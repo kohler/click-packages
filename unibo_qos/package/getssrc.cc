@@ -34,8 +34,8 @@
  * legally binding.
  */
 	 
-
 #include <click/config.h>
+#include "packet_anno.hh"
 #include "getssrc.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
@@ -63,20 +63,15 @@ GetSSRC::configure(Vector<String> &conf, ErrorHandler *errh)
 void
 GetSSRC::push(int,Packet *p)
 {
-  if ((p->length())<(_offset+4)) output(1).push(p);
-    else  { 
-      for (i=0; i<4 ; i++) {
-          _ssrc=*(p->data() + _offset + i);
-          p->set_user_anno_c(8 + i , _ssrc);
-          }
-      output(0).push(p);
-      } 
-}
-
-EXPORT_ELEMENT(GetSSRC)
-ELEMENT_MT_SAFE(GetSSRC)
-.push(p);
-      } 
+    if ((p->length())<(_offset+4))
+	output(1).push(p);
+    else  {
+	uint32_t ssrc = 0;
+	for (int i = 0; i < 4; i++)
+	    ssrc = (ssrc << 8) | p->data()[_offset + i];
+	SET_SSRC_ANNO(p, ssrc);
+	output(0).push(p);
+    }
 }
 
 EXPORT_ELEMENT(GetSSRC)

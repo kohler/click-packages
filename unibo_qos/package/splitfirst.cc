@@ -73,9 +73,3 @@ SplitFirst::push(int, Packet *p)
 
 EXPORT_ELEMENT(SplitFirst)
 ELEMENT_REQUIRES(linuxmodule)
-ush(p);
-}
-
-
-EXPORT_ELEMENT(SplitFirst)
-ELEMENT_REQUIRES(linuxmodule)

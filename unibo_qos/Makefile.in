@@ -1,0 +1,55 @@
+SHELL = @SHELL@
+@SUBMAKE@
+
+# PACKAGE = @PACKAGE@
+# VERSION = @VERSION@
+
+top_srcdir = @top_srcdir@
+srcdir = @srcdir@
+top_builddir = .
+subdir = .
+AUTOCONF = @AUTOCONF@
+INSTALL = @INSTALL@
+INSTALL_DATA = @INSTALL@ -m 644
+INSTALL_DATA_IF_CHANGED = @INSTALL_IF_CHANGED@ -m 644
+mkinstalldirs = @top_srcdir@/mkinstalldirs
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+includedir = @includedir@
+bindir = @bindir@
+
+TARGETS = package
+
+all: Makefile $(TARGETS)
+
+$(TARGETS): Makefile
+	@cd $@ && $(MAKE) all
+
+elemlist install: Makefile
+	@for d in $(TARGETS); do (cd $$d && $(MAKE) $@) || exit 1; done
+
+install-man:
+	@cd elements && $(MAKE) install-man
+
+$(srcdir)/configure: $(srcdir)/configure.in
+	cd $(srcdir) && $(AUTOCONF)
+config.status: $(srcdir)/configure
+	$(SHELL) $(srcdir)/configure @ac_configure_args@
+Makefile: config.status $(srcdir)/Makefile.in
+	cd $(top_builddir) && \
+	  CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
+config.h: config.status $(srcdir)/config.h.in
+	cd $(top_builddir) && \
+	  CONFIG_FILES= CONFIG_HEADERS=$@ $(SHELL) ./config.status
+
+clean:
+	@-for d in $(TARGETS); do (cd $$d && $(MAKE) clean); done
+
+distclean:
+	@-for d in $(TARGETS); do (cd $$d && $(MAKE) distclean); done
+	-rm -f Makefile config.status config.cache config.log
+	-rm -f include/config.h
+
+.PHONY: all $(TARGETS) elemlist clean distclean \
+	install install-doc install-man install-include

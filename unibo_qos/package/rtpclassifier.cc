@@ -40,6 +40,7 @@
 
 #include <click/config.h>
 #include "rtpclassifier.hh"
+#include "packet_anno.hh"
 #include <click/glue.hh>
 #include <click/error.hh>
 #include <click/confparse.hh>
@@ -184,7 +185,7 @@ RTPClassifier::push(int, Packet *p)
     if (nf==ERROR) output(1).push(p);
        else {    
              if (is_rtp(nf)) { 
-                SET_FLOW_ANNO(p,nf); 
+                SET_AGGREGATE_ANNO(p,nf); 
 	        output(0).push(p); }
              else { output(1).push(p); }
 	     }
@@ -202,57 +203,3 @@ RTPClassifier::add_handlers()
 
 EXPORT_ELEMENT(RTPClassifier)
 ELEMENT_REQUIRES(linuxmodule)
-
-
-      
-	 
-	 
-	 
-	 
-	 
-
-
-
-
-
-
-
-
-
-
-
-h(p); }
-	     }
-    return;      
-}
-
-
-// HANDLERS
-
-void
-RTPClassifier::add_handlers()
-{
- 
-}
-
-EXPORT_ELEMENT(RTPClassifier)
-ELEMENT_REQUIRES(linuxmodule)
-
-
-      
-	 
-	 
-	 
-	 
-	 
-
-
-
-
-
-
-
-
-
-
-

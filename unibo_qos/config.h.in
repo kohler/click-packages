@@ -1,0 +1,7 @@
+/* Process this file with configure to produce config.h. -*- mode: c -*- */
+#ifndef CLICKMODULE_UNIBO_QOS_CONFIG_H
+#define CLICKMODULE_UNIBO_QOS_CONFIG_H
+
+/* 'unibo_qos' doesn't need any extra configuration. */
+
+#endif /* CLICKMODULE_UNIBO_QOS_CONFIG_H */
