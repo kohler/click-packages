@@ -515,6 +515,9 @@ class FlowRef:
     def aggregate(self):
         return self.conn.aggregate
 
+    def direction(self):
+        return self.dir
+
     def has_window(self):
         return self.conn.has_window
 
@@ -646,7 +649,7 @@ class FlowSet:
             self.reading_connection = None
 
     def sort_by_loss_count(self):
-        self.flows.sort(lambda a, b: b.loss_count().__cmp__(a.loss_count()) or a.aggregate().__cmp__(b.aggregate()))
+        self.flows.sort(lambda a, b: b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
         self.sorted = FlowSet.SORT_LOSS
 
     def __getitem__(self, k):
@@ -667,7 +670,7 @@ class FlowSet:
     def index(self, flowref):
         if self.sorted == FlowSet.SORT_LOSS:
             l, a = flowref.loss_count(), flowref.aggregate()
-            return bisect_with_cmp(self.flows, lambda f: (f.loss_count() - l) or (a - f.aggregate())) - 1
+            return bisect_with_cmp(self.flows, lambda f: (f.loss_count() - l) or (a - f.aggregate()) or (flowref.dir - f.dir)) - 1
         else:
             return self.flows.index(flowref)
 
