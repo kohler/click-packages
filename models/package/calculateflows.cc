@@ -608,6 +608,15 @@ CalculateFlows::Scoreboard::contains(tcp_seq_t seq, tcp_seq_t end_seq) const
 }
 
 void
+CalculateFlows::StreamInfo::unfinish()
+{
+    for (Pkt *k = pkt_head; k; k = k->next) {
+	k->flags &= ~Pkt::F_DELIVERED;
+	k->caused_ack = 0;
+    }
+}
+
+void
 CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
     // calculate delivered packets
@@ -638,7 +647,6 @@ CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 		    k->caused_ack = ack;
 	    }
     }
-    
 }
 
 bool
@@ -725,7 +733,7 @@ CalculateFlows::StreamInfo::output_loss(ConnInfo *conn, CalculateFlows *cf)
 // LOSSINFO
 
 CalculateFlows::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_call)
-    : _aggregate(AGGREGATE_ANNO(p))
+    : _aggregate(AGGREGATE_ANNO(p)), _finished(false), _clean(true)
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
@@ -948,10 +956,23 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 }
 
 void
+CalculateFlows::ConnInfo::finish(CalculateFlows *cf)
+{
+    if (!(_finished && _clean)) {
+	if (_finished) {
+	    _stream[0].unfinish();
+	    _stream[1].unfinish();
+	}
+	_stream[0].finish(this, cf);
+	_stream[1].finish(this, cf);
+	_finished = _clean = true;
+    }
+}
+
+void
 CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 {
-    _stream[0].finish(this, cf);
-    _stream[1].finish(this, cf);
+    finish(cf);
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
     if (FILE *f = cf->traceinfo_file()) {
@@ -1024,6 +1045,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	    np->ack = 0;
 	np->ip_id = (parent->_ip_id ? iph->ip_id : 0);
 	np->timestamp = p->timestamp_anno() - _init_time;
+	np->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
 	np->flags = 0;
 	np->event_id = stream.event_id;
 
@@ -1102,6 +1124,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
+    _clean = false;
     
     // update timestamp and sequence number offsets at beginning of connection
     if (Pkt *k = create_pkt(p, parent)) {
@@ -1281,10 +1304,34 @@ CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const
 }
 
 
-enum { H_CLEAR };
+enum { H_CLEAR, H_SAVE };
 
 int
-CalculateFlows::write_handler(const String &, Element *e, void *thunk, ErrorHandler *)
+CalculateFlows::save(int, uint32_t aggregate, int direction, const String &filename, ErrorHandler *errh)
+{
+    ConnInfo *loss = _conn_map.find(aggregate);
+    if (!loss)
+	return errh->error("no '%u' aggregate", aggregate);
+    
+    FILE *f;
+    if (!filename || filename == "-")
+	f = stdout;
+    else if (!(f = fopen(filename.c_str(), "w")))
+	return errh->error("%s: %s", filename.c_str(), strerror(errno));
+
+    loss->finish(this);
+
+    for (Pkt *k = loss->stream(direction)->pkt_head; k; k = k->next)
+	if (!(k->flags & Pkt::F_DELIVERED))
+	    fprintf(f, "%u\n", k->packetno_anno);
+
+    if (f != stdout)
+	fclose(f);
+    return 0;
+}
+
+int
+CalculateFlows::write_handler(const String &s, Element *e, void *thunk, ErrorHandler *errh)
 {
     CalculateFlows *cf = static_cast<CalculateFlows *>(e);
     switch ((intptr_t)thunk) {
@@ -1293,6 +1340,19 @@ CalculateFlows::write_handler(const String &, Element *e, void *thunk, ErrorHand
 	    i.value()->kill(cf);
 	cf->_conn_map.clear();
 	return 0;
+      case H_SAVE: {
+	  String what, filename;
+	  uint32_t aggregate;
+	  if (cp_va_space_parse(s, cf, errh,
+				cpWord, "data type", &what,
+				cpUnsigned, "aggregate number", &aggregate,
+				cpFilename, "save file", &filename, 0) < 0)
+	      return -1;
+	  if (what == "undelivered_packetno")
+	      return cf->save(SAVE_UNDELIVERED_PACKETNO, aggregate, 0, filename, errh);
+	  else
+	      return errh->error("no such data type '%#s'", what.c_str());
+      }
       default:
 	return -1;
     }
@@ -1302,6 +1362,7 @@ void
 CalculateFlows::add_handlers()
 {
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
+    add_write_handler("save", write_handler, (void *)H_SAVE);
 }
 
 

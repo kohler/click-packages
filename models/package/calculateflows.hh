@@ -170,6 +170,9 @@ class CalculateFlows : public Element, public AggregateListener { public:
     enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32, WR_REORDERED = 64 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
+    enum { SAVE_UNDELIVERED_PACKETNO };
+    int save(int what, uint32_t aggregate, int direction, const String &filename, ErrorHandler *);
+    
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
@@ -209,6 +212,7 @@ struct CalculateFlows::Pkt {
     tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
+    uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
 
     enum Flags {
@@ -327,6 +331,7 @@ struct CalculateFlows::StreamInfo {
     bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
 
     void finish(ConnInfo*, CalculateFlows*);
+    void unfinish();
 
     void output_loss(ConnInfo *, CalculateFlows *);
     void write_xml(ConnInfo *, FILE *, WriteFlags) const;
@@ -355,6 +360,8 @@ class CalculateFlows::ConnInfo {  public:
     Pkt *create_pkt(const Packet *, CalculateFlows *);
     void calculate_loss_events(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
+
+    void finish(CalculateFlows *);
     
   private:
 
@@ -362,6 +369,8 @@ class CalculateFlows::ConnInfo {  public:
     IPFlowID _flowid;		// flow identifier for _stream[0]
     struct timeval _init_time;	// first time seen in stream
     String _filepos;		// file position of first packet
+    bool _finished : 1;		// have we finished the flow?
+    bool _clean : 1;		// have packets been added since we finished?
     StreamInfo _stream[2];
     
 };
