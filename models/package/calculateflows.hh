@@ -214,9 +214,10 @@ struct CalculateFlows::Pkt {
 				// (retransmission or reordering)
 	F_KEEPALIVE = 0x40,	// packet is a keepalive
 	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
+	F_ACK_NONORDERED = 0x100, // packet is part of a non-ordered ack block
 
-	F_FILLS_RCV_WINDOW = 0x100, // packet filled receive window
-	F_WINDOW_PROBE = 0x200,	// packet was a window probe
+	F_FILLS_RCV_WINDOW = 0x200, // packet filled receive window
+	F_WINDOW_PROBE = 0x400,	// packet was a window probe
 	
 	F_DELIVERED = 0x10000,	// do we think the packet was delivered?
 	F_ACK_CAUSE = 0x20000	// do we think it caused an ack?
@@ -303,10 +304,12 @@ struct CalculateFlows::StreamInfo {
     void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
     Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
+#if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
+#endif
     Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
 
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
+    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, uint32_t &dupcount) const;
 
     void finish(ConnInfo*, CalculateFlows*);
 

@@ -281,6 +281,7 @@ CalculateFlows::StreamInfo::find_acked_pkt(const Pkt *ackk, Pkt *search_hint) co
     return possible;
 }
 
+#if 0
 CalculateFlows::Pkt *
 CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) const
 {
@@ -329,6 +330,7 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 
     return result;
 }
+#endif
 
 CalculateFlows::Pkt *
 CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_seq_t &max_ack) const
@@ -336,17 +338,22 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     // skip undelivered packets and window probes
     // skip packets that have causalities already
     // skip packets with old sequence numbers if this is a new ack
-    while (k_cumack
-	   && (!(k_cumack->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
-	       || (k_cumack->flags & Pkt::F_ACK_CAUSE)
-	       || (SEQ_LT(k_cumack->end_seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))))
-	k_cumack = k_cumack->next;
-
     Pkt *k = k_cumack;
+    
+    while (k
+	   && (!(k->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
+	       || (k->flags & Pkt::F_ACK_CAUSE)
+	       || (SEQ_LT(k->end_seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))
+	       || (SEQ_GT(k->seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))))
+	k = k->next;
 
     // From this point on, we are shifting over packets that might, indeed,
     // cause ack latencies later, so don't change the stable k_cumack hint.
 
+    // Only set k_cumack to the new value if acks were not reordered.
+    if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
+	k_cumack = k;
+    
     // Handle reordering: skip packets that are in a hole.
     if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE))
 	for (k = k->next;
@@ -357,7 +364,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
 	k->flags |= Pkt::F_ACK_CAUSE;
-	if (SEQ_GT(k->end_seq, max_ack))
+	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
 	return k;
     } else
@@ -365,26 +372,48 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 }
 
 bool
-CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, uint32_t &dupcount) const
 {
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp > 0.8 * min_ack_latency)
 	k_time = k_time->next;
 
     // go over previous packets, marking them as delivered
-    for (Pkt *k = (k_time ? k_time->prev : pkt_tail); k && k != k_cumack; k = k->prev) {
-	if (SEQ_LEQ(k->end_seq, ackk->ack)) {
-	    // can we find an already-received packet covering these sequence
-	    // numbers?
-	    for (Pkt *kk = k->next; kk != k_time; kk = kk->next)
-		if ((kk->flags & Pkt::F_DELIVERED)
-		    && SEQ_LEQ(kk->seq, k->seq)
-		    && SEQ_GEQ(kk->end_seq, k->end_seq))
-		    goto not_delivered;
-	    // otherwise, this puppy was delivered
-	    k->flags |= Pkt::F_DELIVERED;
-	  not_delivered: ;
-	}}
+    if (!k_time || k_time != k_cumack) {
+	Pkt *k_loss = (k_time ? k_time->prev : pkt_tail);
+	for (Pkt *k = k_loss; k && k != k_cumack; k = k->prev) {
+	    if (SEQ_LEQ(k->end_seq, ackk->ack) && k->seq != k->end_seq) {
+		// can we find an already-received packet covering these
+		// sequence numbers?
+		for (Pkt *kk = k->next; kk != k_time; kk = kk->next)
+		    if ((kk->flags & Pkt::F_DELIVERED)
+			&& SEQ_LEQ(kk->seq, k->seq)
+			&& SEQ_GEQ(kk->end_seq, k->end_seq))
+			goto not_delivered;
+		// otherwise, this puppy was delivered
+		k->flags |= Pkt::F_DELIVERED;
+#if 0
+		// does a preexisting duplicate count indicate more
+		// deliveries?
+		if (dupcount > 0 && SEQ_GT(k->seq, ackk->prev->ack)) {
+		    if (init_seq == 2831743689)
+			click_chatter("%{timeval}: dupcount %u", &k->timestamp, dupcount);
+		    while (k_loss
+			   && (!(k_loss->flags & Pkt::F_NONORDERED) || SEQ_GEQ(k_loss->seq, ackk->prev->ack))
+			   && ((k_loss->flags & Pkt::F_DELIVERED) || k_loss->seq == k_loss->end_seq))
+			k_loss = k_loss->prev;
+		    if (k_loss && !(k_loss->flags & Pkt::F_DELIVERED) && SEQ_GEQ(k_loss->seq, ackk->prev->ack)) {
+			if (init_seq == 2831743689)
+			    click_chatter("%{timeval}: did it @ %u", &k_loss->timestamp, k_loss->seq);
+			k_loss->flags |= Pkt::F_DELIVERED;
+			dupcount--;
+		    }
+		}
+#endif
+	      not_delivered: ;
+	    }
+	}
+    }
     
     // finally, move k_cumack forward
     if (!k_cumack)
@@ -400,13 +429,15 @@ CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
     Pkt *k_cumack = 0, *k_time = pkt_head;
     uint32_t last_ack = 0;
+    uint32_t dupcount = 0;
     for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
 	if (last_ack != ackk->ack) {
-	    if (!mark_delivered(ackk, k_cumack, k_time))
+	    if (!mark_delivered(ackk, k_cumack, k_time, dupcount))
 		break;
 	    else
 		last_ack = ackk->ack;
-	}
+	} else if (ackk->seq == ackk->end_seq)
+	    dupcount++;
 }
 
 bool
@@ -599,12 +630,14 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *conn, FILE *f) con
     Pkt *hint = pkt_head;
     tcp_seq_t max_ack = 0;
     for (Pkt *ack = acks->pkt_head; ack; ack = ack->next)
-	if (ack->seq == ack->end_seq)
+	if (ack->seq == ack->end_seq) {
+	    Pkt *old_hint = hint;
+	    tcp_seq_t max_ack2 = max_ack;
 	    if (Pkt *k = find_ack_cause2(ack, hint, max_ack)) {
 		struct timeval latency = ack->timestamp - k->timestamp;
-		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec);
-		//hint = k;
+		fprintf(f, "%ld.%06ld %u %ld.%06ld %ld.%06ld %u %x\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec, old_hint->timestamp.tv_sec, old_hint->timestamp.tv_usec, max_ack2, ack->flags);
 	    }
+	}
     
     fprintf(f, "    </ackcausality>\n");
 }
@@ -776,8 +809,11 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
     if (tcph->th_flags & TH_ACK) {
 	if (SEQ_GT(k->ack, ack_stream.max_ack))
 	    ack_stream.max_ack = k->ack;
-	else if (k->ack != ack_stream.max_ack)
-	    k->flags |= Pkt::F_ACK_REORDER;
+	else if (k->ack != ack_stream.max_ack) {
+	    k->flags |= Pkt::F_ACK_NONORDERED;
+	    for (Pkt *prev = k->prev; prev && SEQ_LT(k->ack, prev->ack); prev = prev->prev)
+		prev->flags |= Pkt::F_ACK_NONORDERED | Pkt::F_ACK_REORDER;
+	}
 	
 	// find acked packet
 	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
