@@ -22,12 +22,10 @@ CLICK_DECLS
 
 TCPMystery::TCPMystery()
 {
-    MOD_INC_USE_COUNT;
 }
 
 TCPMystery::~TCPMystery()
 {
-    MOD_DEC_USE_COUNT;
 }
 
 int
@@ -1291,12 +1289,10 @@ TCPMystery::TCPMystery()
     : Element(1, 1), _tipfd(0), _tipsd(0), _traceinfo_file(0), _filepos_h(0),
       _free_pkt(0), _packet_source(0)
 {
-    MOD_INC_USE_COUNT;
 }
 
 TCPMystery::~TCPMystery()
 {
-    MOD_DEC_USE_COUNT;
     for (int i = 0; i < _pkt_bank.size(); i++)
 	delete[] _pkt_bank[i];
     delete _filepos_h;

@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: checkgreheader.cc,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: checkgreheader.cc,v 1.3 2005/02/07 21:20:55 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -39,13 +39,11 @@ const char * const CheckGREHeader::reason_texts[NREASONS] = {
 CheckGREHeader::CheckGREHeader()
   : Element(1, 1), _offset(0), _checksum(false), _key(0), _checkseq(false), _reason_drops(0)
 {
-  MOD_INC_USE_COUNT;
   _drops = 0;
 }
 
 CheckGREHeader::~CheckGREHeader()
 {
-  MOD_DEC_USE_COUNT;
   delete[] _reason_drops;
 }
 

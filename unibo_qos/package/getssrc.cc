@@ -44,12 +44,10 @@
 GetSSRC::GetSSRC()
   : Element(1, 2)
 {
-  MOD_INC_USE_COUNT;
 }
 
 GetSSRC::~GetSSRC()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 int

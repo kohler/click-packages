@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: pppencap.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: pppencap.hh,v 1.3 2005/02/07 21:20:56 eddietwo Exp $
  */
 
 /*
@@ -73,9 +73,8 @@ class PPPEncap : public Element { public:
     _ppp.address = PPP_ALLSTATIONS;
     _ppp.control = PPP_UI;
     _ppp.protocol = htons(PPP_IP);
-    MOD_INC_USE_COUNT;
   }
-  virtual ~PPPEncap() { MOD_DEC_USE_COUNT; }
+  virtual ~PPPEncap() { }
 
   const char *class_name() const { return "PPPEncap"; }
   const char *processing() const { return AGNOSTIC; }

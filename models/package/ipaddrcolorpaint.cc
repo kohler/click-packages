@@ -25,12 +25,10 @@
 IPAddrColorPaint::IPAddrColorPaint()
     : Element(1, 1)
 {
-    MOD_INC_USE_COUNT;
 }
 
 IPAddrColorPaint::~IPAddrColorPaint()
 {
-    MOD_DEC_USE_COUNT;
 }
 
 void

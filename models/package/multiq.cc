@@ -321,12 +321,10 @@ MultiQ::MultiQ()
       GAP_MIN_POINTS(2),
       MODES_SIMILAR(0.05)
 {
-    MOD_INC_USE_COUNT;
 }
 
 MultiQ::~MultiQ()
 {
-    MOD_DEC_USE_COUNT;
 }
 
 void

@@ -47,13 +47,11 @@
 CheckAverageLength::CheckAverageLength()
   : Element(1, 2)
 {
-  MOD_INC_USE_COUNT;
 }
 
 
 CheckAverageLength::~CheckAverageLength()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 void

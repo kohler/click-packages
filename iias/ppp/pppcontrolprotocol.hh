@@ -46,7 +46,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pppcontrolprotocol.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: pppcontrolprotocol.hh,v 1.3 2005/02/07 21:20:56 eddietwo Exp $
  */
 
 /*
@@ -94,8 +94,8 @@ class PPPControlProtocol : public Element { public:
     maxconfreqtransmits(DEFMAXCONFREQS),
     retransmits(DEFMAXCONFREQS),
     _verbose(false),
-    timer(NULL) { MOD_INC_USE_COUNT; }
-  virtual ~PPPControlProtocol() { MOD_DEC_USE_COUNT; }
+    timer(NULL) { }
+  virtual ~PPPControlProtocol() { }
 
   const char *class_name() const { return "PPPControlProtocol"; }
   const char *processing() const { return AGNOSTIC; }

@@ -49,14 +49,12 @@
 RTPClassifier::RTPClassifier()
   : Element(1, 2)
 {
-  MOD_INC_USE_COUNT;
   FlowTable();
 }
 
 
 RTPClassifier::~RTPClassifier()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 void

@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.cc,v 1.2 2004/12/31 21:57:31 eddietwo Exp $
+ * $Id: pptpserver.cc,v 1.3 2005/02/07 21:20:56 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -46,12 +46,10 @@ CLICK_DECLS
 PPTPServer::PPTPServer()
   : Element(1, 1), _verbose(false), _fd(-1)
 {
-  MOD_INC_USE_COUNT;
 }
 
 PPTPServer::~PPTPServer()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 void

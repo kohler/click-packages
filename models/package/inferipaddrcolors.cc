@@ -28,12 +28,10 @@
 InferIPAddrColors::InferIPAddrColors()
     : Element(1, 1)
 {
-    MOD_INC_USE_COUNT;
 }
 
 InferIPAddrColors::~InferIPAddrColors()
 {
-    MOD_DEC_USE_COUNT;
 }
 
 int

@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: ipcp.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: ipcp.hh,v 1.3 2005/02/07 21:20:55 eddietwo Exp $
  */
 
 /*
@@ -57,8 +57,8 @@ CLICK_DECLS
 
 class IPCP : public PPPControlProtocol { public:
 
-  IPCP() : PPPControlProtocol(PPP_IPCP), _localip(0), _remoteip(0) { MOD_INC_USE_COUNT; }
-  ~IPCP() { MOD_DEC_USE_COUNT; }
+  IPCP() : PPPControlProtocol(PPP_IPCP), _localip(0), _remoteip(0) { }
+  ~IPCP() { }
 
   const char *class_name() const { return "IPCP"; }
 

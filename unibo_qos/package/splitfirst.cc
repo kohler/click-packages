@@ -44,12 +44,10 @@
 SplitFirst::SplitFirst()
   : Element(1, 2)
 {
-  MOD_INC_USE_COUNT;
 }
 
 SplitFirst::~SplitFirst()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 int

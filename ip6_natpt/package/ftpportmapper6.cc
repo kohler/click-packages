@@ -23,7 +23,6 @@
 CLICK_DECLS
 FTPPortMapper6::FTPPortMapper6()
 {
-  MOD_INC_USE_COUNT;
   add_input(); /*IPv4 arriving packets */
   add_input(); /*IPv6 arriving packets */
   add_output(); /* IPv4 outgoing translated packets*/
@@ -33,7 +32,6 @@ FTPPortMapper6::FTPPortMapper6()
 
 FTPPortMapper6::~FTPPortMapper6()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 int

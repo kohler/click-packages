@@ -101,7 +101,6 @@ TCPAddressTranslator::TCPAddressTranslator()
 _tcp_done_tail(0),_tcp_gc_timer(tcp_gc_hook, this),
     _tcp_done_gc_timer(tcp_done_gc_hook, this)
 {
-  MOD_INC_USE_COUNT;
   add_input(); /*IPv4 arriving packets */
   add_input(); /*IPv6 arriving packets */
   add_output(); /* IPv4 outgoing translated packets*/
@@ -111,7 +110,6 @@ _tcp_done_tail(0),_tcp_gc_timer(tcp_gc_hook, this),
 
 TCPAddressTranslator::~TCPAddressTranslator()
 {
-  MOD_DEC_USE_COUNT;
   assert(!_tcp_gc_timer.scheduled() && !_tcp_done_gc_timer.scheduled());
 }
 

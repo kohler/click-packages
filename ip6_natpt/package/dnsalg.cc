@@ -22,7 +22,6 @@ CLICK_DECLS
 
 DNSAlg::DNSAlg()
 {
-  MOD_INC_USE_COUNT;
   add_input(); /*IPv4 arriving packets */
   add_input(); /*IPv6 arriving packets */
   add_output(); /* IPv4 outgoing translated packets*/
@@ -31,7 +30,6 @@ DNSAlg::DNSAlg()
 
 DNSAlg::~DNSAlg()
 {
-  MOD_DEC_USE_COUNT;
 }
 
 int

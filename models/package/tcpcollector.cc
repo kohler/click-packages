@@ -684,12 +684,10 @@ TCPCollector::TCPCollector()
     , _traceinfo_file(0)
 #endif
 {
-    MOD_INC_USE_COUNT;
 }
 
 TCPCollector::~TCPCollector()
 {
-    MOD_DEC_USE_COUNT;
     for (int i = 0; i < _pktbuf_bank.size(); i++)
 	delete[] _pktbuf_bank[i];
     delete _filepos_h;
