@@ -17,7 +17,7 @@ CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), different_syn(false),
       have_fin(false), different_fin(false),
       have_ack_latency(false), filled_rcv_window(false),
-      sent_window_probe(false), sent_sackok(false),
+      sent_window_probe(false), sent_sackok(false), time_confusion(false),
       init_seq(0), max_seq(0), max_ack(0),
       max_live_seq(0), max_loss_seq(0),
       total_packets(0), total_seq(0),
@@ -45,7 +45,7 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 
     // check that timestamp makes sense
     if (np->prev && np->timestamp < np->prev->timestamp) {
-	click_chatter("timestamp confusion");
+	time_confusion = true;
 	np->timestamp = np->prev->timestamp;
     }
 
@@ -904,6 +904,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	fprintf(f, " differentsyn='yes'");
     if (different_fin)
 	fprintf(f, " differentfin='yes'");
+    if (time_confusion)
+	fprintf(f, " timeconfusion='yes'");
 
     int nreordered = 0, nundelivered = 0;
     for (Pkt *k = pkt_head; k; k = k->next)

@@ -272,6 +272,7 @@ struct CalculateFlows::StreamInfo {
     bool filled_rcv_window : 1;	// have we ever filled the receive window?
     bool sent_window_probe : 1;	// have we ever sent a window probe?
     bool sent_sackok : 1;	// did we send SACKOK on the SYN?
+    bool time_confusion : 1;	// was there timestamp confusion?
     
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
