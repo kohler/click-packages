@@ -124,13 +124,13 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	if (rexmit->event_id == np->event_id)
 	    // new loss event
 	    register_loss_event(rexmit, np, conn, parent);
-    } else {
+    } else
 	// if not a retransmission, then a reordering
 	np->flags |= Pkt::F_REORDER;
-	// mark intervening packets as in a reordering event
-	for (x = (x ? x->next : pkt_head); x; x = x->next)
-	    x->flags |= Pkt::F_IN_REORDER;
-    }
+
+    // either way, intervening packets are in a non-ordered event
+    for (x = (x ? x->next : pkt_head); x; x = x->next)
+	x->flags |= Pkt::F_NONORDERED;
 }
 
 void
@@ -227,10 +227,10 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
     // neither a reordering nor a retransmission
     // bounded on the right by a packet whose seq >= ack, and which is not
     // part of a reordered block
-    
+
     // move search_hint forward to right edge
     while (search_hint && !(SEQ_GEQ(search_hint->seq, ack)
-			    && !(search_hint->flags & Pkt::F_IN_REORDER)))
+			    && !(search_hint->flags & Pkt::F_NONORDERED)))
 	search_hint = search_hint->next;
 
     // move backwards to left edge

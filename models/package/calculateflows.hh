@@ -191,7 +191,8 @@ struct CalculateFlows::Pkt {
 				// to an earlier packet
 	F_DUPLICATE = 0x8,	// packet is a network duplicate
 	F_REORDER = 0x10,	// packet is reordered
-	F_IN_REORDER = 0x20,	// packet is part of a reordered block
+	F_NONORDERED = 0x20,	// packet is part of a non-ordered block
+				// (retransmission or reordering)
 	F_KEEPALIVE = 0x40,	// packet is a keepalive
 	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
 
