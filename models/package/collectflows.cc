@@ -97,9 +97,9 @@ CollectTCPFlows::initialize(ErrorHandler *errh)
     if (!_filename)
 	/* nada */;
     else if (_filename != "-") {
-	_f = fopen(_filename, "wb");
+	_f = fopen(_filename.c_str(), "wb");
 	if (!_f)
-	    return errh->error("%s: %s", _filename.cc(), strerror(errno));
+	    return errh->error("%s: %s", _filename.c_str(), strerror(errno));
     } else {
 	_f = stdout;
 	_filename = "<stdout>";
