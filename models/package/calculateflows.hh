@@ -101,6 +101,10 @@ guaranteed.
 
 Boolean.
 
+=item REORDERED
+
+Boolean.
+
 =item FULLRCVWINDOW
 
 Boolean. If true, then output a list of data packets that fill the receiver's
@@ -164,7 +168,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32 };
+    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32, WR_REORDERED = 64 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
     static double float_timeval(const struct timeval &);
@@ -227,7 +231,6 @@ struct CalculateFlows::Pkt {
 	F_WINDOW_PROBE = 0x800,	// packet was a window probe
 	
 	F_DELIVERED = 0x10000,	// do we think the packet was delivered?
-	F_ACK_CAUSE = 0x20000	// do we think it caused an ack?
     };
     int flags;			// packet flags
 
@@ -235,6 +238,7 @@ struct CalculateFlows::Pkt {
     tcp_seq_t cumack_seq;	// sequence number of the cumack for this packet
 
     Pkt *cumack_pkt;		// packet that this ack cumacks
+    Pkt *caused_ack;		// ack that this data packet caused
 };
 
 struct CalculateFlows::LossInfo {
@@ -325,9 +329,10 @@ struct CalculateFlows::StreamInfo {
     void write_xml(ConnInfo *, FILE *, WriteFlags) const;
     void write_ack_latency_xml(ConnInfo *, FILE *) const;
     void write_ack_causality_xml(ConnInfo *, FILE *) const;
+    void write_reordered_xml(FILE *, WriteFlags, int n) const;
     void write_full_rcv_window_xml(FILE *) const;
     void write_window_probe_xml(FILE *) const;
-    void write_undelivered_xml(FILE *) const;
+    void write_undelivered_xml(FILE *, WriteFlags, int n) const;
     void write_packets_xml(FILE *) const;
 
 };
