@@ -184,7 +184,7 @@ FromDump_Fast::read_buffer(ErrorHandler *errh)
 	// else, try a regular read
 	_mmap = false;
 	(void) lseek(_fd, _mmap_off, SEEK_SET);
-	_pos = _off = 0;
+	_pos = _len = 0;
     }
 #endif
     
