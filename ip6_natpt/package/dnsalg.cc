@@ -918,5 +918,5 @@ DNSAlg::my_atoi(const char *string)
 }
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(AddressTranslator DNSMessage)
+ELEMENT_REQUIRES(ip6 DNSMessage)
 EXPORT_ELEMENT(DNSAlg)
