@@ -158,7 +158,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     struct LossInfo;
     struct LossBlock;
     struct Pkt;
-    class Scoreboard;
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
@@ -373,22 +372,6 @@ class CalculateFlows::ConnInfo {  public:
     bool _clean : 1;		// have packets been added since we finished?
     StreamInfo _stream[2];
     
-};
-
-class CalculateFlows::Scoreboard { public:
-
-    Scoreboard(tcp_seq_t cumack = 0)	: _cumack(cumack) { }
-
-    void clear(tcp_seq_t cumack = 0)	{ _cumack = cumack; }
-    void add(tcp_seq_t seq, tcp_seq_t end_seq);
-    bool contains(tcp_seq_t seq, tcp_seq_t end_seq) const;
-    inline tcp_seq_t cumack() const	{ return _cumack; }
-
-  public:
-
-    tcp_seq_t _cumack;
-    DEQueue<tcp_seq_t> _sack;
-
 };
 
 inline uint32_t
