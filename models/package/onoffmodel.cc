@@ -5,6 +5,8 @@
 #include <click/packet_anno.hh>
 #include <packet_anno.hh>
 #include <click/click_tcp.h>
+#include <click/router.hh>
+
 
 OnOffModel::OnOffModel()
     : Element(1,1)
@@ -29,6 +31,7 @@ OnOffModel::configure(const Vector<String> &conf, ErrorHandler *errh)
 
     if (cp_va_parse(conf, this, errh,
 		cpTimeval, "max. silence interval allowed in ON period (struct timeval)", &_max_silence_int,
+		cpTimeval,"stop after xxx seconds", &_effective_duration,
 		    0) < 0) 
 	return -1;
     return 0;
@@ -43,6 +46,11 @@ OnOffModel::simple_action(Packet *p)
 
     if (_start_time.tv_sec == 0) {
 	_start_time = p->timestamp_anno();
+	timeradd(&_start_time, &_effective_duration, &_stop_time); 
+    }
+
+    if (timercmp(&p->timestamp_anno(),&_stop_time,>)) {
+	router()->please_stop_driver();
     }
 
     _end_time = p->timestamp_anno();
@@ -85,6 +93,9 @@ OnOffModel::simple_action(Packet *p)
 	    if (duration > 2) {
 		c->total_on_duration += duration;
 		c->total_on_throughput += on_throughput;
+		if (on_throughput>c->max_on_throughput) {
+		    c->max_on_throughput  = on_throughput;
+		}
 		c->total_on_transfers++;
 		c->total_on_throughput_sqr += on_throughput*on_throughput;
 	    }
@@ -143,8 +154,8 @@ OnOffModel::write_file(String where, ErrorHandler *errh) const
 	avg_off_duration = c.total_off_duration/c.total_off_times;
 	var_off_duration = c.total_off_duration_sqr/c.total_off_times - (avg_off_duration * avg_off_duration);
 
-	fprintf(f,"%s %.2f %.2f %d %.2f %.2f %.2f %d %.2f %.2f\n", addr.s().cc(), c.total_user_bytes, total_trace_time, c.total_on_transfers, c.total_on_duration,
-		avg_on_throughput,var_on_throughput,c.total_off_times, avg_off_duration, var_off_duration);
+	fprintf(f,"%s %.2f %.2f %d %.2f %.2f %.2f %.2f %d %.2f %.2f\n", addr.s().cc(), c.total_user_bytes, total_trace_time, c.total_on_transfers, c.total_on_duration,
+		avg_on_throughput,var_on_throughput,c.max_on_throughput, c.total_off_times, avg_off_duration, var_off_duration);
     }
 }
 

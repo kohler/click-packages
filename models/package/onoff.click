@@ -6,7 +6,7 @@ FromTUSummaryLog("-",STOP true)
 
 classifier[0]
     -> webpktcount::Counter()
-    -> onoff::OnOffModel(5) 
+    -> onoff::OnOffModel(5,3600) 
     -> Discard;
 
 classifier[1]
@@ -15,6 +15,6 @@ classifier[1]
 DriverManager(wait_pause,
 	        print allpktcount.count,
 		print webpktcount.count,
-		write onoff.write_ascii_file master-onoff-ucb,
+		write onoff.write_ascii_file master-onoff-har,
 		stop);
 	

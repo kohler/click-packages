@@ -23,7 +23,7 @@ class OnOffModel : public Element {
 	public:
 	OnOffConnCounter() {}
 	OnOffConnCounter(struct timeval stime, unsigned int pkt_c, unsigned int byte_c)
-	    : total_on_duration(0.0), total_on_throughput(0.0),total_on_throughput_sqr(0.0),total_on_transfers(0),
+	    : total_on_duration(0.0), total_on_throughput(0.0),total_on_throughput_sqr(0.0),max_on_throughput(0.0),total_on_transfers(0),
 	      total_off_duration(0.0),total_off_duration_sqr(0.0),total_off_times(0)
 	{
 
@@ -43,6 +43,7 @@ class OnOffModel : public Element {
 	double total_on_duration;
 	double total_on_throughput;
 	double total_on_throughput_sqr;
+	double max_on_throughput;
 	unsigned int total_on_transfers;
 
 	double total_off_duration;
@@ -62,6 +63,8 @@ class OnOffModel : public Element {
 
     struct timeval _start_time;
     struct timeval _end_time;
+    struct timeval _effective_duration;
+    struct timeval _stop_time;
 
 };
 
