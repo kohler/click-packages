@@ -334,6 +334,7 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 }
 #endif
 
+#if 0
 void
 CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
 {
@@ -345,7 +346,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_a
     }
     
     while (ackwindow_begin
-	   && (cur_ack->timestamp - ackwindow_begin->timestamp).tv_sec > 2) {
+	   && (cur_ack->timestamp - ackwindow_begin->timestamp).tv_sec > 5) {
 	if (ackwindow_begin->cumack_pkt
 	    && ackwindow_begin->timestamp - ackwindow_begin->cumack_pkt->timestamp <= running_min_ack_latency)
 	    refind_min_ack_latency = true;
@@ -358,7 +359,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_a
     }
     
     while (ackwindow_end
-	   && (ackwindow_end->timestamp - cur_ack->timestamp).tv_sec < 2) {
+	   && (ackwindow_end->timestamp - cur_ack->timestamp).tv_sec < 5) {
 	if (ackwindow_end->cumack_pkt
 	    && ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp < running_min_ack_latency)
 	    running_min_ack_latency = ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp;
@@ -370,6 +371,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_a
     else
 	cur_min_ack_latency = running_min_ack_latency;
 }
+#endif
 
 CalculateFlows::Pkt *
 CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_seq_t &max_ack) const
@@ -386,10 +388,26 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	       || (SEQ_GT(k->seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))))
 	k = k->next;
 
+    // the packet just before a loss event might not be acknowledged because
+    // of duplicate acks
+    if (k && k->end_seq == ackk->ack && k->next && !(k->next->flags & Pkt::F_DELIVERED)) {
+	int numacks = 1;
+	for (Pkt *ackt = ackk->next; ackt && ackt->ack == ackk->ack && ackt->seq == ackt->end_seq; ackt = ackt->next)
+	    numacks++;
+	int numacksexpected = 1;
+	for (Pkt *kk = k->next->next; kk && kk->cumack_seq == ackk->ack; kk = kk->next)
+	    if (kk->flags & Pkt::F_DELIVERED)
+		numacksexpected++;
+	//click_chatter("%u ack: %u vs. %u", ackk->ack, numacks, numacksexpected);
+	if (numacksexpected > numacks)
+	    k = k->next;
+    }
+    
     // Only set k_cumack to the new value if acks were not reordered.
     if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
 	k_cumack = k;
 
+    // If this is a dupack,
     // From this point on, we are shifting over packets that might, indeed,
     // cause ack latencies later, so don't change the stable k_cumack hint.
 
@@ -430,6 +448,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     }
     
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
+	//&& SEQ_GEQ(k->cumack_seq, ackk->ack)) {
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
 	// If the new match started a retransmission section, change cumack
@@ -445,11 +464,11 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 }
 
 bool
-CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
 {
     // update current RTT
-    struct timeval cur_min_ack_latency;
-    update_cur_min_ack_latency(cur_min_ack_latency, running_min_ack_latency, ackk, ackwindow_begin, ackwindow_end);
+    struct timeval cur_min_ack_latency = min_ack_latency;
+    //update_cur_min_ack_latency(cur_min_ack_latency, running_min_ack_latency, ackk, ackwindow_begin, ackwindow_end);
     
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
@@ -511,19 +530,73 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 }
 
 void
+CalculateFlows::Scoreboard::add_packet(tcp_seq_t seq, tcp_seq_t end_seq)
+{
+    // common cases
+    if (seq == end_seq || SEQ_LEQ(end_seq, _cumack))
+	/* nothing to do */;
+    else if (SEQ_LEQ(seq, _cumack) && !_sack.size())
+	_cumack = end_seq;
+    else if (SEQ_LEQ(seq, _cumack)) {
+	_cumack = end_seq;
+	while (_sack.size() && SEQ_GEQ(_cumack, _sack[0])) {
+	    if (SEQ_LT(_cumack, _sack[1]))
+		_cumack = _sack[1];
+	    _sack.pop_front();
+	    _sack.pop_front();
+	}
+    } else if (!_sack.size() || SEQ_GT(seq, _sack.back())) {
+	_sack.push_back(seq);
+	_sack.push_back(end_seq);
+    } else {
+	int block;
+	for (block = 0; block < _sack.size(); block += 2)
+	    if (SEQ_LEQ(seq, _sack[block + 1])) {
+		if (SEQ_LT(end_seq, _sack[block])) { // add new block
+		    _sack.push_back(0);
+		    _sack.push_back(0);
+		    for (int i = _sack.size() - 1; i >= block + 2; i--)
+			_sack[i] = _sack[i - 2];
+		    _sack[block] = seq;
+		    _sack[block+1] = end_seq;
+		} else {
+		    if (SEQ_LEQ(seq, _sack[block]))
+			_sack[block] = seq;
+		    if (SEQ_GEQ(end_seq, _sack[block+1]))
+			_sack[block+1] = end_seq;
+		}
+		break;
+	    }
+    }
+}
+
+void
 CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
-    Pkt *k_cumack = 0, *k_time = pkt_head;
-    struct timeval running_min_ack_latency;
-    const Pkt *ackwindow_begin = 0, *ackwindow_end = 0;
-    uint32_t last_ack = 0;
-    for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
-	if (last_ack != ackk->ack) {
-	    if (!mark_delivered(ackk, k_cumack, k_time, running_min_ack_latency, ackwindow_begin, ackwindow_end))
-		break;
-	    else
-		last_ack = ackk->ack;
+    {
+	Pkt *k_cumack = 0, *k_time = pkt_head;
+	//struct timeval running_min_ack_latency;
+	//const Pkt *ackwindow_begin = 0, *ackwindow_end = 0;
+	uint32_t last_ack = 0;
+	for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
+	    if (last_ack != ackk->ack) {
+		if (!mark_delivered(ackk, k_cumack, k_time /*, running_min_ack_latency, ackwindow_begin, ackwindow_end */))
+		    break;
+		else
+		    last_ack = ackk->ack;
+	    }
+    }
+
+    // calculate cumack_seq
+    {
+	Scoreboard sb;
+	for (Pkt *k = pkt_head; k; k = k->next) {
+	    if (k->flags & Pkt::F_DELIVERED)
+		sb.add_packet(k->seq, k->end_seq);
+	    k->cumack_seq = sb.cumack();
+	    //click_chatter("%u: %{timeval} %u gets %u", conn->aggregate(), &k->timestamp, k->end_seq, k->cumack_seq);
 	}
+    }
 }
 
 bool
@@ -1157,4 +1230,5 @@ CalculateFlows::add_handlers()
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(CalculateFlows)
 #include <click/bighashmap.cc>
+#include <click/dequeue.cc>
 CLICK_ENDDECLS

@@ -4,6 +4,7 @@
 #include <click/element.hh>
 #include <click/bighashmap.hh>
 #include <click/handlercall.hh>
+#include <click/dequeue.hh>
 #include "elements/analysis/aggregatenotifier.hh"
 #include "elements/analysis/toipflowdumps.hh"
 CLICK_DECLS
@@ -154,6 +155,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     struct LossInfo;
     struct LossBlock;
     struct Pkt;
+    class Scoreboard;
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
@@ -230,6 +232,7 @@ struct CalculateFlows::Pkt {
     int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
+    tcp_seq_t cumack_seq;	// sequence number of the cumack for this packet
 
     Pkt *cumack_pkt;		// packet that this ack cumacks
 };
@@ -308,15 +311,13 @@ struct CalculateFlows::StreamInfo {
     void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
     void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
-    void update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const;
-    
     Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
 #if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
 #endif
     Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
 
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const;
+    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
 
     void finish(ConnInfo*, CalculateFlows*);
 
@@ -355,6 +356,20 @@ class CalculateFlows::ConnInfo {  public:
     String _filepos;		// file position of first packet
     StreamInfo _stream[2];
     
+};
+
+class CalculateFlows::Scoreboard { public:
+
+    Scoreboard()				: _cumack(0) { }
+
+    void add_packet(tcp_seq_t seq, tcp_seq_t end_seq);
+    tcp_seq_t cumack() const			{ return _cumack; }
+
+  public:
+
+    tcp_seq_t _cumack;
+    DEQueue<tcp_seq_t> _sack;
+
 };
 
 inline uint32_t
