@@ -429,6 +429,9 @@ class ConnectionGroup:
     def __getitem__(self, key):
         return self.conns[key]
 
+    def append(self, conn):
+        self.conns.append(conn)
+
 
 def fix_range(a, b, min_step_frac):
     d = b - a
