@@ -122,7 +122,8 @@ InferIPAddrColors::update(Packet *p)
 	_compacted = false;
     } else if (snode->color == dnode->color) {
 	click_chatter("color conflict: src %s same color as dst %s", IPAddress(iph->ip_src).s().cc(), IPAddress(iph->ip_dst).s().cc());
-	snode->color = dnode->color = BADCOLOR;
+	// don't mark colors as bad, it kills too many addresses
+	//snode->color = dnode->color = BADCOLOR;
     }
 
     return true;
