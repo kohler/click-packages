@@ -1268,7 +1268,6 @@ class FlowSet:
             return fn
 
     def _start_element(self, name, attrs):
-	print name, " ", self.reading_direction
         if name == 'trace':
             if self.reading_state != FlowSet.READ_NONE:
                 raise ConnectionFormatError, "nested <trace>"

@@ -487,9 +487,13 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 	k_time = k_time->next;
 
     // move k_time backward if this followed a string of dupacks
-    if (prev_ndupack && k_time)
-	while (k_time->prev && SEQ_GT(k_time->prev->seq, prev_ackno))
-	    k_time = k_time->prev;
+    if (prev_ndupack && k_time) {
+	Pkt *k = k_time;
+	while (k->prev && SEQ_GT(k->prev->seq, prev_ackno) && k != k_cumack)
+	    k = k->prev;
+	if (k != k_cumack)
+	    k_time = k;
+    }
 
     // go over previous packets, marking them as delivered
     if (!k_time || k_time != k_cumack) {

@@ -328,7 +328,7 @@ struct CalculateFlows::StreamInfo {
 #endif
     Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
 
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
+    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const;
 
     void finish(ConnInfo*, CalculateFlows*);
     void unfinish();
