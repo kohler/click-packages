@@ -54,7 +54,7 @@ class CalculateVariance : public Element {
 
     class CounterEntry {
 	public:
-	CounterEntry():pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0.0),pkt_count(0),byte_count(0) {}
+	CounterEntry():pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0.0),pkt_count(0),byte_count(0.0) {}
 	double get_pkt_variance(unsigned num_int) const {
 	    assert(num_int>0);
 	    double tmp_mean_sqr = (double) pkt_sum/num_int;
@@ -66,7 +66,7 @@ class CalculateVariance : public Element {
 	unsigned pkt_sum; // Sum(X) where X is ther number of packets in the previous intervals.
 	double pkt_sum_sq; //Sum(X^2) where X is ther number of packets in the previous intervals. var(X) = E(X^2) - E(X)^2;
 	uint32_t pkt_count;
-	unsigned byte_count;
+	double byte_count;
 	
 	/*
 	double pkt_bytes_sum;

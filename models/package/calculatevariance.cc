@@ -80,7 +80,13 @@ Packet *
 CalculateVariance::simple_action(Packet *p)
 {
     uint32_t row;
-    row = AGGREGATE_ANNO(p);
+
+    if (_num_aggregates_bits == 32) {
+	const click_ip *iph = p->ip_header();
+	IPAddress dstaddr = IPAddress(iph->ip_dst);
+	row = (uint32_t) ntohl(dstaddr.addr());
+    }else
+       row = AGGREGATE_ANNO(p);
 
     if (_num_aggregates == 1) row = 0;
 
