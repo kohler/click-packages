@@ -16,13 +16,12 @@ class OnOffModel : public Element {
     const char *processing() const { return AGNOSTIC;}
 
     int configure(const Vector<String> &, ErrorHandler *);
-    int initialize(ErrorHandler *);
     void add_handlers();
 
     class OnOffConnCounter{
 
 	public:
-	OnOffConnCounter();
+	OnOffConnCounter() {}
 	OnOffConnCounter(struct timeval stime, unsigned int pkt_c, unsigned int byte_c)
 	    : total_on_throughput(0.0),total_on_throughput_sqr(0.0),total_on_transfers(0),
 	      total_off_duration(0.0),total_off_duration_sqr(0.0),total_off_times(0) 

@@ -29,12 +29,6 @@ OnOffModel::configure(const Vector<String> &conf, ErrorHandler *errh)
 }
 
 
-int
-OnOffModel::initialize(ErrorHandler *errh)
-{
-    return 0;
-}
-
 Packet *
 OnOffModel::simple_action(Packet *p)
 {
@@ -124,7 +118,7 @@ OnOffModel::write_file(String where, ErrorHandler *errh) const
 }
 
 static int
-onoffmodel_write_file_handler(const String &data, Element *e, void *thunk, ErrorHandler *errh)
+onoffmodel_write_file_handler(const String &data, Element *e, void *, ErrorHandler *errh)
 {
     OnOffModel *m = static_cast<OnOffModel *>(e);
     String fn;
