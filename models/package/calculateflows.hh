@@ -243,6 +243,8 @@ struct CalculateFlows::StreamInfo {
     bool have_fin : 1;		// have we seen a FIN?
     bool have_ack_latency : 1;	// have we seen an ACK match?
     bool filled_rcv_window : 1;	// have we ever filled the receive window?
+    bool sent_timestamp : 1;	// did we ever send a timestamp option?
+    bool sent_sackok : 1;	// did we send SACKOK on the SYN?
     
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative

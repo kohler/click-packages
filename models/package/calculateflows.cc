@@ -24,6 +24,7 @@ operator*(double frac, const struct timeval &tv)
 CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
       have_ack_latency(false), filled_rcv_window(false),
+      sent_timestamp(false), sent_sackok(false),
       init_seq(0), max_seq(0), max_ack(0), max_live_seq(0), max_loss_seq(0),
       total_packets(0), total_seq(0),
       loss_events(0), possible_loss_events(0), false_loss_events(0),
@@ -186,28 +187,6 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 	else {
 	    syn_seq = np->seq;
 	    have_syn = true;
-
-	    // look for window scaling option
-	    if (tcph->th_off > 5) {
-		const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
-		int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
-		for (int oi = 20; oi < hlen; ) {
-		    if (oa[oi] == TCPOPT_NOP) {
-			oi++;
-			continue;
-		    } else if (oa[oi] == TCPOPT_EOL)
-			break;
-
-		    int xlen = oa[oi+1];
-		    if (xlen < 2 || oi + xlen > hlen) // bad option
-			break;
-
-		    if (oa[oi] == TCPOPT_WSCALE && xlen == TCPOLEN_WSCALE)
-			rcv_window_scale = (oa[oi+2] <= 14 ? oa[oi+2] : 14);
-
-		    oi += xlen;
-		}
-	    }
 	}
     }
 
@@ -221,6 +200,38 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 	}
     }
 
+    // option processing
+    if (tcph->th_off > 5) {
+	// common case: NUL, NUL, TIMESTAMP
+	if (tcph->th_off == 8
+	    && *(reinterpret_cast<const uint32_t *>(tcph + 1)) == htonl(0x0101080A))
+	    sent_timestamp = true;
+	else {
+	    const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
+	    int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
+	    for (int oi = 20; oi < hlen; ) {
+		if (oa[oi] == TCPOPT_NOP) {
+		    oi++;
+		    continue;
+		} else if (oa[oi] == TCPOPT_EOL)
+		    break;
+
+		int xlen = oa[oi+1];
+		if (xlen < 2 || oi + xlen > hlen) // bad option
+		    break;
+
+		if (oa[oi] == TCPOPT_WSCALE && xlen == TCPOLEN_WSCALE && (tcph->th_flags & TH_SYN))
+		    rcv_window_scale = (oa[oi+2] <= 14 ? oa[oi+2] : 14);
+		else if (oa[oi] == TCPOPT_SACK_PERMITTED && xlen == TCPOLEN_SACK_PERMITTED)
+		    sent_sackok = true;
+		else if (oa[oi] == TCPOPT_TIMESTAMP && xlen == TCPOLEN_TIMESTAMP)
+		    sent_timestamp = true;
+
+		oi += xlen;
+	    }
+	}
+    }
+    
     // update max_seq and max_live_seq
     if (SEQ_GT(np->end_seq, max_seq))
 	max_seq = np->end_seq;
@@ -545,6 +556,10 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
     if (have_ack_latency)
 	fprintf(f, " minacklatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+    if (sent_sackok)
+	fprintf(f, " sentsackok='yes'");
+    if (sent_timestamp)
+	fprintf(f, " senttimestamp='yes'");
     if (loss_trail
 	|| ((write_flags & (WR_ACKLATENCY | WR_ACKCAUSALITY)) && have_ack_latency)
 	|| ((write_flags & WR_FULLRCVWND) && filled_rcv_window)) {
