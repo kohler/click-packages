@@ -306,10 +306,57 @@ CalculateVariance::print_edf_function()
 
 }
 
+static int sorter(const void *av, const void *bv) {
+    unsigned a = *((const unsigned *)av);
+    unsigned b = *((const unsigned *)bv);
+    return a-b;
+}
+
+void
+CalculateVariance::print_all_aggregates()
+{
+
+    FILE *outfile = fopen(_outfilename.cc(), "w");
+
+    if (!outfile) {
+        click_chatter("%s: %s", _outfilename.cc(), strerror(errno));
+	return;
+    }
+
+    fprintf(outfile,"#total pkts %d\n",_total_pkts);
+    if (_use_hash) {
+	unsigned *permutation = new unsigned[_hashed_counters.size()];
+	int i=0;
+	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	    permutation[i] = iter.key();
+	    CounterEntry ent = iter.value();
+	    i++;
+	}
+	assert(i < _num_aggregates);
+	qsort(permutation,i, sizeof(unsigned), &sorter);
+
+	CalculateVariance::CounterEntry *entry;
+	for (int j=0;j<i;j++) {
+	    entry = _hashed_counters.findp(permutation[j]);
+	    fprintf(outfile,"%d\t%d\n",  permutation[j], entry->pkt_count);
+	}
+	
+	delete[] permutation;
+    }else{
+	for (int j=0;j<_num_aggregates;j++) {
+	    if (_counters[j].pkt_count>0) 
+		fprintf(outfile,"%d\t%d\n",j,_counters[j].pkt_count);
+	}
+    }
+
+    if (fclose(outfile)) {
+	click_chatter("error closing file!");
+    }
+}
+
 void
 CalculateVariance::print_top_aggregates()
 {
-
     FILE *outfile = fopen(_outfilename.cc(), "w");
     if (!outfile) {
         click_chatter("%s: %s", _outfilename.cc(), strerror(errno));
@@ -359,6 +406,15 @@ calculatevariance_print_top_aggregates_handler(Element *e, void *)
     return String("");
 }
 
+static String
+calculatevariance_print_all_aggregates_handler(Element *e, void *)
+{
+    CalculateVariance *cv = (CalculateVariance *)e;
+    cv->print_all_aggregates();
+    return String("");
+}
+
+
 static int
 calculatevariance_reset_write_handler (const String &, Element *e, void *, ErrorHandler *)
 {
@@ -374,6 +430,7 @@ CalculateVariance::add_handlers()
     add_read_handler("printallvariance",calculatevariance_print_all_variance_handler,0);
     add_read_handler("printEDFfunction",calculatevariance_print_edf_function_handler,0);
     add_read_handler("printtopaggregates",calculatevariance_print_top_aggregates_handler,0);
+    add_read_handler("printallaggregates",calculatevariance_print_all_aggregates_handler,0);
     add_write_handler("reset",calculatevariance_reset_write_handler,0);
 }
 

@@ -50,6 +50,7 @@ class CalculateVariance : public Element {
     void print_all_variance(); 
     void print_edf_function();
     void print_top_aggregates();
+    void print_all_aggregates();
 
     class CounterEntry {
 	public:
