@@ -1233,7 +1233,7 @@ class PlotCanvas:
     _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "")
 
     DRAG_STICKINESS = 5
-    IDENTIFY_MAGNETISM = 15
+    IDENTIFY_MAGNETISM = 24
     
     # initialization
     def __init__(self, master, width=600, height=500):
@@ -1347,6 +1347,11 @@ class PlotCanvas:
     def grab_focus(self):
         self.canvas.grab_focus()
 
+    # selecting tools
+    def select_tool(self, which):
+        self.tool = which
+        self._check_tool(self.canvas.window.get_pointer()[2])
+
     def cmd_configure(self, widget, event):
         x, y, self.wwidth, self.wheight = widget.get_allocation()
         self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
@@ -1453,18 +1458,19 @@ class PlotCanvas:
     # IDENTIFY tool
     def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM):
         try:
-            t = self._itransform(x0, y0)[0]
+            t0, t1 = self.get_plotted_time_range()
+            t = self._itransform(x0, y0, constrain=False)[0]
             delta = mindist / self.tscale
             found = None; best_dist = mindist ** 2
             tscale, toff, sscale, soff = self.tscale, self.toff, self.sscale, self.soff
-            for p in self.conn.packets(self.dir, t - delta, t + delta):
+            for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
                 x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
                 dist = (x - x0) ** 2
-                if y0 < y1: dist += (y0 - y1) ** 2
-                elif y0 > y2: dist += (y0 - y2) ** 2
+                if y0 > y1: dist += (y0 - y1) ** 2
+                elif y0 < y2: dist += (y0 - y2) ** 2
                 if dist < best_dist:
                     found = ('packet', p, self.dir); best_dist = dist
-            for p in self.conn.packets(1 - self.dir, t - delta, t + delta):
+            for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
                 x, y = p.time * tscale + toff, p.ack * sscale + soff
                 dist = (x - x0) ** 2 + (y - y0) ** 2
                 if dist < best_dist:
@@ -1689,6 +1695,9 @@ class PlotFlowWindow:
             ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
    	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, "<StockItem>", gtk.STOCK_QUIT ),
+            ( "/_Tools",	None,		None, 0, "<Branch>" ),
+            ( "/Tools/_Identify", None,		self.cmd_menu_tool, 0, "<RadioItem>" ),
+            ( "/Tools/_Move", None,		self.cmd_menu_tool, 0, "/Tools/Identify" ),
             ( "/_View",		None,		None, 0, "<Branch>" ),
             ( "/View/View _All", None, self.cmd_zoom_fit, 0, "<StockItem>", gtk.STOCK_ZOOM_FIT ),
             ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, "<StockItem>", gtk.STOCK_ZOOM_IN ),
@@ -1704,11 +1713,19 @@ class PlotFlowWindow:
         vbox.pack_start(menubar, 0, 0)
         menubar.show()
 
+        self.menu_tools = { }
+        self.menu_tools[PlotCanvas.TOOL_IDENTIFY] = self.item_factory.get_item("/Tools/Identify")
+        self.menu_tools[PlotCanvas.TOOL_HAND] = self.item_factory.get_item("/Tools/Move")
+
         self.rcv_window_item = self.item_factory.get_item("/View/Hide Receive Window")
 
     def _init_toolbar(self, win, vbox):
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH)
+        self.toolbar_tools = { }
+        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool selects packets and prints information in status line", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_toolbar_tool, 0)
+        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Panning and zooming tool", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_toolbar_tool, 0)
+        toolbar.append_space()
         toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
         toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
         toolbar.append_item("All", "Show whole connection", "", stock_image(gtk.STOCK_ZOOM_FIT), self.cmd_zoom_fit, 0)
@@ -1781,6 +1798,19 @@ class PlotFlowWindow:
     def cmd_zoom_fit(self, widget, event):
         self.canvas.view_all()
 
+    def select_tool(self, tool):
+        if self.canvas.tool != tool:
+            self.canvas.select_tool(tool)
+            self.toolbar_tools[tool].set_active(True)
+            self.menu_tools[tool].set_active(True)
+
+    def cmd_menu_tool(self, widget, toolbar):
+        for e in self.menu_tools.items():
+            if e[1].get_active(): self.select_tool(e[0])
+    def cmd_toolbar_tool(self, widget, toolbar):
+        for e in self.toolbar_tools.items():
+            if e[1].get_active(): self.select_tool(e[0])
+
     def _activate_flow_items(self, fref):
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
         self.next_flow_button.set_sensitive(self.flowid < len(self.flowset) - 1)
@@ -1837,12 +1867,14 @@ class PlotFlowWindow:
         elif highlight[0] == "packet":
             p, dir = highlight[1:]
             if dir == self.flowref.dir:
-                desc = "%.06fs: <b>Data</b> at %d+%d" % (p.time, int(p.seq), int(p.last_seq - p.seq))
+                desc = "%.06fs: <b>Data</b> at %d:%d (+%d)" % (p.time, int(p.seq), int(p.last_seq), int(p.last_seq - p.seq))
             else:
                 desc = "%.06fs: <b>Ack</b> for %d" % (p.time, int(p.ack))
                 if p.dup_acks > 0:
                     desc += " (" + ordinal(p.dup_acks + 1) + " dup)"
-            self.statusbar.set_markup(desc)
+                if not p.pure_ack():
+                    desc += " with data (+%d)" % (p.last_seq - p.seq)
+            self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
             
 
 
