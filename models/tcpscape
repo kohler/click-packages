@@ -925,7 +925,7 @@ class PlotCanvas:
                 if not (event.state & (gtk.gdk.CONTROL_MASK | gtk.gdk.SHIFT_MASK)):
                     self.canvas.window.set_cursor(PlotCursors(self.canvas)["grabhand"])
         except ValueError:
-            self.press_x = -1
+            self.press_x = None
         self.stuck = True
         self.press_state = event.state
         self.grab_focus()
@@ -933,7 +933,7 @@ class PlotCanvas:
     def cmd_motion(self, widget, event):
         try:
             x, y, state = widget.window.get_pointer()
-            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted and self.press_x >= 0:
+            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted and self.press_x is not None:
                 if self.stuck and (abs(self.press_x - x) > 5):
                     self.stuck = False
                     self.drag_t0 = self.get_time_range()[0]
