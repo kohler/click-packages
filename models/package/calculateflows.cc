@@ -92,25 +92,15 @@ CalculateFlows::simple_action(Packet *p)
        unsigned win = ntohs(tcph->th_win); // requested window size
        unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
        int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
-	   if (!loss.rel_seq[paint]) {
-	   		loss.rel_seq[paint] = seq;
-			seq = 1;
-	   }
-	   else{
-	   		seq = seq - loss.rel_seq[paint];
-	   		ack = ack - loss.rel_seq[cpaint];	
-	   }
 	   
-	   
-	   
-	     	       
 	   if (tcph->th_flags & TH_SYN) // Is this a SYN packet?
        		return p;
        if (tcph->th_flags & TH_FIN)	// Is this a FIN packet?
        		return p;
+	 	  
 	   if (seqlen > 0) {
 		   type=1;
-	   	   loss.calculate_loss_events(seq,seqlen,ts,paint); //calculate loss if any
+	   	   loss.calculate_loss_events2(seq,seqlen,ts,paint); //calculate loss if any
 		   loss.calculate_loss(seq, seqlen, paint); //calculate loss if any
    	       print_send_event(paint, ts, seq, (seq+seqlen));
   		   m_tbfirst.insert(seq, ts);
@@ -123,15 +113,16 @@ CalculateFlows::simple_action(Packet *p)
 	   }
 	   
 	   if (ackp){ // check for ACK and update as necessary 
-	   		loss.set_last_ack(ack,cpaint);
+			loss.set_last_ack(ack,cpaint);
 			m_acks.insert(ack, m_acks.find(ack)+1 );
 			print_ack_event(cpaint, type, ts, ack);	
-			printf("[%u, %u]",ack,m_acks[ack]);
+			//printf("[%u, %u]",ack,m_acks[ack]);
 	   }
 	   
-	   /*for (MapInterval::Iterator iter = m_ibtime.first(); iter; iter++){
-	   	TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
-	   	printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
+	/* for (MapS::Iterator iter = m_acks.first(); iter; iter++){
+	   	short int *value = const_cast<short int *>(&iter.value());
+		const unsigned *temp = &m_acks.key_of_value(value);
+	   	printf("%u:%hd \n",*temp,*value);
 	    
 	   }
 	   timeval tv2 = loss.Search_seq_interval(27 ,600, paint);
@@ -139,7 +130,7 @@ CalculateFlows::simple_action(Packet *p)
 	   
        loss.inc_packets(paint); // Increment the packets for this flow (forward or reverse)
 	   loss.set_total_bytes((loss.total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
-	   
+	 //  printf("[%u] %u:%u:%u\n",paint,loss.packets(paint),loss.total_bytes(paint),seq);
 	   
 	   break;
      }
@@ -163,13 +154,13 @@ CalculateFlows::simple_action(Packet *p)
 		
 	 }
 	}
-	 printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
+	/* printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
 	 printf("Sequence Number =[%u,%u]", loss.last_seq(0),loss.last_seq(1));
 	 printf("ACK Number =[%u,%u]", loss.last_ack(0),loss.last_ack(1));
 	 printf("Total Packets =[%u,%u]", loss.packets(0),loss.packets(1));
 	 printf("Total Bytes =[%u,%u]", loss.total_bytes(0),loss.total_bytes(1));
 	 printf("Total Bytes Lost=[%u,%u]\n\n", loss.bytes_lost(0),loss.bytes_lost(1));
-	
+	*/
 	 return p;
 }
 
@@ -182,10 +173,10 @@ CalculateFlows::print_ack_event(unsigned paint, int type, timeval tstamp, unsign
         return;
     }
 	if (type == 0){	
-		fprintf(outfile,"%ld.%06ld ACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+		fprintf(outfile,"%ld.%06ld PACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
 	}
 	else {
-		fprintf(outfile,"%ld.%06ld DACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+		fprintf(outfile,"%ld.%06ld ACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
 	}
 	if (fclose(outfile)) {
         click_chatter("error closing file!");
