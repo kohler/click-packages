@@ -61,7 +61,17 @@ _postscript_style = {
     "label": LineDescriptor(0, 0, 0)
     }
 
-_print_options = None
+PRINT_PRINTER = 0
+PRINT_FILE = 1
+PRINT_EPSFILE = 2
+_print_options = {
+    "dest": PRINT_PRINTER,
+    "file": "",
+    "papersize": (612, 792),
+    "landscape": True,
+    "color": True,
+    "margins": (28, 28, 28, 28)         # left, top, right, bottom
+    }
 
 
 def frange(start, stop, step):
@@ -956,6 +966,7 @@ class PlotCursors:
 
 ANCHOR_N = 0
 ANCHOR_E = 1
+ANCHOR_E_ROT = 2
 
 class PlotCanvas_ScreenDrawable:
 
@@ -992,19 +1003,25 @@ class PlotCanvas_ScreenDrawable:
                 new_pcontext.set_font_description(new_pfontdesc)
                 self.small_playout = pango.Layout(new_pcontext)
             return self.small_playout
-        elif name == "":
+        elif name == "" or name == "legend":
             if self.playout is None:
                 self.playout = self.plotcanvas.canvas.create_pango_layout("")
             return self.playout
         else:
             raise RuntimeError("bad layout name " + name)
 
+    def legend(self, gc, layout, text, position):
+        pass
+    
     def prepare(self):
         self.drawable = self.plotcanvas.backing_store
 
     def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
         p = self.plotcanvas
         return (p.left_margin, p.top_margin, p.plot_width, p.plot_height)
+
+    def y_axis_labels(self, labels):
+        pass
 
     def complete(self):
         gc = self.plotcanvas.canvas.get_style().black_gc
@@ -1079,45 +1096,69 @@ class PlotCanvas_ScreenDrawable:
         self.draw_line(gc, x, y + 2, x, y - 2)
 
 
-class Helvetica:
-    WIDTHS = { '0': 0.556, '1': 0.556, '2': 0.556, '3': 0.556, '4': 0.556,
-               '5': 0.556, '6': 0.556, '7': 0.556, '8': 0.556, '9': 0.556,
-               'K': 0.667, '.': 0.278, '+': 0.584, '-': 0.584 }
-
-    def __init__(self, size):
+class PostScriptFont:
+    
+    def __init__(self, name, size, widths, capheight):
+        self.name = name
         self.size = size
+        self.widths = widths
+        self.capheight = capheight
 
-    def write_define(f):
-        f.write("/Helvetica findfont dup length dict begin {\n\
+    def write_define(self, f):
+        f.write("/" + self.name + " findfont dup length dict begin {\n\
   1 index /FID ne {def} {pop pop} ifelse\n\
 } forall\n\
 /Encoding[StandardEncoding aload pop]dup 45/minus put def\n\
-currentdict end /Helvetica.tcpplot exch definefont pop\n")
-    write_define = staticmethod(write_define)
+currentdict end /" + self.name + ".tcpplot exch definefont pop\n")
 
     def write_select(self, f):
-        f.write('/Helvetica.tcpplot ' + str(self.size) + ' selectfont\n')
+        f.write("/" + self.name + ".tcpplot " + str(self.size) + " selectfont\n")
 
     def height(self):
-        return 0.718 * self.size
+        return self.capheight * self.size
         
     def extents(self, str):
-        w = reduce(lambda x, y: x + self.WIDTHS[y], str, 0)
+        w = reduce(lambda x, y: x + self.widths[ord(y)], str, 0)
         if w == 0:
             return (0, 0, 0, 0)
         else:
-            return (0, 0, w * self.size, self.height())
+            return (0, 0, w * self.size / 1000., self.height())
+
+
+class Helvetica(PostScriptFont):
+    
+    WIDTHS = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 584, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 278, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 333, 556, 556, 167, 556, 556, 556, 556, 238, 500, 556, 333, 333, 611, 611, 0, 556, 556, 556, 278, 0, 556, 350, 278, 500, 500, 556, 1000, 1000, 0, 611, 0, 333, 333, 333, 333, 333, 333, 333, 333, 0, 333, 333, 0, 333, 333, 333, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1000, 0, 370, 0, 0, 0, 0, 611, 778, 1000, 365, 0, 0, 0, 0, 0, 889, 0, 0, 0, 278, 0, 0, 278, 611, 944, 611, 0, 0, 0, 0)
+
+    def __init__(self, size=0):
+        PostScriptFont.__init__(self, "Helvetica", size, self.WIDTHS, 0.718)
+
+
+class HelveticaBold(PostScriptFont):
+    
+    WIDTHS = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 584, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 222, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 333, 556, 556, 167, 556, 556, 556, 556, 191, 333, 556, 333, 333, 500, 500, 0, 556, 556, 556, 278, 0, 537, 350, 222, 333, 333, 556, 1000, 1000, 0, 611, 0, 333, 333, 333, 333, 333, 333, 333, 333, 0, 333, 333, 0, 333, 333, 333, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1000, 0, 370, 0, 0, 0, 0, 556, 778, 1000, 365, 0, 0, 0, 0, 0, 889, 0, 0, 0, 278, 0, 0, 222, 611, 944, 611, 0, 0, 0, 0)
+
+    def __init__(self, size=0):
+        PostScriptFont.__init__(self, "Helvetica-Bold", size, self.WIDTHS, 0.718)
 
 
 class PlotCanvas_PostScriptDrawable:
 
     FONT = Helvetica
+    LEGEND_FONT = HelveticaBold
+
+    PPD_PAPER_SIZES = { (612, 792): "Letter",
+                        (792, 612): "LetterRotated",
+                        (612, 1008): "Legal",
+                        (842, 1191): "A3",
+                        (595, 842): "A4",
+                        (420, 595): "A5" }
 
     def __init__(self, plotcanvas, f):
         self.plotcanvas = plotcanvas
         self.f = f
         self.cur_font = None
         self.cur_gc = None
+        self.options = _print_options
 
     def gc(self, name):
         return name
@@ -1127,33 +1168,97 @@ class PlotCanvas_PostScriptDrawable:
             return self.FONT(8)
         elif name == "":
             return self.FONT(12)
+        elif name == "legend":
+            return self.LEGEND_FONT(12)
         else:
             raise RuntimeError("bad layout name " + name)
 
     def prepare(self):
-        self.f.write("%!PS-Adobe-3.0\n")
-        self.FONT.write_define(self.f)
-        self.f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
+        f = self.f
+        papersize = self.options["papersize"]
+        eps = (self.options["dest"] == PRINT_EPSFILE)
+        margins = self.options["margins"]
+        
+        f.write("%!PS-Adobe-3.0\n\
+%%Creator: LCDF tcpplot\n\
+%%LanguageLevel: 2\n\
+%%Pages: 1\n")
+        if self.options["landscape"]:
+            f.write("%%Orientation: Landscape\n")
+        if not eps:
+            f.write("%%DocumentMedia: ")
+            try: f.write(self.PPD_PAPER_SIZES[papersize])
+            except KeyError: f.write(`papersize[0]` + "ptx" + `papersize[1]` + "pt")
+            f.write(" " + `papersize[0]` + " " + `papersize[1]` + " 75 white ()\n")
+        f.write("%%EndComments\n\
+%%BeginProlog\n\
+%%BeginProcSet: LCDF-tcpplot 1.0 0\n")
+        self.FONT().write_define(f)
+        self.LEGEND_FONT().write_define(f)
+        f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
         for key in _postscript_style:
             s = _postscript_style[key]
-            self.f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
+            f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
             if len(s.dash):
-                self.f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
+                f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
             else:
-                self.f.write("[]0 setdash ")
-            self.f.write("}bind def\n")
-        self.f.write("/Pd{moveto -2 0 rmoveto 4 0 rlineto 0 1 index rmoveto -4 0 rlineto 2 0 rmoveto 0 exch neg rlineto stroke}bind def\n\
+                f.write("[]0 setdash ")
+            f.write("}bind def\n")
+        f.write("/Pd{moveto -2 0 rmoveto 4 0 rlineto 0 1 index rmoveto -4 0 rlineto 2 0 rmoveto 0 exch neg rlineto stroke}bind def\n\
 /Pa{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto stroke}bind def\n\
-/Pda{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto 0 -2 rmoveto 4 0 rlineto -2 -2 rmoveto 0 4 rlineto stroke}bind def\n\
-90 rotate 0 -612 translate\n")
-        self.cur_gc = None
-        self.top = 612
+/Pda{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto 0 -2 rmoveto 4 0 rlineto -2 -2 rmoveto 0 4 rlineto stroke}bind def\n")
+        f.write("%%EndProcSet\n")
 
-    def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
-        return (72, 72, 684, 504)
+        # page size
+        if not eps and papersize in self.PPD_PAPER_SIZES:
+            f.write("%%BeginSetup\n\
+%%IncludeFeature: *PaperSize " + self.PPD_PAPER_SIZES[papersize] + "\n\
+%%EndSetup\n")
+
+        # page
+        f.write("%%Page: 1 1\n")
+        if self.options["landscape"]:
+            f.write("90 rotate 0 -" + `self.options["papersize"][0]` + " translate\n")
+            self.top = papersize[0]
+        else:
+            self.top = papersize[1]
+        self.cur_gc = None
+
+        # calculate initial bounds
+        if self.options["landscape"]:
+            self.all_bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
+        else:
+            self.all_bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
+        self.y_axis_labels([])
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height) -- vertical opposite of PostScript coordinates
+        return self.bounds
+
+    def y_axis_labels(self, labels):
+        label, legend = self.layout(), self.layout("legend")
+        try:
+            leftsp = max(map(lambda x: label.extents(x)[2], labels))
+        except ValueError:              # no labels
+            leftsp = label.extents("6000K")[2]
+        leftsp += 4 + 6 + legend.height()
+        botsp = label.height() + 4 + legend.height() + 6
+
+        # now calculate bounds
+        allb = self.all_bounds
+        self.bounds = (allb[0] + leftsp, allb[1], allb[2] - leftsp, allb[3] - botsp)
+    
+    def legend(self, gc, layout, text, position):
+        b, allb = self.bounds, self.all_bounds
+        if position == "xaxis":
+            self.draw_text(gc, layout, text, b[0] + b[2]/2., allb[1] + allb[3] - 2 - layout.height(), ANCHOR_N)
+        elif position == "yaxis":
+            self.draw_text(gc, layout, text, allb[0] + layout.height() + 2, b[1] + b[3]/2., ANCHOR_E_ROT)
+        else:
+            raise ValueError
     
     def complete(self):
         self.f.write("showpage\n")
+        self.f.write("%%EOF\n")
         
     def clip(self, gc, rectangle):
         x, y, w, h = rectangle
@@ -1202,6 +1307,8 @@ class PlotCanvas_PostScriptDrawable:
             self.f.write(str(x - lr[2]/2.0) + " " + str(self.top - y - lr[3] - 4) + " m(" + text + ")s\n")
         elif anchor == ANCHOR_E:
             self.f.write(str(x - 4 - lr[2]) + " " + str(self.top - y - lr[3]/2.0) + " m(" + text + ")s\n")
+        elif anchor == ANCHOR_E_ROT:
+            self.f.write("gsave " + str(x - 4) + " " + str(self.top - y - lr[2]/2.0) + " translate 90 rotate 0 0 m(" + text + ")s grestore\n")
         else:
             raise RuntimeError("bad anchor " + str(anchor))
 
@@ -1211,6 +1318,8 @@ class PlotCanvas_PostScriptDrawable:
             return (x - lr[2]/2.0, y + 2, lr[2], lr[3])
         elif anchor == ANCHOR_E:
             return (x - 4 - lr[2], y - lr[3]/2.0, lr[2], lr[3])
+        elif anchor == ANCHOR_E_ROT:
+            return (x - 4 - lr[3], y - lr[2]/2.0, lr[3], lr[2])
         else:
             raise RuntimeError("bad anchor " + str(anchor))
 
@@ -1524,12 +1633,15 @@ class PlotCanvas:
             return None
 
     # drawing helpers
-    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, layout):
+    def _format_y_label(text):
         if re.match(".*e\\+0[4-7]$", text):
             text = str(float(text))[:-2]
         if re.match("...*000$", text):
             text = text[:-3] + "K"
-        drawable.draw_text(gc, layout, text, edge1, pos, anchor=ANCHOR_E)
+        return text
+    _format_y_label = staticmethod(_format_y_label)
+    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, layout):
+        drawable.draw_text(gc, layout, self._format_y_label(text), edge1, pos, anchor=ANCHOR_E)
     def _draw_label_x(self, text, pos, edge1, edge2, drawable, gc, layout):
         drawable.draw_text(gc, layout, text, pos, edge2, anchor=ANCHOR_N)
     def _draw_tic_x(self, pos, edge1, edge2, len, drawable, gc):
@@ -1552,6 +1664,12 @@ class PlotCanvas:
                 mpix = mpos * scale + off
                 if mpos >= pos1:
                     ticer(mpix, edge1, edge2, 2, drawable, gc_tic)
+    def _y_labels(self, pos1, pos2, step):
+        l = []
+        for pos in frange(floor(pos1 / step) * step, pos2, step):
+            if pos >= pos1:
+                l.append(self._format_y_label("%g" % pos))
+        return l
 
     def plot(self, drawable=None):
         if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
@@ -1563,7 +1681,7 @@ class PlotCanvas:
             playout = drawable.layout()
             small_playout = drawable.layout("small")
 
-            # plottable area
+            # initial plottable area
             left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
 
             # analyze time ranges
@@ -1575,6 +1693,10 @@ class PlotCanvas:
             if s1 <= s0: s0 = 0; s1 = 1
             ranges = fix_range(s0, s1, 30.0 / plot_height)
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
+
+            # refine plottable area based on widths of sequence labels
+            drawable.y_axis_labels(self._y_labels(s0, s1, sstep))
+            left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
 
             # get transformation
             tscale = plot_width / float(t1 - t0)
@@ -1609,6 +1731,11 @@ class PlotCanvas:
             label_gc = drawable.gc("label")
             self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, label_gc, playout)
             self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
+
+            # axis legends
+            legend_playout = drawable.layout("legend")
+            drawable.legend(label_gc, legend_playout, "Sequence number", "yaxis")
+            drawable.legend(label_gc, legend_playout, "Time (s)", "xaxis")
 
             # ack packets
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
@@ -1712,15 +1839,23 @@ class PlotCanvas:
 
 class PrintOptionsDialog:
 
-    PRINTER = 0
-    FILE = 1
-    EPSFILE = 2
+    PAPER_SIZES = (
+        ( "US Letter (8.5x11\")", (612, 792) ),
+        ( "US Legal (8.5x14\")", (612, 1008) ),
+        ( "ISO A3 (297x420mm)", (842, 1191) ),
+        ( "ISO A4 (210x297mm)", (595, 842) ),
+        ( "ISO A5 (148x210mm)", (420, 595) ),
+        ( "Custom", (0, 0) )
+        )
 
-    def __init__(self, parent):
-        dialog = gtk.Dialog(title='tcpplot Print Options', parent=parent, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+    def __init__(self, parent, options=None):
+        if options == None: options = _print_options
+        self.options = options
+        
+        self.dialog = dialog = gtk.Dialog(title='tcpplot Print Options', parent=parent, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
         frame = gtk.Frame(label='Printer')
         dialog.vbox.pack_start(frame)
-        table = gtk.Table(rows=3, columns=3)
+        table = gtk.Table(rows=4, columns=3)
         table.set_row_spacings(5); table.set_col_spacings(7); table.set_border_width(5)
         frame.add(table)
 
@@ -1730,36 +1865,70 @@ class PrintOptionsDialog:
         table.attach(l, 0, 1, 1, 2)
         l = gtk.Label("Color:"); l.set_alignment(1, 0.5)
         table.attach(l, 0, 1, 2, 3)
+        l = gtk.Label("Paper Size:"); l.set_alignment(1, 0.5)
+        table.attach(l, 0, 1, 3, 4)
 
         b = gtk.HBox(False, 10)
-        table.attach(b, 1, 2, 0, 1)
-        self.w_dest = [gtk.RadioButton(group=None, label='Printer')]
-        b.pack_start(self.w_dest[0], False, False)
-        self.w_dest.append(gtk.RadioButton(group=self.w_dest[0], label='File'))
-        b.pack_start(self.w_dest[1], False, False)
-        self.w_dest.append(gtk.RadioButton(group=self.w_dest[0], label='EPS File'))
-        b.pack_start(self.w_dest[2], False, False)
+        self.w_dest = [None, None, None]
+        self.w_dest[PRINT_PRINTER] = gtk.RadioButton(group=None, label='Printer')
+        self.w_dest[PRINT_FILE] = gtk.RadioButton(group=self.w_dest[0], label='File')
+        self.w_dest[PRINT_EPSFILE] = gtk.RadioButton(group=self.w_dest[0], label='EPS File')
+        self.w_dest[self.options["dest"]].set_active(True)
         for i in range(3):
-            self.w_dest[i].connect("toggled", self.dest_toggled, i) 
-
-        b = gtk.HBox(False, 10)
-        table.attach(b, 1, 2, 2, 3)
-        r1 = gtk.RadioButton(group=None, label='Color')
-        b.pack_start(r1, False, False)
-        r = gtk.RadioButton(group=r1, label='Grayscale')
-        b.pack_start(r, False, False)
+            self.w_dest[i].connect("toggled", self.dest_toggled, i)
+            b.pack_start(self.w_dest[i], False, False)
+        table.attach(b, 1, 2, 0, 1)
 
         self.w_file = gtk.Entry()
+        self.w_file.set_text(options["file"])
+        self.w_file.set_sensitive(options["dest"] != PRINT_PRINTER)
         table.attach(self.w_file, 1, 2, 1, 2)
+
+        b = gtk.HBox(False, 10)
+        self.w_color = gtk.RadioButton(group=None, label='Color')
+        b.pack_start(self.w_color, False, False)
+        r = gtk.RadioButton(group=self.w_color, label='Grayscale')
+        if not options["color"]: r.set_active(True)
+        b.pack_start(r, False, False)
+        table.attach(b, 1, 2, 2, 3)
+
+        self.w_papersize = gtk.OptionMenu()
+        menu = gtk.Menu()
+        for x in self.PAPER_SIZES:
+            menu.append(gtk.MenuItem(x[0]))
+        self.w_papersize.set_menu(menu)
+        mapped_indices = filter(lambda x: self.PAPER_SIZES[x][1] == options["papersize"], range(len(self.PAPER_SIZES)))
+        if len(mapped_indices):
+            self.w_papersize.set_history(mapped_indices[0])
+        else:
+            self.w_papersize.set_history(len(self.PAPER_SIZES) - 1)
+        table.attach(self.w_papersize, 1, 3, 3, 4)
+
+        # action area
+        ok = gtk.Button(stock=gtk.STOCK_OK)
+        ok.connect("clicked", self.cmd_done, 1)
+        dialog.action_area.pack_start(ok)
+        cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
+        cancel.connect("clicked", self.cmd_done, 0)
+        dialog.action_area.pack_start(cancel)
         
         dialog.show_all()
 
     def set_dest(self, where):
-        self.w_file.set_sensitive(where != self.PRINTER)
+        self.w_file.set_sensitive(where != PRINT_PRINTER)
 
     def dest_toggled(self, widget, data=None):
-        if widget.get_active():
-            self.set_dest(data)
+        if widget.get_active(): self.set_dest(data)
+
+    def cmd_done(self, widget, data):
+        if data:                        # OK
+            for i in range(3):
+                if self.w_dest[i].get_active():
+                    self.options["dest"] = i
+            self.options["file"] = self.w_file.get_text()
+            self.options["color"] = self.w_color.get_active()
+            self.options["papersize"] = self.PAPER_SIZES[self.w_papersize.get_history()][1]
+        self.dialog.destroy()
 
 
 class PlotFlowWindow:
