@@ -161,9 +161,11 @@ def expand_rectangle(r1, v):
     return (r1[0] - v, r1[1] - v, r1[2] + 2*v, r1[3] + 2*v)
 
 def ordinal(n):
-    if abs(n) == 1: return str(n) + "st"
-    elif abs(n) == 2: return str(n) + "nd"
-    elif abs(n) == 3: return str(n) + "rd"
+    dig = abs(n) % 10
+    if abs(n) >= 10 and abs(n) <= 19: dig = 4
+    if dig == 1: return str(n) + "st"
+    elif dig == 2: return str(n) + "nd"
+    elif dig == 3: return str(n) + "rd"
     else: return str(n) + "th"
 
 def seqadj(seq, adj):
@@ -263,15 +265,17 @@ def idle_remove(num):
 #
 
 class Packet(object):
-    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
+    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'flags', 'dup_acks', 'window', 'anno']
     def __init__(self, time, flags, seq, payloadlen, ack, window=0):
         self.time = time
         self.seq = seq
         self.last_seq = self.seq + payloadlen
         self.ack = ack
+        self.flags = flags
         self.last_seq += ((flags & TH_SYN) != 0) + ((flags & TH_FIN) != 0)
         self.dup_acks = 0
         self.window = window
+        self.anno = None
     def pure_ack(self):
         return self.seq == self.last_seq
     def has_data(self):
@@ -291,6 +295,14 @@ class Packet(object):
             result += str(self.seq) + ":" + str(self.last_seq)
         return result + "]"
 
+class PacketAnno(object):
+    __slots__ = ['packet', 'graphmarkup', 'graphanchor', 'next']
+    def __init__(self, packet, graphmarkup, graphanchor):
+        self.packet = packet
+        self.graphmarkup = graphmarkup
+        self.graphanchor = graphanchor
+        self.next = None
+
 class LossEvent:
     def __init__(self, type, begin, seq, end, end_seq):
         self.type, self.begin, self.seq, self.end, self.end_seq = \
@@ -308,6 +320,11 @@ class LossEvent:
 # connections and flowrefs
 #
 
+class PulseProcess(Exception):
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
 class ConnectionFormatError(Exception):
     def __init__(self, s=""):
         self.str = s
@@ -508,7 +525,7 @@ class Connection(object):
         except IndexError:
             pass
         self.s[dir].append(p)
-        
+    
     def load_process(self):
         if self.available:
             return None
@@ -759,12 +776,15 @@ class ConnectionReader:
     _parse_code_min_binary_len = 0
     _parse_code_window = False
 
+    FAKE_ENDTIME = 8000000000.
+
     def __init__(self, conn=None, flowset=None):
         self.conn = conn; self.flowset = flowset
         if conn is None: self.conn = Connection()
         if flowset is None: self.flowset = FlowSet()
         self.fake_conn = conn is None
         self.fake_flowset = flowset is None
+        self.endtime = self.FAKE_ENDTIME
 
     def connmap(self, aggregate):
         try:
@@ -983,9 +1003,8 @@ except KeyError:\n\
         self.f = TCPDumpFile(f)
         if filepos is not None:
             self.f.seek(filepos)
-        if endtime is None:
-            endtime = 8000000000.
-        self.endtime = endtime
+        if endtime is not None:
+            self.endtime = endtime
 
         return self._read_tcpdump
 
@@ -1016,23 +1035,58 @@ except KeyError:\n\
                 c.read_complete(True)
         return None
 
+    # progress tracking
+    def process_position(self):
+        if self.endtime != self.FAKE_ENDTIME:
+            s0, s1 = self.conn.s[0], self.conn.s[1]
+            mint = min(len(s0) == 0 and self.FAKE_ENDTIME or s0[0].time,
+                       len(s1) == 0 and self.FAKE_ENDTIME or s1[0].time)
+            maxt = max(len(s0) == 0 and -1 or s0[-1].time,
+                       len(s1) == 0 and -1 or s1[-1].time)
+            if mint < maxt:
+                return (maxt - mint) / (self.endtime - mint)
+            else:
+                raise PulseProcess()
+        elif self.file_size is not None:
+            return float(self.base_file.tell()) / self.file_size
+        else:
+            raise PulseProcess()
+
+    def process_function(self):
+        return self.process_func
+
     # general reading
     def read_process(self, filename, f=None, filepos=None, endtime=None):
-        if f is None:
-            f = uncompressed_file(filename)
-        else:
-            f = uncompressed_file(f)
-        c = f.read(1)
+        # open file, get its size
+        if f is None: f = file(filename, "rb")
+        try:
+            f.seek(0, 2)
+            self.file_size = f.tell()
+            f.seek(0)
+        except IOError:
+            self.file_size = None
+        self.base_file = f
+
+        # uncompress file if appropriate
+        s = f.read(2)
         f.seek(0)
-        if c == '<':
-            return self.flowset.read_process(filename, f)
-        elif c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
-            return self.read_ipsumdump_process(filename, f, filepos, endtime)
+        if s == "\037\235" or s == "\037\213":
+            f = gzip.GzipFile(fileobj=f)
+            s = f.read(1)
+            f.seek(0)
+
+        # return the appropriate process
+        if s[0] == '<':
+            self.process_func = self.flowset.read_process(filename, f)
+        elif s[0] == '!' or s[0] == '#' or (s[0] >= '0' and s[0] <= 'Z'):
+            self.process_func = self.read_ipsumdump_process(filename, f, filepos, endtime)
         else:
-            return self.read_tcpdump_process(filename, f, filepos, endtime)
+            self.process_func = self.read_tcpdump_process(filename, f, filepos, endtime)
+        return self
 
     def read(self, filename, f=None, filepos=None, endtime=None):
-        func = self.read_process(filename, f, filepos, endtime)
+        self.read_process(filename, f, filepos, endtime)
+        func = self.process_func
         while func is not None:
             func = func()
 
@@ -1365,6 +1419,7 @@ class PlotCursors:
     "zoomout": ("zoomout_data", "zoom_mask", 6, 6, gtk.gdk.SB_DOWN_ARROW),
     "hand": ("hand_data", "hand_mask", 9, 8, gtk.gdk.FLEUR),
     "grabhand": ("grabhand_data", "grabhand_mask", 8, 7, gtk.gdk.FLEUR),
+    "zoomdrag": ("zoomin_data", "zoom_mask", 6, 6, gtk.gdk.SIZING),
     "zoomin_data": (string.join(map(chr, [
 	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x62, 0x04, 0x00,
         0x61, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x61, 0x08, 0x00,
@@ -1446,9 +1501,8 @@ class PlotCanvas_ScreenDrawable:
 
     def __init__(self, plotcanvas, immediate=False):
         self.plotcanvas = plotcanvas
-        self.playout = None
-        self.small_playout = None
-        if immediate: self.drawable = plotcanvas.canvas.window
+        self.playout = self.small_playout = self.flags_playout = None
+        self.immediate = immediate
 
     def gc(self, name):
         if name in PlotCanvas_ScreenDrawable._gcs:
@@ -1475,6 +1529,15 @@ class PlotCanvas_ScreenDrawable:
                 new_pcontext.set_font_description(new_pfontdesc)
                 self.small_playout = pango.Layout(new_pcontext)
             return self.small_playout
+        elif name == "flags":
+            if self.flags_playout is None:
+                new_pcontext = self.plotcanvas.canvas.create_pango_context()
+                new_pfontdesc = new_pcontext.get_font_description().copy()
+                new_pfontdesc.set_weight(pango.WEIGHT_HEAVY)
+                new_pfontdesc.set_size(new_pfontdesc.get_size() * 0.75)
+                new_pcontext.set_font_description(new_pfontdesc)
+                self.flags_playout = pango.Layout(new_pcontext)
+            return self.flags_playout
         elif name == "":
             if self.playout is None:
                 self.playout = self.plotcanvas.canvas.create_pango_layout("")
@@ -1486,7 +1549,10 @@ class PlotCanvas_ScreenDrawable:
         return False
     
     def prepare(self):
-        self.drawable = self.plotcanvas.backing_store
+        if self.immediate:
+            self.drawable = self.plotcanvas.canvas.window
+        else:
+            self.drawable = self.plotcanvas.backing_store
 
     def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
         p = self.plotcanvas
@@ -1637,6 +1703,8 @@ class PlotCanvas_PostScriptDrawable:
             return self.FONT(8)
         elif name == "":
             return self.FONT(12)
+        elif name == "flags":
+            return self.LEGEND_FONT(8)
         elif name == "legend":
             return self.LEGEND_FONT(12)
         elif name == "title":
@@ -1814,7 +1882,8 @@ class PlotCanvas:
     TOOL_ZOOM_OUT = 3
     TOOL_GRABHAND = 4
     TOOL_IDENTIFY = 5
-    _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "")
+    TOOL_ZOOM_DRAG = 6
+    _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "", "zoomdrag")
 
     DRAG_STICKINESS = 5
     IDENTIFY_MAGNETISM = 24
@@ -1837,9 +1906,6 @@ class PlotCanvas:
         self.canvas.connect("enter_notify_event", self.cmd_check_state)
         self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
-        master.pack_start(self.canvas, expand=1, fill=1, padding=4)
-        self.canvas.show()
-
         self.conn = None
         
         self.left_margin = 4
@@ -1854,9 +1920,14 @@ class PlotCanvas:
         self.show_tool = PlotCanvas.TOOL_NONE
         self.begin = 0
         self.end = 1000000000.0
+        self.beginseq = None
+        self.endseq = None
         self.show_window = True
         self.backing_store = None
         self.backing_store_updated = False
+
+        self.screen_drawable = PlotCanvas_ScreenDrawable(self)
+        self.immediate_screen_drawable = PlotCanvas_ScreenDrawable(self, True)
 
         self.lit_main = [None, None]
         self._draw_lit_main = [None, None]
@@ -1870,6 +1941,9 @@ class PlotCanvas:
         self.adjustment = gtk.Adjustment()
         self.adjustment.connect("value_changed", self.adj_value_changed)
         self.adjusting = False
+
+        master.pack_start(self.canvas, expand=1, fill=1, padding=4)
+        self.canvas.show()
 
     # getting properties
     def get_direction(self):
@@ -1893,6 +1967,7 @@ class PlotCanvas:
         self.lit = {}
         self.highlight = [None]
         self.highlight_bounds = None
+        self.beginseq = self.endseq = None
         if keeptime:
             self.plot()
         else:
@@ -1934,10 +2009,12 @@ class PlotCanvas:
             self.set_time_range(adj.value)
         
     def zoom(self, when=None, factor=1):
-        if when is None: when = (self.begin + self.end) / 2
+        if when is None:
+            when = (self.begin + self.end) / 2
         new_dt = (self.end - self.begin) * factor
         t0, t1 = self.get_plotted_time_range()
         new_t0 = max(when - new_dt * ((when - t0) / (t1 - t0)), 0)
+        self.beginseq = self.endseq = None
         self.set_time_range(new_t0, new_dt, incr=True)
 
     def grab_focus(self):
@@ -1953,6 +2030,7 @@ class PlotCanvas:
         self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
         self.backing_store_updated = False
         self.configured = True
+        self.immediate_screen_drawable.prepare()
 
         # set margins from layout
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
@@ -2001,13 +2079,15 @@ class PlotCanvas:
     def cmd_press(self, widget, event):
         if event.button == 1:
             self.press_state = event.state | gtk.gdk.BUTTON1_MASK
-            self._check_tool(self.press_state)
-            try:
-                self._itransform(event.x, event.y) # for signal
-                self.press = (event.x, event.y)
-            except ValueError:
-                self.press = None
-            self.stuck = True
+        elif event.button == 3:
+            self.press_state = event.state | gtk.gdk.BUTTON3_MASK
+        self._check_tool(self.press_state)
+        try:
+            self._itransform(event.x, event.y) # for signal
+            self.press = (event.x, event.y)
+        except ValueError:
+            self.press = None
+        self.stuck = True
         self.grab_focus()
         return 1
     
@@ -2017,15 +2097,27 @@ class PlotCanvas:
             # locate and light up closest packet
             # prefer current direction during a drag
             dir = None
-            button1 = (state & gtk.gdk.BUTTON1_MASK) != 0 and self.show_tool == PlotCanvas.TOOL_IDENTIFY
-            if button1 and self.lit_main[0] is not None:
+            button = (state & (gtk.gdk.BUTTON1_MASK | gtk.gdk.BUTTON3_MASK)) != 0
+            if button and self.lit_main[0] is not None:
                 dir = self.lit_main[0][1]
-            self.lit_main[button1] = self.closest_packet(x, y, mindist=(button1 and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
+            self.lit_main[button] = self.closest_packet(x, y, mindist=(button and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
             self.highlight = ['lit_packet']
-            if not button1 and self.lit_main[0] != self._draw_lit_main[0]:
+            if not button and self.lit_main[0] != self._draw_lit_main[0]:
                 self.sublight_matchers()
-            
-            if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
+
+            if self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and self.press is not None:
+                if self.stuck and max(abs(self.press[0] - x), abs(self.press[1] - y)) > PlotCanvas.DRAG_STICKINESS:
+                    self.stuck = False
+                if not self.stuck:
+                    x0, y0 = self.press
+                    if self.lit_main[0] is not None:
+                        x0, y0 = self._transform_packet(self.lit_main[0], top=False)
+                    if self.lit_main[1] is not None:
+                        x, y = self._transform_packet(self.lit_main[1], top=True)
+                    t0, s0 = self._itransform(x0, y0)
+                    t, s = self._itransform(x, y, constrain=False)
+                    self.highlight = ["box", t0, s0, t, s]
+            elif self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
                 if self.stuck and (abs(self.press[0] - x) > PlotCanvas.DRAG_STICKINESS):
                     self.stuck = False
                     self.drag_t0 = self.get_plotted_time_range()[0]
@@ -2053,9 +2145,10 @@ class PlotCanvas:
     
     def cmd_release(self, widget, event):
         try:
-            if event.button != 1 or self.press is None:
+            if (event.button != 1 and event.button != 3) or self.press is None:
                 pass
             else:
+                old_highlight = self.highlight
                 self.lit_main[0] = self.lit_main[1]
                 self.lit_main[1] = None
                 self.highlight = ['lit_packet']
@@ -2067,6 +2160,13 @@ class PlotCanvas:
                 elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
                     when = self._itransform(event.x, event.y)[0]
                     self.zoom(when, 0.25)
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and not self.stuck:
+                    crap, t0, s0, t1, s1 = old_highlight
+                    dt, ds = abs(t0 - t1), abs(s0 - s1)
+                    t0, s0 = min(t0, t1), min(s0, s1)
+                    self.beginseq = s0
+                    self.endseq = s0 + ds
+                    self.set_time_range(t0, interval=dt)
 
                 self.highlight_changed()
         except ValueError:
@@ -2077,9 +2177,11 @@ class PlotCanvas:
     def _check_tool(self, state):
         t = self.tool
         if t == PlotCanvas.TOOL_HAND or t == PlotCanvas.TOOL_IDENTIFY:
-            if state & gtk.gdk.BUTTON1_MASK:
+            if state & (gtk.gdk.BUTTON1_MASK | gtk.gdk.BUTTON3_MASK):
                 state = self.press_state
-            if state & gtk.gdk.MOD1_MASK:
+            if state & gtk.gdk.BUTTON3_MASK:
+                t = PlotCanvas.TOOL_ZOOM_DRAG
+            elif state & gtk.gdk.MOD1_MASK:
                 t = PlotCanvas.TOOL_ZOOM_OUT
             elif state & gtk.gdk.CONTROL_MASK:
                 t = PlotCanvas.TOOL_ZOOM_IN
@@ -2205,7 +2307,7 @@ class PlotCanvas:
 
     def plot(self, drawable=None):
         if drawable is None:
-            drawable = PlotCanvas_ScreenDrawable(self)
+            drawable = self.screen_drawable
         
         drawable.prepare()
         drawable.clear()
@@ -2215,6 +2317,7 @@ class PlotCanvas:
             # variables
             playout = drawable.layout()
             small_playout = drawable.layout("small")
+            flags_playout = drawable.layout("flags")
 
             # initial plottable area
             left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
@@ -2242,7 +2345,10 @@ class PlotCanvas:
             t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
 
             # analyze sequence ranges
-            s0, s1 = self.conn.get_seq_range(self.dir, t0, t1)
+            if self.beginseq is None:
+                s0, s1 = self.conn.get_seq_range(self.dir, t0, t1)
+            else:
+                s0, s1 = self.beginseq, self.endseq
             if s1 <= s0: s0 = 0; s1 = 1
             ranges = fix_range(s0, s1, 30.0 / plot_height)
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
@@ -2333,6 +2439,9 @@ class PlotCanvas:
             gc = drawable.gc("data")
             for p in self.conn.packets(self.dir, t0, t1):
                 drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
+                if p.flags & (TH_SYN | TH_FIN):
+                    s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+                    drawable.draw_text(label_gc, flags_playout, s, p.time * tscale + toff, p.last_seq * sscale + soff, anchor=ANCHOR_S)
             
         else:
             self.plotted = False
@@ -2343,37 +2452,46 @@ class PlotCanvas:
     # higlights
     def _highlight_packet_bg(self, pd, gctype="H"):
         p, dir = pd
-        drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+        drawable = self.immediate_screen_drawable
         gc = drawable.gc(gctype)
         if dir == self.dir:
             x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
             bounds = (x - 5, y2 - 5, 10, y1 - y2 + 10)
             drawable.fill_rectangle(gc, bounds)
         else:
-            x, y = self._transform(p.time, p.ack)
-            bounds = (x - 5, y - 5, 10, 10)
+            x, y2 = self._transform(p.time, p.ack)
+            bounds = (x - 5, y2 - 5, 10, 10)
             if p.dup_acks > 0 and gctype == "H":
                 layout = drawable.layout("small")
                 w, h = drawable.text_size(layout, str(p.dup_acks + 1))[:2]
-                bounds = union_rectangle(bounds, (x - w/2 - 2, y + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
-            drawable.fill_rectangle(gc, bounds)
+                bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
+        if p.flags & (TH_SYN | TH_FIN):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+            layout = drawable.layout("flags")
+            w, h = drawable.text_size(layout, s)[:2]
+            bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_S)[1] - 2 - h, w + 4, h + 4))
+        drawable.fill_rectangle(gc, bounds)
         return bounds
         
     def _highlight_packet_fg(self, pd, gctype="H"):
         p, dir = pd
-        drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+        drawable = self.immediate_screen_drawable
         if dir == self.dir:
             x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
             drawable.draw_data(drawable.gc("data." + gctype), x, y1, y2)
         else:
-            x, y = self._transform(p.time, p.ack)
+            x, y2 = self._transform(p.time, p.ack)
             if p.pure_ack():
-                drawable.draw_ack(drawable.gc("ack." + gctype), x, y)
+                drawable.draw_ack(drawable.gc("ack." + gctype), x, y2)
             else:
-                drawable.draw_dataack(drawable.gc("dataack." + gctype), x, y)
+                drawable.draw_dataack(drawable.gc("dataack." + gctype), x, y2)
             if p.dup_acks > 0 and gctype == "H":
                 layout = drawable.layout("small")
-                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
+                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y2, anchor=ANCHOR_N)
+        if p.flags & (TH_SYN | TH_FIN):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+            layout = drawable.layout("flags")
+            drawable.draw_text(drawable.gc("label"), layout, s, x, y2, anchor=ANCHOR_S)
     
     def draw_highlight(self):
         bounds = None
@@ -2392,10 +2510,20 @@ class PlotCanvas:
             x1, y1 = self._transform(t1, s1)
             if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
                 b = (min(x0, x1) - 2, min(y0, y1), abs(x0 - x1) + 2, abs(y0 - y1) + 2)
-                drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+                drawable = self.immediate_screen_drawable
                 gc = drawable.gc("H")
                 drawable.draw_line(gc, x0, y0, x1, y1)
                 bounds = union_rectangle(bounds, b)
+        elif h[0] == 'box':
+            t0, s0, t1, s1 = h[1:5]
+            x0, y0 = self._transform(t0, s0)
+            x1, y1 = self._transform(t1, s1)
+            if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
+                b = (min(x0, x1), min(y0, y1), abs(x0 - x1), abs(y0 - y1))
+                drawable = self.immediate_screen_drawable
+                gc = drawable.gc("H")
+                drawable.draw_rectangle(gc, b[0], b[1], b[2], b[3])
+                bounds = union_rectangle(bounds, expand_rectangle(b, 2))
 
         # highlight packets
         for name in ("H.cause", "H.dup", "H.effect"):
@@ -2612,49 +2740,40 @@ class StatusWatcher:
         self.statusline = statusline
         self.progressbar = progressbar
 
-    def prepare_file(self, f, process, complete=None, text=None, markup=None):
-        self.f = f
+    def prepare(self, process, complete=None, text=None, markup=None):
         self.process = process
+        self.process_function = process.process_function()
         self.complete = complete
         self.text = text
         self.markup = markup
-        try:
-            pos = self.f.tell()
-            self.f.seek(0, 2)
-            self.f_size = self.f.tell()
-            self.f.seek(pos)
-        except (IOError, AttributeError):
-            self.f_size = None
 
-    def run_file(self, f, process, **kw):
-        self.prepare_file(f, process, **kw)
-        return self.run()
-
-    def run(self):
+    def run(self, process, **kw):
+        self.prepare(process, **kw)
         if self.markup is not None:
             self.statusline.set_markup(self.markup)
         elif self.text is not None:
             self.statusline.set_text(self.text)
-        if self.f_size is None:
-            self.progressbar.pulse()
-        else:
+        try:
+            process.process_position()
             self.progressbar.set_fraction(0)
+        except PulseProcess:
+            self.progressbar.pulse()
         self.progressbar.show()
         return idle_add(self.idle)
 
     def idle(self):
-        if self.f_size is None:
+        try:
+            self.progressbar.set_fraction(self.process.process_position())
+        except PulseProcess:
             self.progressbar.pulse()
-        else:
-            pos = self.f.tell()
-            self.progressbar.set_fraction(float(pos) / self.f_size)
-        self.process = self.process()
-        if self.process is not None:
+        if self.process_function is not None:
+            self.process_function = self.process_function()
             return self.idle
-        if self.complete is not None:
-            self.complete()
-        self.progressbar.hide()
-        return None
+        else:
+            if self.complete is not None:
+                self.complete()
+            self.progressbar.hide()
+            return None
 
 
 
@@ -2792,19 +2911,19 @@ class PlotFlowWindow:
         scale.show()
 
         self.statusbox = gtk.HBox()
-        frame.pack_start(self.statusbox)
+        frame.pack_start(self.statusbox, 0, 0, padding=3)
         self.statusbox.show()
         
         self.statusbar = gtk.Label("")
         self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
         self.statusbar.set_alignment(0, 0.5)
-        self.statusbar.set_padding(5, 3)
 
-        self.statusbox.pack_start(self.statusbar, True, True)
+        self.statusbox.pack_start(self.statusbar, True, True, padding=5)
         self.statusbar.show()
 
         self.progressbar = gtk.ProgressBar()
-        self.statusbox.pack_end(self.progressbar, 0, 0)
+        self.progressbar.set_property("height_request", 10)
+        self.statusbox.pack_end(self.progressbar, 0, 0, padding=3)
 
         self.activating = None
         
@@ -2887,7 +3006,7 @@ class PlotFlowWindow:
             idle_remove(self.activating[3])
         
         if not fref.available():
-            self.activating = (id, fref, keeptime, self.watch_file_process(None, fref.conn.load_process(), complete=self._flow_loaded, text="Reading " + fref.conn.filename + "..."))
+            self.activating = (id, fref, keeptime, self.watch_process(fref.conn.load_process(), complete=self._flow_loaded, text="Reading " + fref.conn.filename + "..."))
         else:
             self.activating = (id, fref, keeptime, None)
             self._flow_loaded()
@@ -2951,8 +3070,8 @@ class PlotFlowWindow:
         else:
             self.statusbar_description()
 
-    def watch_file_process(self, f, process, **kw):
-        return StatusWatcher(self.statusbar, self.progressbar).run_file(f, process, **kw)
+    def watch_process(self, process, **kw):
+        return StatusWatcher(self.statusbar, self.progressbar).run(process, **kw)
 
 
 def initial_read_complete():
@@ -2971,10 +3090,10 @@ if __name__ == "__main__":
         if len(sys.argv) >= 2:
             f = file(sys.argv[1])
             p = ConnectionReader(flowset=all_connections).read_process(sys.argv[1], f)
-            window.watch_file_process(f, p, complete=initial_read_complete, text="Reading " + sys.argv[1] + "...")
+            window.watch_process(p, complete=initial_read_complete, text="Reading " + sys.argv[1] + "...")
         else:
             p = ConnectionReader(flowset=all_connections).read_process("<stdin>", sys.stdin)
-            window.watch_file_process(sys.stdin, p, complete=initial_read_complete, text="Reading <stdin>...")
+            window.watch_process(p, complete=initial_read_complete, text="Reading <stdin>...")
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
