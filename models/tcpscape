@@ -142,9 +142,28 @@ def unparse_tcp_flags(flags):
 def unparse_ip(ip):
     return "%d.%d.%d.%d" % ((ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, ip & 255)
 
+def parse_ip(ip):
+    p1 = ip.find('.')
+    p2 = ip.find('.', p1 + 1)
+    p3 = ip.find('.', p2 + 1)
+    return (long(ip[:p1]) << 24) + (int(ip[p1+1:p2]) << 16) + (int(ip[p2+1:p3]) << 8) + int(ip[p3+1:])
+
+def remove_duplicates(l):
+    l.sort()
+    delta = 0
+    i = 1
+    while i < len(l):
+        if l[i - delta - 1] == l[i]:
+            delta += 1
+        elif delta > 0:
+            l[i - delta] = l[i]
+        i += 1
+    del l[len(l) - delta:]
+
+
 class Packet(object):
     __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
-    def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0, window=0):
+    def __init__(self, time, flags, seq, payloadlen, ack, window=0):
         self.time = time
         self.seq = seq
         self.last_seq = self.seq + payloadlen
@@ -154,7 +173,7 @@ class Packet(object):
                 self.last_seq += 1
             if flags.find("F") >= 0:
                 self.last_seq += 1
-        self.dup_acks = dup_acks
+        self.dup_acks = 0
         self.window = window
     def pure_ack(self):
         return self.seq == self.last_seq
@@ -216,9 +235,9 @@ def direction(dir):
 
 class Connection(object):
 
-    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename']
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime']
 
-    def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None):
+    def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None, filepos=None, endtime=None):
         self.s = ([], [])
         self.loss = ([], [])
         self.available = False
@@ -231,12 +250,28 @@ class Connection(object):
         self.loss_count = [0, 0]
         self.has_window = False
         self.filename = filename
+        self.filepos = filepos
+        self.endtime = endtime
+
+    def src(self):
+        return self.flowid[0]
+
+    def sport(self):
+        return self.flowid[1]
+
+    def dst(self):
+        return self.flowid[2]
+
+    def dport(self):
+        return self.flowid[3]
 
     def empty(self):
         return self.s == ([], []) and self.loss == ([], [])
     
     def read_complete(self, adjust):
         self.available = True
+        remove_duplicates(self.loss[0])
+        remove_duplicates(self.loss[1])
         self.loss_count = [len(self.loss[0]), len(self.loss[1])]
         if adjust:
             t0 = s0 = s1 = 99999999999
@@ -247,19 +282,19 @@ class Connection(object):
                 t0 = min(self.s[1][0].time, t0)
                 s0 = min(self.s[1][0].ack, s0)
                 s1 = min(self.s[1][0].seq, s1)
-            if len(self.loss[0]):
-                t0 = min(self.loss[0][0].begin, t0)
-            if len(self.loss[1]):
-                t0 = min(self.loss[1][0].begin, t0)
+            #if len(self.loss[0]):
+            #    t0 = min(self.loss[0][0].begin, t0)
+            #if len(self.loss[1]):
+            #    t0 = min(self.loss[1][0].begin, t0)
             t0 -= 0.000001
             for p in self.s[0]:
                 p.adjust(t0, s0, s1)
             for p in self.s[1]:
                 p.adjust(t0, s1, s0)
-            for l in self.loss[0]:
-                l.adjust(t0, s0, s1)
-            for l in self.loss[1]:
-                l.adjust(t0, s1, s0)
+            #for l in self.loss[0]:
+            #    l.adjust(t0, s0, s1)
+            #for l in self.loss[1]:
+            #    l.adjust(t0, s1, s0)
     
     def first_index_after(self, time, dir=None):
         if not self.available:
@@ -353,7 +388,7 @@ class Connection(object):
             self.load()
         s = ""
         if self.aggregate >= 0:
-            s += "#" + `self.aggregate` + ": "
+            s += "#" + str(self.aggregate) + ": "
         return s + self.flowid[0] + ":" + str(self.flowid[1]) + " > " + self.flowid[2] + ":" + str(self.flowid[3])
 
     def get_filename(self):
@@ -364,25 +399,63 @@ class Connection(object):
             self.load()
         dirstr = "><"[direction(dir)]
         return self.flowid[0] + ":" + str(self.flowid[1]) + " " + dirstr + " " + self.flowid[2] + ":" + str(self.flowid[3])
-    
+
+    def append(self, dir, p):
+        try:
+            if self.s[dir][-1].ack == p.ack:
+                p.dup_acks = self.s[dir][-1].dup_acks + 1
+        except IndexError:
+            pass
+        self.s[dir].append(p)
+        
     def load(self):
         if self.available:
             return
         elif not self.dynload:
             raise RuntimeError, "cannot load this Connection " + self.filename
         else:
-            ConnectionReader(conn=self).read(self.filename)
+            ConnectionReader(conn=self).read(self.filename, filepos=self.filepos, endtime=self.endtime)
     
     def unload(self):
         if self.dynload:
             self.s = ([], [])
-            self.loss = ([], [])
             self.available = False
 
     def __str__(self):
         fid = self.flowid
         return "<#%d: %s:%s <> %s:%s %d/%d>" % (self.aggregate, fid[0], fid[1], fid[2], fid[3], len(self.s[0]), len(self.s[1]))
 
+
+####################
+# Connection readers
+#
+
+class SafeFile:
+    def __init__(self, f):
+        self.f = f
+        self.str = ""
+        self.pos = 0
+    def __iter__(self):
+        return self
+    def next(self):
+        while True:
+            eol = self.str.find("\n", self.pos)
+            if eol >= 0:
+                p, self.pos = self.pos, eol + 1
+                return self.str[p:self.pos]
+            if self.pos > 0:
+                self.str = self.str[self.pos:]
+                self.pos = 0
+            p = len(self.str)
+            self.str += self.f.read(32768)
+            if len(self.str) == 0:
+                raise StopIteration
+            elif len(self.str) == p:
+                self.pos = p
+                return self.str
+    def read(self):
+        p, self.pos = self.pos, len(self.str)
+        return self.str[p:] + self.f.read()
 
 class ConnectionReader:
 
@@ -400,37 +473,11 @@ class ConnectionReader:
     _parse_code_window = False
 
     def __init__(self, conn=None, flowset=None):
-        self.conn = (conn is None and Connection() or conn)
-        self.flowset = (flowset is None and FlowSet() or flowset)
+        self.conn = conn; self.flowset = flowset
+        if conn is None: self.conn = Connection()
+        if flowset is None: self.flowset = FlowSet()
         self.fake_conn = conn is None
         self.fake_flowset = flowset is None
-
-    class Fileboy:
-        def __init__(self, f):
-            self.f = f
-            self.str = ""
-            self.pos = 0
-        def __iter__(self):
-            return self
-        def next(self):
-            while True:
-                eol = self.str.find("\n", self.pos)
-                if eol >= 0:
-                    p, self.pos = self.pos, eol + 1
-                    return self.str[p:self.pos]
-                if self.pos > 0:
-                    self.str = self.str[self.pos:]
-                    self.pos = 0
-                p = len(self.str)
-                self.str += self.f.read(32768)
-                if len(self.str) == 0:
-                    raise StopIteration
-                elif len(self.str) == p:
-                    self.pos = p
-                    return self.str
-        def read(self):
-            p, self.pos = self.pos, len(self.str)
-            return self.str[p:] + self.f.read()
 
     def connmap(self, aggregate):
         try:
@@ -483,7 +530,7 @@ class ConnectionReader:
             ipfields = dict(map(lambda x: (x[0], 'unparse_ip(fields[' + `x[1]` + '])'), m.items()))
         else:
             code = 'fields = line.split()\n'
-            ifields = dict(map(lambda x: (x[0], 'int(fields[' + `x[1]` + '])'), m.items()))
+            ifields = dict(map(lambda x: (x[0], 'long(fields[' + `x[1]` + '])'), m.items()))
             ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
             ipfields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
 
@@ -507,14 +554,9 @@ class ConnectionReader:
         else:
             f_len = '0'
         if "tcp_ack" in m:
-            code += 'ack = ' + ffields["tcp_ack"] + '\n\
-if ack == last_ack[dir]: dup_acks[dir] += 1\n\
-else: dup_acks[dir] = 0; last_ack[dir] = ack\n'
-            f_ack = 'ack'
-            f_dupacks = 'dup_acks[dir]'
+            f_ack = ffields['tcp_ack']
         else:
             f_ack = '0.'
-            f_dupacks = '0'
         if "tcp_flags" in m:
             if self.read_state == "b":
                 code += 'flag = fields[' + `m["tcp_flags"]` + ']\n\
@@ -548,7 +590,7 @@ except KeyError:\n\
         else:
             f_conn = 'self.conn'
 
-        code += f_conn + '.s[dir].append(Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_dupacks + ', ' + f_window + '))\n'
+        code += f_conn + '.append(dir, Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_window + '))\n'
 
         self._parse_code = compile(code, "<generated function>", "exec")
         self._parse_code_of = (data, self.read_state)
@@ -569,7 +611,7 @@ except KeyError:\n\
             fid = line.split()[1:5]
             self.conn.flowid = (fid[0], int(fid[1]), fid[2], int(fid[3]))
         elif re.match('!aggregate', line):
-            self.conn.aggregate = int(line.split()[1])
+            self.conn.aggregate = long(line.split()[1])
         elif re.match('!data ', line):
             self.read_data = line
             self._check_data()
@@ -583,7 +625,6 @@ except KeyError:\n\
         self.read_state = "b"
         self._check_data()
 
-        last_ack = [-1, -1]; dup_acks = [0, 0]
         data = f.read()
         pos, leng = 0, len(data)
         while pos + 4 < leng:
@@ -598,16 +639,13 @@ except KeyError:\n\
                 exec self._parse_code
             pos += i
 
-    def read(self, filename, f=None):
-        if f is None:
-            f = uncompressed_file(filename)
+    def read_ipsumdump(self, filename, f, filepos=None, endtime=None):
         self.filename = filename
         self.cmap = { }
 
         # actually read file
-        last_ack = [-1, -1]; dup_acks = [0, 0]
         read_state = 0; self.read_state = ""; self.read_data = ""
-        f = ConnectionReader.Fileboy(f)
+        f = SafeFile(f)
         for line in f:
             if line and line[0] >= '0':
                 if read_state == 0:
@@ -631,32 +669,54 @@ except KeyError:\n\
         
         return self
 
-    def read_tcpdump(self, filename, f=None):
-        if f is None:
-            f = uncompressed_file(filename)
+    def read_tcpdump(self, filename, f, filepos=None, endtime=None):
         self.filename = filename
-        flowmap = { }
         agg = 1
 
+        # prepare flowmap
+        flowmap = { }
+        if not self.fake_conn:
+            flowid = (parse_ip(self.conn.src()), self.conn.sport(), parse_ip(self.conn.dst()), self.conn.dport())
+            flowmap[flowid] = (self.conn, 0)
+            flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (self.conn, 1)
+        
         # actually read file
-        for p in TCPDumpFile(f).packets():
+        tcpdump = TCPDumpFile(f)
+        if filepos is not None:
+            tcpdump.seek(filepos)
+        if endtime is None:
+            endtime = 8000000000.
+        
+        for p in tcpdump.packets():
+            if p.time > endtime: break
             flowid = (p.src, p.sport, p.dst, p.dport)
             try:
                 c, dir = flowmap[flowid]
             except KeyError:
                 c = Connection(filename=filename, dynload=False, aggregate=agg, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
-                c.has_window = True
                 self.flowset.append(c)
                 dir = 0
                 flowmap[flowid] = (c, 0)
                 flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (c, 1)
-            c.s[dir].append(Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, 0, p.win))
+            c.append(dir, Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, p.win))
 
         for c in flowmap.values():
             if c[1] == 0:
+                c[0].has_window = True
                 c[0].read_complete(True)
-        
+
         return self
+
+    def read(self, filename, f=None, filepos=None, endtime=None):
+        if f is None:
+            f = uncompressed_file(filename)
+        c = f.read(1)
+        f.seek(0)
+        if c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
+            self.read_ipsumdump(filename, f, filepos, endtime)
+        else:
+            self.read_tcpdump(filename, f, filepos, endtime)
+
 
 
 class FlowRef(object):
@@ -830,26 +890,26 @@ class FlowSet:
     SORT_NONE = 0
     SORT_LOSS = 1
 
-    def __init__(self, f=None):
+    def __init__(self):
         self.conns = []
         self.flows = []
         self.sorted = FlowSet.SORT_NONE
-        if type(f) == types.StringType:
-            slash = f.rfind('/')
-            if slash >= 0: dir = f[:slash+1]
-            else: dir = ''
-            self.read(file(f), dir=dir)
-        elif f is not None:
-            self.read(f)
 
-    def read(self, f, dir=''):
+    def read(self, filename, f=None, dir=''):
+        if dir == '':
+            slash = filename.rfind('/')
+            if slash >= 0: dir = filename[:slash+1]
         self.reading_directory = dir
+
+        if f is None:
+            f = uncompressed_file(filename)
+        
         p = xml.parsers.expat.ParserCreate()
         p.returns_unicode = 0
         p.StartElementHandler = self._start_element
         p.EndElementHandler = self._end_element
         self.reading_state = 0
-        self.reading_connection = None
+        self.reading_connection = self.reading_direction = None
         p.ParseFile(f)
 
     def _handle_number(self, x, format, precision):
@@ -899,22 +959,44 @@ class FlowSet:
             pos = s.find('%')
         return self.reading_directory + ss + s
 
+    def fix_directory(self, fn):
+        if fn is not None and fn[0] != '/' and self.reading_directory != '':
+            return self.reading_directory + fn
+        else:
+            return fn
+
     def _start_element(self, name, attrs):
         if name == 'connections':
             if self.reading_state != 0:
                 raise ConnectionFormatError, "nested <connections>"
-            self.reading_output_pattern = attrs["filepattern"]
+            self.reading_output_pattern = self.fix_directory(attrs.get("flowfilepattern", None))
+            self.reading_tracefile = self.fix_directory(attrs.get("tracefile", None))
             self.reading_state = 1
         elif name == 'connection' and self.reading_state == 1:
-            agg, src, sport, dst, dport = int(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
-            self.reading_connection = Connection(filename=self._expand_filename(agg, src, sport, dst, dport), aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, dynload=True)
+            agg, src, sport, dst, dport = long(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
+            filepos = endtime = None
+            if self.reading_output_pattern is not None:
+                filename = self._expand_filename(agg, src, sport, dst, dport)
+            else:
+                filename = self.reading_tracefile
+                if "filepos" in attrs: filepos = long(attrs["filepos"])
+            if "duration" in attrs and "begin" in attrs:
+                endtime = float(attrs["begin"]) + float(attrs["duration"])
+            self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=True)
             self.conns.append(self.reading_connection)
             self.flows.append(FlowRef(self.reading_connection, 0))
             self.flows.append(FlowRef(self.reading_connection, 1))
         elif name == 'flow' and self.reading_connection is not None:
             try:
-                d, l, pl, fl = int(attrs["dir"]), int(attrs["nloss"]), int(attrs["nploss"]), int(attrs["nfloss"])
+                d, l, pl, fl = int(attrs["dir"]), long(attrs["nloss"]), long(attrs["nploss"]), long(attrs["nfloss"])
                 self.reading_connection.loss_count[d] += l + pl + fl
+                self.reading_direction = d
+            except KeyError:
+                pass
+        elif name == 'anno' and self.reading_direction is not None:
+            try:
+                type, t0, s0, t1, s1 = attrs["type"], float(attrs["time"]), float(attrs["seq"]), float(attrs["endtime"]), float(attrs["lastseq"])
+                self.reading_connection.loss[self.reading_direction].append(LossEvent(type, t0, s0, t1, s1))
             except KeyError:
                 pass
 
@@ -923,9 +1005,11 @@ class FlowSet:
             self.reading_state = 0
         elif name == 'connection':
             self.reading_connection = None
+        elif name == 'flow':
+            self.reading_direction = None
 
     def sort_by_loss_count(self):
-        self.flows.sort(lambda a, b: b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
+        self.flows.sort(lambda a, b: int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir))
         self.sorted = FlowSet.SORT_LOSS
 
     def __getitem__(self, k):
@@ -2532,7 +2616,7 @@ if __name__ == "__main__":
             c = f.read(1)
             f.seek(0)
             if c == '<':
-                all_connections.read(f)
+                all_connections.read(sys.argv[1], f)
             elif c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
                 ConnectionReader(flowset=all_connections).read(sys.argv[1], f)
             else:
