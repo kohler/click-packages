@@ -1,0 +1,30 @@
+This directory contains the 'models' addons to the Click modular router.
+First make and install Click, then run './configure
+--prefix=CLICKINSTALLPREFIX' in this directory, and finally make install.
+
+The 'package' subdirectory defines a package, "models.uo", which Click will
+load in when given the "require(models)" statement. Elements in the package
+include CalculateTCPLossEvents. CalculateTCPLossEvents analyzes a trace
+that has been separated into TCP flows (such as by AggregateIPFlows), finds
+the loss events and other information, and generates an XML file. 
+
+The 'tcpscape' Python script reads this XML file and shows a time-sequence
+plot that's easy to navigate.
+
+The 'scripts/lossxml.sh' script takes a tcpdump file as argument, and
+generates an XML loss file in the same directory with the same basename, by
+running a short Click configuration. Examples:
+
+	scripts/lossxml.sh examples/sample.dump
+	   # Will create a file examples/sample.xml.
+	scripts/lossxml.sh --config examples/sample.dump
+	   # Will write a Click script to standard output.
+
+examples/sample.xml is the output of scripts/lossxml.sh on
+examples/sample.dump.
+
+Try the following two tcpscape invocations to see what information the XML
+provides:
+
+	./tcpscape examples/sample.dump
+	./tcpscape examples/sample.xml
