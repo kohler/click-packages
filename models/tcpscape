@@ -1288,8 +1288,8 @@ class FlowSet:
             self.append(self.reading_connection)
         elif name == 'stream' and self.reading_connection is not None:
             try:
-                d, l, pl, fl = int(attrs["dir"]), long(attrs["nloss"]), long(attrs["nploss"]), long(attrs["nfloss"])
-                self.reading_connection.loss_count[d] += l + pl + fl
+                d, l, fl = int(attrs["dir"]), long(attrs["nloss"]), long(attrs["nfloss"])
+                self.reading_connection.loss_count[d] += l + fl
                 self.reading_direction = d
             except KeyError:
                 pass
