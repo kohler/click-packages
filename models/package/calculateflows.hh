@@ -67,10 +67,10 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ~CalculateFlows();
 
     const char *class_name() const	{ return "CalculateFlows"; }
+    const char *processing() const	{ return "a/ah"; }
     CalculateFlows *clone() const	{ return new CalculateFlows; }
 
     void notify_noutputs(int);
-    const char *processing() const	{ return "a/ah"; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     
@@ -197,7 +197,7 @@ class CalculateFlows::LossInfo {
 
     void LossInfoInit(String *outfilenamep, uint32_t aggp, short int gnuplotp, short int eventfilesp);
     
-    ~LossInfo(){
+    ~LossInfo() {
 	print_stats();
 	
 	/*	if (gnuplot){  // check if gnuplot output is requested.

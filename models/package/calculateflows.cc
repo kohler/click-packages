@@ -481,11 +481,11 @@ CalculateFlows::simple_action(Packet *p)
       case IP_PROTO_TCP: {
 	  // if (aggp == 1765) {
 	  int type = 0;// 0 ACK or 1 DACK
-	  _loss = _loss_map.find(aggp);
-	  MapS &m_acks = _loss->acks[cpaint];
-	  MapT &m_tbfirst = _loss->time_by_firstseq[paint];
-	  MapT &m_tblast = _loss->time_by_lastseq[paint];
-	  MapInterval &m_ibtime = _loss->inter_by_time[paint];
+	  LossInfo *loss = _loss_map.find(aggp);
+	  MapS &m_acks = loss->acks[cpaint];
+	  MapT &m_tbfirst = loss->time_by_firstseq[paint];
+	  MapT &m_tblast = loss->time_by_lastseq[paint];
+	  MapInterval &m_ibtime = loss->inter_by_time[paint];
 	  
 	   
 	  const click_tcp *tcph = p->tcp_header(); 
@@ -495,53 +495,53 @@ CalculateFlows::simple_action(Packet *p)
 	  unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
 	  int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
-	  if ( (_loss->init_time.tv_usec == 0) && (_loss->init_time.tv_sec == 0) ) { 
+	  if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ) { 
 	      unsigned short sport = ntohs(tcph->th_sport);
 	      unsigned short dport = ntohs(tcph->th_dport);
 	      String outfilenametmp;
-	      outfilenametmp = _loss->outputdir+"/flowhnames.info";
+	      outfilenametmp = loss->outputdir+"/flowhnames.info";
 	      if (FILE *f = fopen(outfilenametmp.cc(), "w")) {
 		  fprintf(f, "flow%u: %s:%d <-> %s:%d'\n", aggp, src.unparse().cc(), sport, dst.unparse().cc(), dport);
 		  fclose(f);
 	      }
-	      _loss->init_time = ts;
+	      loss->init_time = ts;
 	      ts.tv_usec = 1;
 	      ts.tv_sec = 0;
 	  } else {
 	      ts.tv_usec++;
-	      ts = ts - _loss->init_time;
+	      ts = ts - loss->init_time;
 	  }
-	  //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,_loss->init_time.tv_sec,_loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
+	  //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
 	   
 	  // converting the Sequences from Absolute to Relative
-	  if (!_loss->init_seq[paint]) { //first time case 
-	      _loss->init_seq[paint] = seq;
-	      seq = _loss->has_syn[paint];
+	  if (!loss->init_seq[paint]) { //first time case 
+	      loss->init_seq[paint] = seq;
+	      seq = loss->has_syn[paint];
 	  } else {
-	      if (seq < _loss->init_seq[paint]) {//hmm we may have a "wrap around" case
-		  seq = seq + (UINT_MAX - _loss->init_seq[paint]);
+	      if (seq < loss->init_seq[paint]) {//hmm we may have a "wrap around" case
+		  seq = seq + (UINT_MAX - loss->init_seq[paint]);
 	      } else { //normal case no "wrap around"
-		  seq = seq - _loss->init_seq[paint];
+		  seq = seq - loss->init_seq[paint];
 	      }
 	  }
 	  
 	  if (tcph->th_flags & TH_SYN) { // Is this a SYN packet?
-	      _loss->has_syn[paint] = 1;
+	      loss->has_syn[paint] = 1;
 	      return p;
 	  }
 	  if (tcph->th_flags & TH_FIN) {	// Is this a FIN packet?
-	      _loss->has_fin[paint] = 1;
+	      loss->has_fin[paint] = 1;
 	      return p;
 	  }
 	  if (seqlen > 0) {
 	      type=1;
-	      _loss->calculate_loss_events2(seq,seqlen,ts,paint, _tipfd); //calculate loss if any
-	      _loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
-	      if (_loss->eventfiles) {
-		  _loss->print_send_event(paint, ts, seq, (seq+seqlen));
+	      loss->calculate_loss_events2(seq,seqlen,ts,paint, _tipfd); //calculate loss if any
+	      loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
+	      if (loss->eventfiles) {
+		  loss->print_send_event(paint, ts, seq, (seq+seqlen));
 	      }
-	      if (_loss->gnuplot) {
-		  _loss->gplotp_send_event(paint, ts, (seq+seqlen));
+	      if (loss->gnuplot) {
+		  loss->gplotp_send_event(paint, ts, (seq+seqlen));
 	      }
 	      m_tbfirst.insert(seq, ts);
 	      m_tblast.insert((seq+seqlen), ts);
@@ -549,34 +549,34 @@ CalculateFlows::simple_action(Packet *p)
 	      ti.start_byte = seq;
 	      ti.end_byte = seq+seqlen;
 	      ti.time = ts;
-	      m_ibtime.insert(_loss->packets(paint),ti);
+	      m_ibtime.insert(loss->packets(paint),ti);
 	  }
 	  
 	  if (ackp) { // check for ACK and update as necessary
 	      // converting the Sequences from Absolute to Relative (we need
 	      // that for acks also!)
-	      if (!_loss->init_seq[cpaint]) { //first time case
-		  _loss->init_seq[cpaint] = ack;
-		  ack = _loss->has_syn[cpaint];
+	      if (!loss->init_seq[cpaint]) { //first time case
+		  loss->init_seq[cpaint] = ack;
+		  ack = loss->has_syn[cpaint];
 	      } else {
-		  if (ack < _loss->init_seq[cpaint]) {//hmm we may have a "wrap around" case
-		      ack = ack  + (UINT_MAX - _loss->init_seq[cpaint]);
+		  if (ack < loss->init_seq[cpaint]) {//hmm we may have a "wrap around" case
+		      ack = ack  + (UINT_MAX - loss->init_seq[cpaint]);
 		  } else { //normal case no "wrap around"
-		      ack = ack - _loss->init_seq[cpaint];
+		      ack = ack - loss->init_seq[cpaint];
 		  }
 	      }
 	      
-	      if (_loss->max_ack[cpaint] < ack) {
-		  _loss->max_ack[cpaint] = ack;
+	      if (loss->max_ack[cpaint] < ack) {
+		  loss->max_ack[cpaint] = ack;
 	      }
 	      
-	      _loss->set_last_ack(ack,cpaint);
+	      loss->set_last_ack(ack,cpaint);
 	      m_acks.insert(ack, m_acks.find(ack)+1 );
-	      if (_loss->eventfiles) {
-		  _loss->print_ack_event(cpaint, type, ts, ack);	
+	      if (loss->eventfiles) {
+		  loss->print_ack_event(cpaint, type, ts, ack);	
 	      }
-	      if (_loss->gnuplot) {
-		  _loss->gplotp_ack_event(cpaint, type, ts, ack);	
+	      if (loss->gnuplot) {
+		  loss->gplotp_ack_event(cpaint, type, ts, ack);	
 		  //printf("[%u, %u]",ack,m_acks[ack]);
 	      }
 	  }
@@ -587,12 +587,12 @@ CalculateFlows::simple_action(Packet *p)
 	     printf("%u:%hd \n",*temp,*value);
 	     
 	     }
-	     timeval tv2 = _loss->Search_seq_interval(27 ,600, paint);
+	     timeval tv2 = loss->Search_seq_interval(27 ,600, paint);
 	     printf("RESULT:[%ld.%06ld]: %u - %u \n",tv2.tv_sec, tv2.tv_usec,27, 600);*/
 	   
-	  _loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
-	  _loss->set_total_bytes((_loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
-	  //  printf("[%u] %u:%u:%u\n",paint,_loss->packets(paint),_loss->total_bytes(paint),seq);
+	  loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
+	  loss->set_total_bytes((loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
+	  //  printf("[%u] %u:%u:%u\n",paint,loss->packets(paint),loss->total_bytes(paint),seq);
 	  // }  
 	  break;
       }
