@@ -411,7 +411,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 {
     fprintf(f, "    <acklatency");
     if (have_ack_latency)
-	fprintf(f, " minlatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
     fprintf(f, ">\n");
     
     const StreamInfo *acks = conn->stream(!direction);
@@ -447,6 +447,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, bool ack_latency,
 {
     fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
 	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
+    if (have_ack_latency)
+	fprintf(f, " minacklatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
     if (loss_trail || (ack_latency && have_ack_latency)
 	|| (full_rcv_window && filled_rcv_window)) {
 	fprintf(f, ">\n");
@@ -479,6 +481,11 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
+
+	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
+	    timeval min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
+	    fprintf(f, "  <rtt source='minacklatency' value='%ld.%06ld' />\n", min_rtt.tv_sec, min_rtt.tv_usec);
+	}
 	
 	_stream[0].write_xml(this, f, cf->write_ack_latency(), cf->write_full_rcv_window());
 	_stream[1].write_xml(this, f, cf->write_ack_latency(), cf->write_full_rcv_window());
