@@ -6,6 +6,7 @@
 #include "aggregatenotifier.hh"
 #include "toipflowdumps.hh"
 CLICK_DECLS
+class ToIPSummaryDump;
 
 /*
 =c
@@ -37,22 +38,25 @@ the router quits.
 
 =item FLOWDUMPS
 
-A ToIPFlowDumps element. If provided, CalculateTCPLossEvents
+A ToIPFlowDumps element. If provided, CalculateTCPLossEvents reports loss
+events to that element; they will show up as comments like "C<#LOSSTYPE
+DIRECTION TIME SEQ ENDTIME ENDSEQ>", where LOSSTYPE is "C<loss>" for loss
+events, "C<ploss>" for possible loss events, or "C<floss>" for false loss
+events, and DIRECTION is "C<&gt;>" or "C<&lt;>".
 
-=item LOSSFILE
+=item SUMMARYDUMP
 
-Filename. If given, then output information about each loss event (or possible
-or false loss event) to that file, in the following format:
-
-  loss_type aggregate_number direction time1 seq1 time2 seq2
-
-where C<loss_type> is the loss type, "loss" or "ploss" or "floss", and
-C<direction> is either ">" or "<".
+A ToIPSummaryDump element. If provided, CalculateTCPLossEvents reports loss
+events to that element; they will show up as comments like "C<#ALOSSTYPE
+AGGREGATE DIRECTION TIME SEQ ENDTIME ENDSEQ>", where ALOSSTYPE is "C<aloss>"
+for loss events, "C<aploss>" for possible loss events, or "C<afloss>" for
+false loss events, and DIRECTION is "C<&gt;>" or "C<&lt>".
 
 =item STATFILE
 
-Filename. If given, then output summary information about each aggregate to
-that file, in an XML format.
+Filename. If given, then output information about each aggregate to that file,
+in an XML format. Information includes the flow identifier, total sequence
+space used on each flow, and loss counts for each flow.
 
 =item ABSOLUTE_TIME
 
@@ -115,7 +119,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
     ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
-    FILE *loss_file() const		{ return _loss_file; }
+    ToIPSummaryDump *summary_dump() const { return _tipsd; }
     FILE *stat_file() const		{ return _stat_file; }
     bool absolute_time() const		{ return _absolute_time; }
     bool absolute_seq() const		{ return _absolute_seq; }
@@ -130,7 +134,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ConnMap _conn_map;
 
     ToIPFlowDumps *_tipfd;
-    FILE *_loss_file;
+    ToIPSummaryDump *_tipsd;
     FILE *_stat_file;
 
     bool _absolute_time : 1;
@@ -141,7 +145,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
 
-    String _loss_filename;
     String _stat_filename;
 
     Pkt *new_pkt();

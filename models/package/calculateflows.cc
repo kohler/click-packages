@@ -10,6 +10,7 @@
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
 #include "aggregateipflows.hh"
+#include "elements/analysis/toipsumdump.hh"
 CLICK_DECLS
 
 CalculateFlows::StreamInfo::StreamInfo()
@@ -167,58 +168,53 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
 void
 CalculateFlows::StreamInfo::output_loss(ConnInfo *loss_info, CalculateFlows *cf)
 {
-    if (loss_type != NO_LOSS) {
-	// figure out loss type, make accounting
-	uint32_t aggregate = loss_info->aggregate();
-	const char *direction_str = (direction ? " < " : " > ");
-	const char *loss_type_str;
-	if (loss_type == LOSS) {
-	    loss_type_str = "loss";
-	    loss_events++;
-	} else if (loss_type == POSSIBLE_LOSS) {
-	    loss_type_str = "ploss";
-	    possible_loss_events++;
-	} else {
-	    assert(loss_type == FALSE_LOSS);
-	    loss_type_str = "floss";
-	    false_loss_events++;
-	}
+    if (loss_type == NO_LOSS)
+	return;
 
-	// output to ToIPFlowDumps
-	if (ToIPFlowDumps *flowd = cf->flow_dumps()) {
-	    StringAccum sa;
-	    sa << loss_type_str << direction_str;
-	    if (!flowd->absolute_time() && !flowd->absolute_seq())
-		// common case
-		sa << loss_time << ' ' << loss_seq << ' '
-		   << loss_end_time << ' ' << loss_last_seq;
-	    else {
-		struct timeval time_adj = (flowd->absolute_time() ? loss_info->init_time() : make_timeval(0, 0));
-		uint32_t seq_adj = (flowd->absolute_seq() ? init_seq : 0);
-		sa << (loss_time + time_adj) << ' '
-		   << (loss_seq + seq_adj) << ' '
-		   << (loss_end_time + time_adj) << ' '
-		   << (loss_last_seq + seq_adj);
-	    }
-	    sa << ' ' << '0'; // XXX nacks
-	    flowd->add_note(aggregate, sa.take_string());
-	}
-
-	// output to loss file
-	if (cf->loss_file()) {
-	    if (cf->absolute_time())
-		loss_time += loss_info->init_time(), loss_end_time += loss_info->init_time();
-	    if (cf->absolute_seq())
-		loss_seq += init_seq, loss_last_seq += init_seq;
-	    fprintf(cf->loss_file(), "%s %u%s%ld.%06ld %u %ld.%06ld %u\n",
-		    loss_type_str, aggregate, direction_str,
-		    loss_time.tv_sec, loss_time.tv_usec, loss_seq,
-		    loss_end_time.tv_sec, loss_end_time.tv_usec, loss_last_seq);
-	}
-
-	// clear loss
-	loss_type = NO_LOSS;
+    // figure out loss type, count loss
+    const char *loss_type_str;
+    if (loss_type == LOSS) {
+	loss_type_str = "aloss ";
+	loss_events++;
+    } else if (loss_type == POSSIBLE_LOSS) {
+	loss_type_str = "aploss ";
+	possible_loss_events++;
+    } else {
+	assert(loss_type == FALSE_LOSS);
+	loss_type_str = "afloss ";
+	false_loss_events++;
     }
+
+    // output to ToIPSummaryDump and/or ToIPFlowDumps
+    ToIPSummaryDump *sumd = cf->summary_dump();
+    ToIPFlowDumps *flowd = cf->flow_dumps();
+
+    if (flowd || sumd) {
+	StringAccum sa;
+	sa << (direction ? "< " : "> ");
+	if (!flowd->absolute_time() && !flowd->absolute_seq())
+	    // common case
+	    sa << loss_time << ' ' << loss_seq << ' '
+	       << loss_end_time << ' ' << loss_last_seq;
+	else {
+	    struct timeval time_adj = (flowd->absolute_time() ? loss_info->init_time() : make_timeval(0, 0));
+	    uint32_t seq_adj = (flowd->absolute_seq() ? init_seq : 0);
+	    sa << (loss_time + time_adj) << ' '
+	       << (loss_seq + seq_adj) << ' '
+	       << (loss_end_time + time_adj) << ' '
+	       << (loss_last_seq + seq_adj);
+	}
+
+	String s = sa.take_string();
+	uint32_t aggregate = loss_info->aggregate();
+	if (flowd)
+	    flowd->add_note(aggregate, (loss_type_str + 1) + s);
+	if (sumd)
+	    sumd->add_note(loss_type_str + String(aggregate) + " " + s);
+    }
+    
+    // clear loss
+    loss_type = NO_LOSS;
 }
 
 
@@ -254,17 +250,19 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    end_time = _stream[1].pkt_tail->timestamp;
 
 	fprintf(cf->stat_file(), "<connection aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'>\n\
-  <flow dir='0' loss='%u' ploss='%u' floss='%u' />\n\
-  <flow dir='1' loss='%u' ploss='%u' floss='%u' />\n\
+  <flow dir='0' seq='%u' loss='%u' ploss='%u' floss='%u' />\n\
+  <flow dir='1' seq='%u' loss='%u' ploss='%u' floss='%u' />\n\
 </connection>\n",
 		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
 		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
 		_init_time.tv_sec, _init_time.tv_usec,
 		end_time.tv_sec, end_time.tv_usec,
-		_stream[0].loss_events, _stream[0].possible_loss_events,
-		_stream[0].false_loss_events,
-		_stream[1].loss_events, _stream[1].possible_loss_events,
-		_stream[1].false_loss_events);
+		
+		_stream[0].total_seq, _stream[0].loss_events,
+		_stream[0].possible_loss_events, _stream[0].false_loss_events,
+		
+		_stream[1].total_seq, _stream[1].loss_events,
+		_stream[1].possible_loss_events, _stream[1].false_loss_events);
     }
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
     cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
@@ -387,7 +385,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1), _tipfd(0), _loss_file(0), _stat_file(0), _free_pkt(0)
+    : Element(1, 1), _tipfd(0), _tipsd(0), _stat_file(0), _free_pkt(0)
 {
     MOD_INC_USE_COUNT;
 }
@@ -408,14 +406,13 @@ CalculateFlows::notify_noutputs(int n)
 int 
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    Element *af_element = 0, *tipfd_element = 0;
-    _tipfd = 0;
+    Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
     bool absolute_time = false, absolute_seq = false, ack_match = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
+		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element pointer (notifier)", &tipsd_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
-		    "LOSSFILE", cpFilename, "filename for loss info", &_loss_filename,
 		    "STATFILE", cpFilename, "filename for XML loss statistics", &_stat_filename,
 		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
 		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
@@ -432,6 +429,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     
     if (tipfd_element && !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("FLOWDUMPS must be a ToIPFlowDumps element");
+    if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
+	return errh->error("SUMMARYDUMP must be a ToIPSummaryDump element");
 
     _absolute_time = absolute_time;
     _absolute_seq = absolute_seq;
@@ -443,15 +442,6 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 CalculateFlows::initialize(ErrorHandler *errh)
 {
-    if (!_loss_filename)
-	/* nada */;
-    else if (_loss_filename == "-")
-	_loss_file = stdout;
-    else if (!(_loss_file = fopen(_loss_filename.cc(), "w")))
-	return errh->error("%s: %s", _loss_filename.cc(), strerror(errno));
-    if (_loss_file)
-	fprintf(_loss_file, "# losstype aggregate direction time seq end_time end_seq\n");
-    
     if (!_stat_filename)
 	/* nada */;
     else if (_stat_filename == "-")
@@ -464,6 +454,8 @@ CalculateFlows::initialize(ErrorHandler *errh)
 	if (_tipfd)
 	    fprintf(_stat_file, " filepattern='%s'",
 		    _tipfd->output_pattern().cc());
+	if (_tipsd && _tipsd->filename())
+	    fprintf(_stat_file, " file='%s'", _tipsd->filename().cc());
 	fprintf(_stat_file, ">\n");
     }
 
@@ -478,8 +470,6 @@ CalculateFlows::cleanup(CleanupStage)
 	losstmp->kill(this);
     }
     _conn_map.clear();
-    if (_loss_file)
-	fclose(_loss_file);
     if (_stat_file) {
 	fprintf(_stat_file, "</connections>\n");
 	fclose(_stat_file);
