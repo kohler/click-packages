@@ -860,7 +860,9 @@ def fix_range(a, b, min_step_frac):
     return { "low": a, "high": b, "step": step }
 
 
-_plot_cursors = {
+class PlotCursors:
+
+    _d = {
     "zoomin": ("zoomin_data", "zoom_mask", 6, 6, gtk.gdk.SB_UP_ARROW),
     "zoomout": ("zoomout_data", "zoom_mask", 6, 6, gtk.gdk.SB_DOWN_ARROW),
     "hand": ("hand_data", "hand_mask", 9, 8, gtk.gdk.FLEUR),
@@ -904,30 +906,30 @@ _plot_cursors = {
         0xf8, 0x3f, 0xfc, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x3f,
         0xfc, 0x3f, 0xf8, 0x1f, 0xf0, 0x1f, 0xf0, 0x1f]), ''), 16, 16)
     }
-class PlotCursors:
+
     def __init__(self, win):
         self.window = win
     def make_pixmap(self, name):
         pname = name + ".pix"
-        if pname not in _plot_cursors:
+        if pname not in PlotCursors._d:
             try:
-                l = _plot_cursors[name]
-                _plot_cursors[pname] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
+                l = PlotCursors._d[name]
+                PlotCursors._d[pname] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
             except:
-                _plot_cursors[pname] = None
-        return _plot_cursors[pname]
+                PlotCursors._d[pname] = None
+        return PlotCursors._d[pname]
     def __getitem__(self, name):
         cname = name + ".cur"
-        if cname not in _plot_cursors:
-            data, mask, hotx, hoty, default = _plot_cursors[name]
+        if cname not in PlotCursors._d:
+            data, mask, hotx, hoty, default = PlotCursors._d[name]
             dpix, mpix = self.make_pixmap(data), self.make_pixmap(mask)
             if dpix is not None and mpix is not None:
                 black = self.window.get_style().black
                 white = self.window.get_style().white
-                _plot_cursors[cname] = gtk.gdk.Cursor(dpix, mpix, black, white, hotx, hoty)
+                PlotCursors._d[cname] = gtk.gdk.Cursor(dpix, mpix, black, white, hotx, hoty)
             else:
-                _plot_cursors[cname] = gtk.gdk.Cursor(default)
-        return _plot_cursors[cname]
+                PlotCursors._d[cname] = gtk.gdk.Cursor(default)
+        return PlotCursors._d[cname]
 
 
 
