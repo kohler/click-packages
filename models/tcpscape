@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import generators
-import sys, re, types, string, struct, gzip
+import sys, os, re, types, string, struct, gzip
 #sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
@@ -67,6 +67,7 @@ PRINT_EPSFILE = 2
 _print_options = {
     "dest": PRINT_PRINTER,
     "file": "",
+    "command": "lpr",
     "papersize": (612, 792),
     "landscape": True,
     "color": True,
@@ -506,6 +507,9 @@ else: flag = unparse_tcp_flags(flag)\n'
         if self.aggregate >= 0:
             s += "#" + `self.aggregate` + ": "
         return s + self.flowid[0] + ":" + str(self.flowid[1]) + " > " + self.flowid[2] + ":" + str(self.flowid[3])
+
+    def get_filename(self):
+        return self.filename
     
     def get_flowid_text(self, dir=0):
         if self.flowid is None:
@@ -559,6 +563,9 @@ class FlowRef:
         if self.dir:
             s = re.sub(" > ", " < ", s)
         return s
+
+    def get_filename(self):
+        return self.conn.get_filename()
     
     def opposite(self):
         return FlowRef(self.conn, 1 - self.dir)
@@ -967,6 +974,7 @@ class PlotCursors:
 ANCHOR_N = 0
 ANCHOR_E = 1
 ANCHOR_E_ROT = 2
+ANCHOR_S = 3
 
 class PlotCanvas_ScreenDrawable:
 
@@ -1003,12 +1011,12 @@ class PlotCanvas_ScreenDrawable:
                 new_pcontext.set_font_description(new_pfontdesc)
                 self.small_playout = pango.Layout(new_pcontext)
             return self.small_playout
-        elif name == "" or name == "legend":
+        elif name == "":
             if self.playout is None:
                 self.playout = self.plotcanvas.canvas.create_pango_layout("")
             return self.playout
         else:
-            raise RuntimeError("bad layout name " + name)
+            raise ValueError("bad layout name " + name)
 
     def legend(self, gc, layout, text, position):
         pass
@@ -1153,12 +1161,13 @@ class PlotCanvas_PostScriptDrawable:
                         (595, 842): "A4",
                         (420, 595): "A5" }
 
-    def __init__(self, plotcanvas, f):
+    ANCHOR_SHIFT = 4
+
+    def __init__(self, plotcanvas, options):
         self.plotcanvas = plotcanvas
-        self.f = f
         self.cur_font = None
         self.cur_gc = None
-        self.options = _print_options
+        self.options = options
 
     def gc(self, name):
         return name
@@ -1170,20 +1179,39 @@ class PlotCanvas_PostScriptDrawable:
             return self.FONT(12)
         elif name == "legend":
             return self.LEGEND_FONT(12)
+        elif name == "title":
+            return self.LEGEND_FONT(14)
+        elif name == "subtitle":
+            return self.FONT(12)
         else:
             raise RuntimeError("bad layout name " + name)
 
     def prepare(self):
-        f = self.f
+        if self.options["dest"] == PRINT_PRINTER:
+            f = self.f = os.popen(self.options["command"], "w")
+        else:
+            f = self.f = open(self.options["file"], "w")
+
         papersize = self.options["papersize"]
         eps = (self.options["dest"] == PRINT_EPSFILE)
         margins = self.options["margins"]
+        if eps: margins = (1, 1, 1, 1)
+
+        # determine initial bounds
+        if self.options["landscape"]:
+            self.all_bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
+            self.top = papersize[0]
+        else:
+            self.all_bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
+            self.top = papersize[1]
         
-        f.write("%!PS-Adobe-3.0\n\
+        f.write("%!PS-Adobe-3.0" + (eps and " EPSF-3.0" or "") + "\n\
 %%Creator: LCDF tcpplot\n\
 %%LanguageLevel: 2\n\
 %%Pages: 1\n")
-        if self.options["landscape"]:
+        bbx, bby = int(self.all_bounds[0]), int(self.top - self.all_bounds[1] - self.all_bounds[3])
+        f.write("%%%%BoundingBox: %d %d %d %d\n" % (bbx, bby, bbx + self.all_bounds[2] + 1.5, bby + self.all_bounds[3] + 1.5))
+        if self.options["landscape"] and not eps:
             f.write("%%Orientation: Landscape\n")
         if not eps:
             f.write("%%DocumentMedia: ")
@@ -1217,18 +1245,11 @@ class PlotCanvas_PostScriptDrawable:
 
         # page
         f.write("%%Page: 1 1\n")
-        if self.options["landscape"]:
+        if self.options["landscape"] and not eps:
             f.write("90 rotate 0 -" + `self.options["papersize"][0]` + " translate\n")
-            self.top = papersize[0]
-        else:
-            self.top = papersize[1]
         self.cur_gc = None
 
         # calculate initial bounds
-        if self.options["landscape"]:
-            self.all_bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
-        else:
-            self.all_bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
         self.y_axis_labels([])
 
     def plot_bounds(self):              # returns (left_margin, top_margin, width, height) -- vertical opposite of PostScript coordinates
@@ -1242,23 +1263,29 @@ class PlotCanvas_PostScriptDrawable:
             leftsp = label.extents("6000K")[2]
         leftsp += 4 + 6 + legend.height()
         botsp = label.height() + 4 + legend.height() + 6
+        topsp = self.layout("title").height() + self.layout("subtitle").height() + 20
 
         # now calculate bounds
         allb = self.all_bounds
-        self.bounds = (allb[0] + leftsp, allb[1], allb[2] - leftsp, allb[3] - botsp)
+        self.bounds = (allb[0] + leftsp, allb[1] + topsp, allb[2] - leftsp, allb[3] - botsp - topsp)
     
     def legend(self, gc, layout, text, position):
         b, allb = self.bounds, self.all_bounds
         if position == "xaxis":
             self.draw_text(gc, layout, text, b[0] + b[2]/2., allb[1] + allb[3] - 2 - layout.height(), ANCHOR_N)
         elif position == "yaxis":
-            self.draw_text(gc, layout, text, allb[0] + layout.height() + 2, b[1] + b[3]/2., ANCHOR_E_ROT)
+            self.draw_text(gc, layout, text, allb[0] + layout.height() + 4, b[1] + b[3]/2., ANCHOR_E_ROT)
+        elif position == "title":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., allb[1] - 6, ANCHOR_N)
+        elif position == "subtitle":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., b[1] - 6, ANCHOR_S)
         else:
             raise ValueError
     
     def complete(self):
         self.f.write("showpage\n")
         self.f.write("%%EOF\n")
+        self.f.close()
         
     def clip(self, gc, rectangle):
         x, y, w, h = rectangle
@@ -1307,6 +1334,8 @@ class PlotCanvas_PostScriptDrawable:
             self.f.write(str(x - lr[2]/2.0) + " " + str(self.top - y - lr[3] - 4) + " m(" + text + ")s\n")
         elif anchor == ANCHOR_E:
             self.f.write(str(x - 4 - lr[2]) + " " + str(self.top - y - lr[3]/2.0) + " m(" + text + ")s\n")
+        elif anchor == ANCHOR_S:
+            self.f.write(str(x - lr[2]/2.0) + " " + str(self.top - y + 4) + " m(" + text + ")s\n")
         elif anchor == ANCHOR_E_ROT:
             self.f.write("gsave " + str(x - 4) + " " + str(self.top - y - lr[2]/2.0) + " translate 90 rotate 0 0 m(" + text + ")s grestore\n")
         else:
@@ -1325,7 +1354,7 @@ class PlotCanvas_PostScriptDrawable:
 
     def draw_data(self, gc, x, y1, y2):
         if self.cur_gc is not gc: self.select_gc(gc)
-        self.f.write(str(y2 - y1) + " " + str(x) + " " + str(self.top - y1) + " Pd\n")
+        self.f.write(str(y1 - y2) + " " + str(x) + " " + str(self.top - y1) + " Pd\n")
 
     def draw_ack(self, gc, x, y):
         if self.cur_gc is not gc: self.select_gc(gc)
@@ -1672,9 +1701,12 @@ class PlotCanvas:
         return l
 
     def plot(self, drawable=None):
-        if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
+        if drawable is None:
+            drawable = PlotCanvas_ScreenDrawable(self)
+        
         drawable.prepare()
         drawable.clear()
+        
         if self.conn is not None:
 
             # variables
@@ -1703,10 +1735,11 @@ class PlotCanvas:
             sscale = plot_height / float(s0 - s1)
             toff = left_margin - (t0 * tscale)
             soff = top_margin - (s1 * sscale)
-            self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
 
-            # mark that self.tscale, self.sscale, etc. are available
-            self.plotted = True
+            # save screen information
+            if isinstance(drawable, PlotCanvas_ScreenDrawable):
+                self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
+                self.plotted = True
             
             # clear background
             drawable.fill_rectangle(drawable.gc("bg"), left_margin, top_margin, plot_width, plot_height)
@@ -1733,9 +1766,14 @@ class PlotCanvas:
             self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
 
             # axis legends
-            legend_playout = drawable.layout("legend")
-            drawable.legend(label_gc, legend_playout, "Sequence number", "yaxis")
-            drawable.legend(label_gc, legend_playout, "Time (s)", "xaxis")
+            try:
+                legend_playout = drawable.layout("legend")
+                drawable.legend(label_gc, legend_playout, "Sequence number", "yaxis")
+                drawable.legend(label_gc, legend_playout, "Time (s)", "xaxis")
+                drawable.legend(label_gc, drawable.layout("title"), self.get_flowref().get_description(), "title")
+                drawable.legend(label_gc, drawable.layout("subtitle"), self.get_flowref().get_filename(), "subtitle")
+            except ValueError:
+                pass
 
             # ack packets
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
@@ -1855,18 +1893,20 @@ class PrintOptionsDialog:
         self.dialog = dialog = gtk.Dialog(title='tcpplot Print Options', parent=parent, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
         frame = gtk.Frame(label='Printer')
         dialog.vbox.pack_start(frame)
-        table = gtk.Table(rows=4, columns=3)
+        table = gtk.Table(rows=5, columns=3)
         table.set_row_spacings(5); table.set_col_spacings(7); table.set_border_width(5)
         frame.add(table)
 
         l = gtk.Label("Print To:"); l.set_alignment(1, 0.5)
         table.attach(l, 0, 1, 0, 1)
-        l = gtk.Label("File:"); l.set_alignment(1, 0.5)
+        l = gtk.Label("Command:"); l.set_alignment(1, 0.5)
         table.attach(l, 0, 1, 1, 2)
-        l = gtk.Label("Color:"); l.set_alignment(1, 0.5)
+        l = gtk.Label("File:"); l.set_alignment(1, 0.5)
         table.attach(l, 0, 1, 2, 3)
-        l = gtk.Label("Paper Size:"); l.set_alignment(1, 0.5)
+        l = gtk.Label("Color:"); l.set_alignment(1, 0.5)
         table.attach(l, 0, 1, 3, 4)
+        l = gtk.Label("Paper Size:"); l.set_alignment(1, 0.5)
+        table.attach(l, 0, 1, 4, 5)
 
         b = gtk.HBox(False, 10)
         self.w_dest = [None, None, None]
@@ -1879,10 +1919,14 @@ class PrintOptionsDialog:
             b.pack_start(self.w_dest[i], False, False)
         table.attach(b, 1, 2, 0, 1)
 
+        self.w_command = gtk.Entry()
+        self.w_command.set_text(options["command"])
+        table.attach(self.w_command, 1, 2, 1, 2)
+
         self.w_file = gtk.Entry()
         self.w_file.set_text(options["file"])
-        self.w_file.set_sensitive(options["dest"] != PRINT_PRINTER)
-        table.attach(self.w_file, 1, 2, 1, 2)
+        table.attach(self.w_file, 1, 2, 2, 3)
+        self.set_dest(self.options["dest"])
 
         b = gtk.HBox(False, 10)
         self.w_color = gtk.RadioButton(group=None, label='Color')
@@ -1890,7 +1934,7 @@ class PrintOptionsDialog:
         r = gtk.RadioButton(group=self.w_color, label='Grayscale')
         if not options["color"]: r.set_active(True)
         b.pack_start(r, False, False)
-        table.attach(b, 1, 2, 2, 3)
+        table.attach(b, 1, 2, 3, 4)
 
         self.w_papersize = gtk.OptionMenu()
         menu = gtk.Menu()
@@ -1902,7 +1946,7 @@ class PrintOptionsDialog:
             self.w_papersize.set_history(mapped_indices[0])
         else:
             self.w_papersize.set_history(len(self.PAPER_SIZES) - 1)
-        table.attach(self.w_papersize, 1, 3, 3, 4)
+        table.attach(self.w_papersize, 1, 3, 4, 5)
 
         # action area
         ok = gtk.Button(stock=gtk.STOCK_OK)
@@ -1916,6 +1960,7 @@ class PrintOptionsDialog:
 
     def set_dest(self, where):
         self.w_file.set_sensitive(where != PRINT_PRINTER)
+        self.w_command.set_sensitive(where == PRINT_PRINTER)
 
     def dest_toggled(self, widget, data=None):
         if widget.get_active(): self.set_dest(data)
@@ -2018,6 +2063,8 @@ class PlotFlowWindow:
         self.prev_flow_button = toolbar.append_item("Prev", "Switch to previous flow", "", stock_image(gtk.STOCK_GO_BACK), self.cmd_prev_flow, 0)
         self.next_flow_button = toolbar.append_item("Next", "Switch to next flow", "", stock_image(gtk.STOCK_GO_FORWARD), self.cmd_next_flow, 0)
         toolbar.append_item("Swap", "Show the other flow of this connection", "", file_image("double_arrow_small.png"), self.cmd_swap_dir, 0)
+        toolbar.append_space()
+        toolbar.append_item("Print", "Print to current printer or file", "", stock_image(gtk.STOCK_PRINT), self.cmd_print, 0)
         vbox.pack_start(toolbar, 0, 0)
         toolbar.show()
 
@@ -2069,11 +2116,18 @@ class PlotFlowWindow:
     def cmd_exit(self, *args):
         gtk.main_quit()
 
-    def cmd_print(self, widget, event):
-        f = file("/tmp/tcpplot.ps", "w")
-        self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, f))
-        f.close()
-        
+    def cmd_print(self, widget, event, window=None):
+        try:
+            self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, _print_options))
+        except IOError, (errno, strerror):
+            if window is None: window = self.window
+            dialog = gtk.MessageDialog(window,
+                     gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+                     gtk.MESSAGE_ERROR, gtk.BUTTONS_OK,
+                     "Could not print to \"%s\": %s" % ((_print_options["dest"] == PRINT_PRINTER and _print_options["command"] or _print_options["file"]), strerror))
+            dialog.run()
+            dialog.destroy()
+
     def cmd_print_options(self, widget, event):
         PrintOptionsDialog(self.window)
         
