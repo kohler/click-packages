@@ -31,7 +31,7 @@ static inline uint32_t bswap_32(uint32_t u) {
 #endif
 
 
-const IPAddrColors::color_t IPAddrColors::NULLCOLOR, IPAddrColors::BADCOLOR, IPAddrColors::MAXCOLOR;
+const IPAddrColors::color_t IPAddrColors::BADCOLOR, IPAddrColors::NULLCOLOR, IPAddrColors::MIXEDCOLOR, IPAddrColors::SUBTREECOLOR, IPAddrColors::MAXCOLOR;
 
 IPAddrColors::IPAddrColors()
     : _root(0), _free(0)
@@ -101,8 +101,8 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
 	    return errh->error("%x: lower bits nonzero (swivel %d)", n->aggregate, swivel);
 
 	// check topheaviness
-	if (n->color != NULLCOLOR) {
-	    if (_n_fixed_colors == 0 || (n->color != BADCOLOR && n->color >= _n_fixed_colors))
+	if (n->color <= MAXCOLOR) {
+	    if (_n_fixed_colors == 0 || n->color >= _n_fixed_colors)
 		errh->error("%x: packets present in middle of tree (color %d)", n->aggregate, n->color);
 	}
 
@@ -356,7 +356,7 @@ IPAddrColors::clear(ErrorHandler *errh)
 void
 IPAddrColors::node_compact_colors(Node *n)
 {
-    if (n->color < BADCOLOR)
+    if (n->color <= MAXCOLOR)
 	n->color = _color_mapping[n->color];
     if (n->child[0]) {
 	node_compact_colors(n->child[0]);
@@ -410,8 +410,8 @@ IPAddrColors::node_mark_subcolors(Node *n)
 	    lcolor = rcolor;
 	else if (rcolor == NULLCOLOR)
 	    rcolor = lcolor;
-	if (lcolor != rcolor || lcolor == BADCOLOR)
-	    return (n->color = BADCOLOR);
+	if (lcolor != rcolor || lcolor == MIXEDCOLOR)
+	    return (n->color = MIXEDCOLOR);
 	else
 	    return (n->color = lcolor);
     }
@@ -429,9 +429,9 @@ IPAddrColors::node_nearest_colored_ancestors(Node *n, color_t color, int swivel,
 	}
 	node_nearest_colored_ancestors(n->child[0], color, swivel, colors, swivels);
 	node_nearest_colored_ancestors(n->child[1], color, swivel, colors, swivels);
-    } else if (n->color != NULLCOLOR && color < BADCOLOR && swivel >= swivels[n->color]) {
+    } else if (n->color <= MAXCOLOR && color <= MAXCOLOR && swivel >= swivels[n->color]) {
 	if (swivel == swivels[n->color] && colors[n->color] != color)
-	    colors[n->color] = BADCOLOR;
+	    colors[n->color] = MIXEDCOLOR;
 	else
 	    colors[n->color] = color;
 	swivels[n->color] = swivel;
@@ -515,7 +515,7 @@ IPAddrColors::write_nodes(Node *n, FILE *f, bool binary,
 	buffer[pos++] = SUBTREECOLOR;
 	buffer[pos++] = first_bit_set(parent->child[0]->aggregate ^ parent->child[1]->aggregate);
 	buffer[pos++] = n->color;
-    } else if (n->color <= MAXCOLOR && !n->child[0]) {
+    } else if (n->color <= BADCOLOR && !n->child[0]) {
 	buffer[pos++] = n->aggregate;
 	buffer[pos++] = n->color;
 	if (pos == len)
