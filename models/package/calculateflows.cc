@@ -553,11 +553,8 @@ CalculateFlows::initialize(ErrorHandler *errh)
 	else if (_tipsd && _tipsd->filename())
 	    fprintf(_traceinfo_file, " file='%s'", _tipsd->filename().cc());
 	fprintf(_traceinfo_file, ">\n");
+	HandlerCall::reset_read(_filepos_h, _packet_source, "packet_filepos");
     }
-
-    // check handler call
-    if (_filepos_h && _filepos_h->initialize_read(this, errh) < 0)
-	return -1;
 
     return 0;
 }
