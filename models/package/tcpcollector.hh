@@ -102,7 +102,8 @@ number.  Default is false.
 
 Boolean.  If true, then write packet interarrival times to the TRACEINFO file,
 in "C<E<lt>interarrivalE<gt>>" XML elements nested inside each
-"C<E<lt>streamE<gt>>".  Each line is an interarrival time.  Default is false.
+"C<E<lt>streamE<gt>>".  Each line is an interarrival time in microseconds.
+Default is false.
 
 =back
 
@@ -213,12 +214,12 @@ struct TCPCollector::Pkt {
 
     uint32_t data_packetno;	// data packet number of this packet
     tcp_seq_t seq;		// sequence number of this packet
-    tcp_seq_t end_seq;	// end sequence number of this packet
+    tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
-    struct timeval timestamp; // timestamp of this packet
+    struct timeval timestamp;	// timestamp of this packet
     uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
-    uint16_t th_flags;	// TCP flags
+    uint16_t th_flags;		// TCP flags
 
     enum Flags {
 	F_NEW = 0x1,		// packet contains some new data
@@ -231,6 +232,7 @@ struct TCPCollector::Pkt {
 
 	F_FILLS_RCV_WINDOW = 0x400, // packet filled receive window
 	F_WINDOW_PROBE = 0x800,	// packet was a window probe
+	F_FRAGMENT = 0x1000,	// packet was a fragment
     };
     int flags;			// packet flags
 };
@@ -239,34 +241,36 @@ struct TCPCollector::StreamInfo {
     
     unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
-    bool have_syn : 1;	// have we seen a SYN?
+    bool have_syn : 1;		// have we seen a SYN?
     bool different_syn : 1;	// did we see a different SYN?
-    bool have_fin : 1;	// have we seen a FIN?
+    bool have_fin : 1;		// have we seen a FIN?
     bool different_fin : 1;	// did we see a different FIN?
     bool filled_rcv_window : 1;	// have we ever filled the receive window?
     bool sent_window_probe : 1;	// have we ever sent a window probe?
     bool sent_sackok : 1;	// did we send SACKOK on the SYN?
     bool time_confusion : 1;	// was there timestamp confusion?
     
-    tcp_seq_t init_seq;	// first absolute sequence number seen, if any
+    tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
     
-    tcp_seq_t syn_seq;	// sequence number of SYN, if any
-    tcp_seq_t fin_seq;	// sequence number of FIN, if any
+    tcp_seq_t syn_seq;		// sequence number of SYN, if any
+    tcp_seq_t fin_seq;		// sequence number of FIN, if any
 
-    tcp_seq_t max_seq;	// maximum sequence number seen on connection
-    tcp_seq_t max_ack;	// maximum sequence number acknowledged
+    tcp_seq_t max_seq;		// maximum sequence number seen on connection
+    tcp_seq_t max_ack;		// maximum sequence number acknowledged
 
     uint32_t total_packets;	// total number of packets seen (incl. rexmits)
     uint32_t ack_packets;	// total number of pure acks seen
-    uint32_t total_seq;	// total sequence space seen (incl. rexmits)
+    uint32_t total_seq;		// total sequence space seen (incl. rexmits)
     
-    tcp_seq_t end_rcv_window; // end of receive window
+    tcp_seq_t end_rcv_window;	// end of receive window
     int rcv_window_scale;	// window scaling option
+
+    uint32_t mtu;		// IP MTU (length of largest IP packet seen)
 
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
-    Pkt *pkt_data_tail;	// last packet record with data
+    Pkt *pkt_data_tail;		// last packet record with data
 
     StreamInfo();
 
@@ -274,13 +278,6 @@ struct TCPCollector::StreamInfo {
     void process_options(const click_tcp *, int transport_length);
     void process_ack(Pkt *, const Packet *, StreamInfo &stream);
     void attach_packet(Pkt *);
-
-    
-    void categorize(Pkt *insertion, ConnInfo *, TCPCollector *);
-    void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, TCPCollector *);
-    void update_counters(const Pkt *np, const click_tcp *);
-
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const;
 
 #if TCPCOLLECTOR_XML
     void write_xml(FILE *, const ConnInfo &, const TCPCollector *) const;
@@ -297,18 +294,13 @@ class TCPCollector::ConnInfo {  public:
     ConnInfo(const Packet *, const HandlerCall *, bool ip_id);
 
     uint32_t aggregate() const		{ return _aggregate; }
-    const timeval &init_time() const { return _init_time; }
-    timeval duration() const;
-    timeval rtt() const;
-    const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
     bool ip_id() const			{ return _ip_id; }
+    const timeval &init_time() const	{ return _init_time; }
+    timeval duration() const;
+    const StreamInfo &stream(int i) const { assert(i==0||i==1); return _stream[i]; }
 
     void handle_packet(const Packet *, TCPCollector *);
     
-    Pkt *create_pkt(const Packet *, TCPCollector *);
-    void calculate_loss_events(Pkt *, unsigned dir, TCPCollector *);
-    void post_update_state(const Packet *, Pkt *, TCPCollector *);
-
 #if TCPCOLLECTOR_XML
     void write_xml(FILE *, const TCPCollector *) const;
 #endif

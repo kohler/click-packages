@@ -72,7 +72,7 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
     k->data_packetno = total_packets - ack_packets;
     k->seq = ntohl(tcph->th_seq) - init_seq;
     k->end_seq = k->seq + calculate_seqlen(iph, tcph);
-    k->ack = ntohl(tcph->th_ack) - conn->stream(!direction)->init_seq;
+    k->ack = ntohl(tcph->th_ack) - conn->stream(!direction).init_seq;
     if (!(tcph->th_flags & TH_ACK))
 	k->ack = 0;
     k->ip_id = (conn->ip_id() ? iph->ip_id : 0);
@@ -111,10 +111,17 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
 	max_seq = k->end_seq;
 
     // process options, if there are any
+    // (do this before end_rcv_window, to get any rcv_window_scale)
     process_options(tcph, p->transport_length());
 
     // update end_rcv_window
     end_rcv_window = k->ack + (ntohs(tcph->th_win) << rcv_window_scale);
+
+    // check packet length
+    if (iph->ip_off & IP_MF)
+	k->flags |= Pkt::F_FRAGMENT;
+    if (ntohs(iph->ip_len) > mtu)
+	mtu = ntohs(iph->ip_len);
 }
 
 void
@@ -308,7 +315,7 @@ TCPCollector::StreamInfo::StreamInfo()
       sent_window_probe(false), sent_sackok(false), time_confusion(false),
       init_seq(0), max_seq(0), max_ack(0),
       total_packets(0), ack_packets(0), total_seq(0),
-      end_rcv_window(0), rcv_window_scale(0),
+      end_rcv_window(0), rcv_window_scale(0), mtu(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0)
 {
 }
@@ -344,8 +351,8 @@ TCPCollector::kill_conn(ConnInfo *conn)
 	conn->write_xml(_traceinfo_file, this);
 #endif
     
-    free_pkt_list(conn->stream(0)->pkt_head, conn->stream(0)->pkt_tail);
-    free_pkt_list(conn->stream(1)->pkt_head, conn->stream(1)->pkt_tail);
+    free_pkt_list(conn->stream(0).pkt_head, conn->stream(0).pkt_tail);
+    free_pkt_list(conn->stream(1).pkt_head, conn->stream(1).pkt_tail);
     delete conn;
 }
 
@@ -466,9 +473,9 @@ TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner) const
 void
 TCPCollector::StreamInfo::write_xml(FILE *f, const ConnInfo &conn, const TCPCollector *owner) const
 {
-    fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u'",
+    fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u' mtu='%u'",
 	    direction, total_packets - ack_packets, ack_packets,
-	    init_seq, total_seq);
+	    init_seq, total_seq, mtu);
     if (sent_sackok)
 	fprintf(f, " sentsackok='yes'");
     if (different_syn)
@@ -535,7 +542,7 @@ TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream,
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream.pkt_head->next; k; k = k->next) {
 	    timeval diff = k->timestamp - k->prev->timestamp;
-	    fprintf(f, "%ld.%06ld\n", diff.tv_sec, diff.tv_usec);
+	    fprintf(f, "%g\n", diff.tv_sec*1.0e6 + diff.tv_usec);
 	}
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
