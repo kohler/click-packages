@@ -152,13 +152,15 @@ class TCPCollector : public Element, public AggregateListener { public:
 
 #if TCPCOLLECTOR_XML
     // XML writing functions
-    int add_trace_xmlattr(const String &attrname, const String &value);
-    typedef String (*ConnectionXMLAttrHook)(Conn*, const String &attrname, void *thunk);
-    int add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook, void *thunk);
-    typedef String (*StreamXMLAttrHook)(Stream*, Conn*, const String &attrname, void *thunk);
-    int add_stream_xmlattr(const String &attrname, StreamXMLAttrHook, void *thunk);
-    typedef void (*StreamXMLTagHook)(FILE*, Stream*, Conn*, const String &tagname, void *thunk);
-    int add_stream_xmltag(const String &tagname, StreamXMLTagHook, void *thunk);
+    int add_trace_xmlattr(const String &attrname, const String& value);
+    typedef String (*ConnectionXMLAttrHook)(Conn*, const String& attrname, void* thunk);
+    int add_connection_xmlattr(const String& attrname, ConnectionXMLAttrHook, void* thunk);
+    typedef void (*ConnectionXMLTagHook)(FILE*, Conn*, const String& attrname, void* thunk);
+    int add_connection_xmltag(const String& tagname, ConnectionXMLTagHook, void* thunk);
+    typedef String (*StreamXMLAttrHook)(Stream*, Conn*, const String& attrname, void* thunk);
+    int add_stream_xmlattr(const String& attrname, StreamXMLAttrHook, void* thunk);
+    typedef void (*StreamXMLTagHook)(FILE*, Stream*, Conn*, const String& tagname, void* thunk);
+    int add_stream_xmltag(const String& tagname, StreamXMLTagHook, void* thunk);
 #endif
 
     // add space for other elements
@@ -201,6 +203,7 @@ class TCPCollector : public Element, public AggregateListener { public:
 	String name;
 	union {
 	    ConnectionXMLAttrHook connection;
+	    ConnectionXMLTagHook connectiontag;
 	    StreamXMLAttrHook stream;
 	    StreamXMLTagHook streamtag;
 	} hook;
@@ -208,6 +211,7 @@ class TCPCollector : public Element, public AggregateListener { public:
 	inline bool operator()(const XMLHook &) const;
     };
     Vector<XMLHook> _conn_xmlattr;
+    Vector<XMLHook> _conn_xmltag;
     Vector<XMLHook> _stream_xmlattr;
     Vector<XMLHook> _stream_xmltag;
     

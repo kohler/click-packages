@@ -75,6 +75,7 @@ TCPCollector::Stream::process_data(Pkt* k, const Packet* p, Conn* conn)
     k->ack = ntohl(tcph->th_ack) - conn->stream(!direction)->init_seq;
     if (!(tcph->th_flags & TH_ACK))
 	k->ack = 0;
+    k->sack = 0;
     k->ip_id = (conn->ip_id() ? iph->ip_id : 0);
     k->timestamp = p->timestamp_anno() - conn->init_time();
     k->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
@@ -148,7 +149,7 @@ TCPCollector::Stream::process_options(const click_tcp* tcph, int transport_lengt
 	    opt += opt[1];
 	}
 
-	// store any sack options in the packet recrod
+	// store any sack options in the packet record
 	if (nsack && (k->sack = conn->allocate_sack(nsack + 1))) {
 	    uint32_t* sack = k->sack;
 	    *sack++ = nsack;
@@ -501,6 +502,16 @@ TCPCollector::add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHo
 }
 
 int
+TCPCollector::add_connection_xmltag(const String &attrname, ConnectionXMLTagHook hook, void *thunk)
+{
+    XMLHook x;
+    x.name = attrname;
+    x.hook.connectiontag = hook;
+    x.thunk = thunk;
+    return add_xmlattr(_conn_xmltag, x);
+}
+
+int
 TCPCollector::add_stream_xmlattr(const String &attrname, StreamXMLAttrHook hook, void *thunk)
 {
     XMLHook x;
@@ -564,6 +575,9 @@ TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
     
     fprintf(f, ">\n");
 
+    for (const XMLHook *x = owner->_conn_xmltag.begin(); x < owner->_conn_xmltag.end(); x++)
+	x->hook.connectiontag(f, this, x->name, x->thunk);
+    
     _stream[0]->write_xml(f, this, owner);
     _stream[1]->write_xml(f, this, owner);
     
@@ -690,7 +704,7 @@ TCPCollector::notify_noutputs(int n)
 }
 
 int
-TCPCollector::add_space(unsigned space, int &size)
+TCPCollector::add_space(unsigned space, int& size)
 {
     if (space == 0)
 	return size;
@@ -698,7 +712,7 @@ TCPCollector::add_space(unsigned space, int &size)
 	return -1;
     else {
 	int offset = size;
-	size = (size + space + 7) % 8;
+	size = (size + space + 7) & ~7;
 	return offset;
     }
 }
