@@ -9,7 +9,7 @@ import gtk, pango
 fill_colors = {
     "data": "red", "ack": "green", "dataack": "blue",
     "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond",
-    "border": "grey", "lossborder": "yellow"
+    "border": "dark grey", "lossborder": "yellow"
 }
 gc_dashes = {
     "lossborder": [4, 4]
@@ -438,7 +438,7 @@ class PlotCanvas:
         drawable.draw_line(gc, edge1, pos, edge1 + len, pos)
         drawable.draw_line(gc, edge2, pos, edge2 - len, pos)
     def _draw_axis(self, scale, off, pos1, pos2, step, edge1, edge2, ticer, labeller, drawable, gc, playout):
-        if abs(step * scale) >= 50:
+        if abs(step * scale) >= 75:
             mstep = step / 10
         else:
             mstep = step / 4
@@ -457,22 +457,22 @@ class PlotCanvas:
         drawable.clear()
         if self.conn is not None:
 
-            # analyze time and sequence ranges
+            # analyze time ranges
             t0, t1 = self.begin, self.end
             if t0 is None:
                 t0 = self.conn.time_range()[0]
             if t1 is None:
                 t1 = self.conn.time_range()[1]
+            ranges = fix_range(t0, t1, 30.0 / self.plot_width)
+            t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
+
+            # analyze sequence ranges
             s0, s1 = self.conn.seq_range(self.dir, t0, t1)
             if s0 is None or s1 is None:
                 s0 = 0; s1 = 1
-
-            # fix ranges
-            ranges = fix_range(t0, t1, 30.0 / self.plot_width)
-            t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
             ranges = fix_range(s0, s1, 30.0 / self.plot_height)
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
-
+            
             # get transformation
             tscale = self.plot_width / float(t1 - t0)
             sscale = self.plot_height / float(s0 - s1)
@@ -552,7 +552,9 @@ class PlotBox:
         self.canvas.set_connection(conn, dir)
         desc = conn.get_description()
         mid = desc.find(' > ')
-        self.l0.set_label(desc[:mid + 1])
+        s = desc[:mid + 1]
+        s = re.sub("(^\\#[0-9]+)", "  <b>\\1</b>", s)
+        self.l0.set_markup(s)
         self.l1.set_label(desc[mid + 2:])
         self.dirbutton.set_label("><"[self.canvas.get_direction()])
     def set_time_range(self, begin, end):
