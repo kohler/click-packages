@@ -87,7 +87,7 @@ def file_image(filename):
     return image
 
 def bisect_with_cmp(list, cmp, lo=0, hi=None):
-    if hi is None: hi = len(list) - 1
+    if hi is None: hi = len(list)
     while lo < hi:
         mid = (lo + hi) // 2
         if cmp(list[mid]) < 0: hi = mid
