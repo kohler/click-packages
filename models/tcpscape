@@ -515,6 +515,9 @@ class FlowRef:
     def aggregate(self):
         return self.conn.aggregate
 
+    def has_window(self):
+        return self.conn.has_window
+
     def get_flowid_text(self):
         return self.conn.get_flowid_text(self.dir)
 
@@ -1471,6 +1474,7 @@ class PlotCanvas:
         drawable.complete()
 
 class PlotFlowWindow:
+    
     def __init__(self, fset):
         self.flowset = fset
         self.flowid = None
@@ -1498,7 +1502,8 @@ class PlotFlowWindow:
 
         if len(fset):
             self.set_flowid(0)
-        self._activate_flow_items()
+        else:
+            self._activate_flow_items(None)
 
         win.show()
 
@@ -1529,6 +1534,8 @@ class PlotFlowWindow:
         menubar = self.item_factory.get_widget("<main>")
         vbox.pack_start(menubar, 0, 0)
         menubar.show()
+
+        self.rcv_window_item = self.item_factory.get_item("/View/Hide Receive Window").get_child()
 
     def _init_toolbar(self, win, vbox):
         toolbar = gtk.Toolbar()
@@ -1603,11 +1610,12 @@ class PlotFlowWindow:
     def cmd_zoom_fit(self, widget, event):
         self.canvas.view_all()
 
-    def _activate_flow_items(self):
+    def _activate_flow_items(self, fref):
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
         self.next_flow_button.set_sensitive(self.flowid < len(self.flowset) - 1)
         self.item_factory.get_item("/View/Previous Flow").set_sensitive(self.flowid > 0)
         self.prev_flow_button.set_sensitive(self.flowid > 0)
+        self.rcv_window_item.set_sensitive(fref is not None and fref.has_window())
 
     def flowref(self):
         if self.flowid is None:
@@ -1638,7 +1646,7 @@ class PlotFlowWindow:
         self.statusbar.set_markup(desc)
         
         self.flowid = new_flowid
-        self._activate_flow_items()
+        self._activate_flow_items(nf)
 
     def cmd_next_flow(self, widget, event):
         self.set_flowid(self.flowid + 1)
