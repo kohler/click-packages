@@ -76,5 +76,5 @@ AggregateIPAddress::pull(int)
   return p;
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(AggregateIPAddress)
