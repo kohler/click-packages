@@ -77,7 +77,7 @@ class CalculateFlows : public Element, public AggregateListener {
     int initialize(ErrorHandler *);
 	void print_ack_event(unsigned, int,  timeval, unsigned);
 	void print_send_event(unsigned, timeval, unsigned , unsigned);
-	void gplotp_ack_event(unsigned, timeval, unsigned);
+	void gplotp_ack_event(unsigned, int ,timeval, unsigned);
 	void gplotp_send_event(unsigned, timeval, unsigned);
 	void aggregate_notify(uint32_t aggregate_ID,
                   AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
@@ -115,10 +115,11 @@ class CalculateFlows : public Element, public AggregateListener {
 		unsigned  _p_loss_events[2];
 		   
 	public:	
-		FILE *outfile[4];
-		FILE *outfileg[8];
-		String outfilename[2];
-		String outfilenameg[8];
+		FILE *outfile[5]; // 0,1 for Events Output and 2,3 for statistics and 4 for info files.
+ 		FILE *outfileg[10]; 
+		String outfilename[2];	// Event output files using Jitu format 
+		String outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
+								// 6,7 for Possible loss Events, 8,9 for Data Acks
 		
 		String outputdir;
 		unsigned agganno;
@@ -258,6 +259,16 @@ class CalculateFlows : public Element, public AggregateListener {
 	        			return;
 					}
 				}
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outputdir + "/" + outfilenamep[i];
+					outfilenametmp.append("_dacks.gp",9);
+					outfilenameg[i+8] = outfilenametmp;
+					outfileg[i+8] = fopen(outfilenametmp.cc(), "w");
+	    			if (!outfileg[i]){
+    	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+	        			return;
+					}
+				}				
 	
 			}
 			if (eventfiles){
@@ -278,6 +289,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		
 		~LossInfo(){
 			print_stats();
+			
 		/*	if (gnuplot){  // check if gnuplot output is requested.
 				char tempstr[32];
 				for (int i = 0 ; i < 2 ; i++){
@@ -335,7 +347,7 @@ class CalculateFlows : public Element, public AggregateListener {
 	    				}
 						// nothing matches (that cannot be possible unless there is reordering)
 						outoforder_pckt = 1; //set the outoforder indicator
-						printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?",
+						printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
 										agganno,
 										paint, 
 										start_seq,
@@ -550,7 +562,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
 			
 			if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)){
-				printf("Possible gap in Byte Sequence flow %d:%d %d - %d",agganno,paint,_max_seq[paint],seq);
+				printf("Possible gap in Byte Sequence flow %d:%d %d - %d\n",agganno,paint,_max_seq[paint],seq);
 			}
 			if (seq < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
 				MapS &m_rexmt = rexmt[paint];

@@ -100,12 +100,16 @@ CalculateFlows::simple_action(Packet *p)
        int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
 	   if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ){ 
-	  	// unsigned short sport = ntohs(tcph->th_sport);
-  	  	// unsigned short dport = ntohs(tcph->th_dport);
-  	  	// printf("%u: %s:%d->%s:%d\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
-	  	loss->init_time = ts;
-		ts.tv_sec = 1;
-	   	ts.tv_usec = 0;
+	  	 unsigned short sport = ntohs(tcph->th_sport);
+  	  	 unsigned short dport = ntohs(tcph->th_dport);
+  	  	 String outfilenametmp;
+		 outfilenametmp = loss->outputdir+"/flowhnames.info";
+		 loss->outfile[4] = fopen(outfilenametmp.cc(), "w");		 
+		 fprintf(loss->outfile[4],"flow%u: %s:%d <-> %s:%d'\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
+	  	 fclose(loss->outfile[4]);
+		 loss->init_time = ts;
+		 ts.tv_sec = 1;
+	   	 ts.tv_usec = 0;
 	   }
 	   else{
 	   	ts.tv_sec++;
@@ -169,7 +173,7 @@ CalculateFlows::simple_action(Packet *p)
 				print_ack_event(cpaint, type, ts, ack);	
 			}
 			if (loss->gnuplot){
-		    	gplotp_ack_event(cpaint, ts, ack);	
+		    	gplotp_ack_event(cpaint, type, ts, ack);	
 			//printf("[%u, %u]",ack,m_acks[ack]);
 	   		}
 	   }
@@ -253,15 +257,22 @@ print_send_event(unsigned paint, timeval tstamp, unsigned startseq, unsigned end
 
 void
 CalculateFlows::
-gplotp_ack_event(unsigned paint, timeval tstamp, unsigned ackseq)
+gplotp_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
 {
-	loss->outfileg[paint] = fopen(loss->outfilenameg[paint].cc(), "a");
-	fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-	//fflush(loss->outfileg[paint]);
-	if (fclose(loss->outfileg[paint])){ 
-   		click_chatter("error closing file!");
+	if (type == 0){	
+		loss->outfileg[paint] = fopen(loss->outfilenameg[paint].cc(), "a");
+		fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+		if (fclose(loss->outfileg[paint])){ 
+   			click_chatter("error closing file!");
+		}
 	}
-
+	else{
+		loss->outfileg[paint+8] = fopen(loss->outfilenameg[paint+8].cc(), "a");
+		fprintf(loss->outfileg[paint+8],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+		if (fclose(loss->outfileg[paint+8])){ 
+   			click_chatter("error closing file!");
+		}
+	}
 }
 
 void
@@ -284,7 +295,7 @@ aggregate_notify(uint32_t aggregate_ID,
                  const Packet *packet /* null for DELETE_AGG */){
 //	printf("ok1 ---->%d %d\n", aggregate_ID, event);
 	if (event == NEW_AGG){	
-		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 0, 0) ;
+		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 1, 1) ;
 		loss_map.insert(aggregate_ID, tmploss);
 	}
 	
