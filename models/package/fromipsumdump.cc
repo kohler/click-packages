@@ -33,7 +33,7 @@
 #include <fcntl.h>
 
 FromIPSummaryDump::FromIPSummaryDump()
-    : Element(0, 1), _fd(-1), _pos(0), _len(0), _task(this)
+    : Element(0, 1), _fd(-1), _pos(0), _len(0), _task(this), _pipe(0)
 {
     MOD_INC_USE_COUNT;
 }
