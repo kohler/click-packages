@@ -1,5 +1,6 @@
 /* -*- c-basic-offset: 4 -*- */
 
+#include <config.h>
 #include <click/config.h>
 
 #include "fromtusummarylog.hh"

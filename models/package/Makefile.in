@@ -96,8 +96,8 @@ CFLAGS = @CFLAGS_NDEBUG@
 CXXFLAGS = @CXXFLAGS_NDEBUG@
 
 DEFS = @DEFS@ 
-K_INCLUDES = -I. -I$(top_builddir) -I$(srcdir) -I$(clickincludedir) -I$(clicksrcdir) -I$(linuxdir)/include
-U_INCLUDES = -I. -I$(top_builddir) -I$(srcdir) -I$(clickincludedir) -I$(clicksrcdir)
+K_INCLUDES = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(srcdir) -I$(clickincludedir) -I$(clicksrcdir) -I$(linuxdir)/include
+U_INCLUDES = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(srcdir) -I$(clickincludedir) -I$(clicksrcdir)
 
 K_CXXCOMPILE = $(K_CXX) $(DEFS) $(K_INCLUDES) $(K_CPPFLAGS) $(CXXFLAGS)
 U_CXXCOMPILE = $(U_CXX) $(DEFS) $(U_INCLUDES) $(U_CPPFLAGS) $(CXXFLAGS)
