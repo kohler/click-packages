@@ -15,7 +15,7 @@ class OnOffModel : public Element {
     OnOffModel *clone() const {return new OnOffModel;}
     const char *processing() const { return AGNOSTIC;}
 
-    int configure(const Vector<String> &, ErrorHandler *);
+    int configure(Vector<String> &, ErrorHandler *);
     void add_handlers();
 
     class OnOffConnCounter{

@@ -26,7 +26,7 @@ OnOffModel::~OnOffModel()
 }
 
 int
-OnOffModel::configure(const Vector<String> &conf, ErrorHandler *errh)
+OnOffModel::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 
     if (cp_va_parse(conf, this, errh,

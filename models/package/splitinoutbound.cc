@@ -18,7 +18,7 @@ SplitInOutBound::~SplitInOutBound()
 }
 
 int
-SplitInOutBound::configure(const Vector<String> &conf, ErrorHandler *errh)
+SplitInOutBound::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_parse(conf, this, errh, 
 		    cpFilename, "filename for inbound addresses", &_infilename,

@@ -76,7 +76,7 @@ CollectTCPFlows::notify_noutputs(int n)
 }
 
 int
-CollectTCPFlows::configure(const Vector<String> &conf, ErrorHandler *errh)
+CollectTCPFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     _gen_packets = false;
     _filename = String();

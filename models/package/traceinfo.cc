@@ -22,7 +22,7 @@ TraceInfo::~TraceInfo()
 }
 
 int
-TraceInfo::configure(const Vector<String> &conf, ErrorHandler *errh)
+TraceInfo::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (cp_va_parse(conf, this, errh,
 		    cpFilename, "filename for general info. output",&_generaloutfilename,

@@ -19,7 +19,7 @@ CalculateVariance::~CalculateVariance()
 }
 
 int
-CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
+CalculateVariance::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     bool bits = false;
     unsigned naggregates = 1024;

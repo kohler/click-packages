@@ -30,7 +30,7 @@ class CalculateVariance : public Element {
     CalculateVariance *clone() const { return new CalculateVariance; }
     const char *processing() const { return AGNOSTIC; }
 
-    int configure(const Vector<String> &, ErrorHandler *);
+    int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void add_handlers();
 

@@ -19,7 +19,7 @@ AggregateIPAddress::~AggregateIPAddress()
 }
 
 int
-AggregateIPAddress::configure(const Vector<String> &conf, ErrorHandler *errh)
+AggregateIPAddress::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   String typ;
   unsigned first, nbits;

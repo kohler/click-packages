@@ -18,7 +18,7 @@ class SplitInOutBound : public Element { public:
     SplitInOutBound *clone() const { return new SplitInOutBound; }
 
     const char *processing() const { return "a/ahhhh";}
-    int configure(const Vector<String> &, ErrorHandler *);
+    int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
 
     void push(int,Packet *);

@@ -28,7 +28,7 @@ class CollectTCPFlows : public Element { public:
     CollectTCPFlows *clone() const	{ return new CollectTCPFlows; }
 
     void notify_noutputs(int);
-    int configure(const Vector<String> &, ErrorHandler *);
+    int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();

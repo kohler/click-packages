@@ -28,7 +28,7 @@ class TraceInfo: public Element {
     TraceInfo *clone() const { return new TraceInfo; }
     const char *processing() const { return AGNOSTIC; }
 
-    int configure(const Vector<String> &, ErrorHandler *);
+    int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void add_handlers();
 

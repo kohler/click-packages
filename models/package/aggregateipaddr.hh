@@ -41,7 +41,7 @@ class AggregateIPAddress : public Element { public:
   const char *processing() const	{ return AGNOSTIC; }
   AggregateIPAddress *clone() const	{ return new AggregateIPAddress; }
 
-  int configure(const Vector<String> &, ErrorHandler *);
+  int configure(Vector<String> &, ErrorHandler *);
 
   void push(int, Packet *);
   Packet *pull(int);
