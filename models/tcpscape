@@ -39,7 +39,7 @@ _screen_style = {
     "bg": LineDescriptor(1, 1, 1),
     "label": LineDescriptor(0.66, 0.66, 0.66),
 
-    "highlight": LineDescriptor(1, 0.9, 0)
+    "highlight": LineDescriptor(1, 0.9, 0, linewidth=2)
     }
 
 _postscript_style = {
@@ -99,10 +99,13 @@ def bisect_with_cmp(list, cmp, lo=0, hi=None):
     return lo
 
 def union_rectangle(r1, r2):
+    if r1 is None or r1[2] <= 0 or r1[3] <= 0: return r2
+    if r2 is None or r2[2] <= 0 or r2[3] <= 0: return r1
     x, y = min(r1[0], r2[0]), min(r1[1], r2[1])
     return (x, y, max(r1[0] + r1[2], r2[0] + r2[2]) - x, max(r1[1] + r1[3], r2[1] + r2[3]) - y)
 
 def expand_rectangle(r1, v):
+    if r1 is None or r1[2] <= 0 or r1[3] <= 0: return r1
     return (r1[0] - v, r1[1] - v, r1[2] + 2*v, r1[3] + 2*v)
 
 def ordinal(n):
@@ -1234,6 +1237,7 @@ class PlotCanvas:
 
     DRAG_STICKINESS = 5
     IDENTIFY_MAGNETISM = 24
+    DRAG_MAGNETISM = 12
     
     # initialization
     def __init__(self, master, width=600, height=500):
@@ -1260,7 +1264,7 @@ class PlotCanvas:
         self.top_margin = 10
         self.bottom_margin = 20
         self.plotted = False
-        self.press_x = None
+        self.press = None
         self.press_state = 0
         self.tool = PlotCanvas.TOOL_IDENTIFY
         self.show_tool = PlotCanvas.TOOL_NONE
@@ -1270,7 +1274,7 @@ class PlotCanvas:
         self.backing_store = None
         self.backing_store_updated = False
 
-        self.highlight = None
+        self.highlight = [None]
         self.highlight_bounds = None
         self.highlight_hooks = []
         
@@ -1296,7 +1300,7 @@ class PlotCanvas:
     # setting properties
     def set_flowref(self, fref, keeptime=False):
         self.conn, self.dir = fref.conn, fref.dir
-        self.highlight = None
+        self.highlight = [None]
         if keeptime:
             self.plot()
         else:
@@ -1318,7 +1322,7 @@ class PlotCanvas:
         self.begin = max(min(begin, self.end - interval), 0)
         if incr and self.begin == old_begin and self.end == old_end: return
 
-        self.highlight = None
+        self.highlight = [None]
         if self.plotted: self.plot()
 
         # now, emit changed values onto the adjustment
@@ -1367,7 +1371,7 @@ class PlotCanvas:
             self.plot()
         else:
             self.expose_rectangle(event.area)
-        if self.highlight is not None:
+        if self.highlight[0] is not None:
             self.draw_highlight()
     def expose_rectangle(self, area):
         x, y, w, h = area
@@ -1377,6 +1381,7 @@ class PlotCanvas:
             gc = self.canvas.get_style().black_gc
             self.canvas.window.draw_drawable(gc, self.backing_store, x, y, x, y, w, h)
 
+    # Transformation
     def _itransform(self, x, y, constrain=True):
         if self.plotted and (not constrain or (x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height)):
             return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
@@ -1389,14 +1394,24 @@ class PlotCanvas:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff
         else:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff, yy2 * self.sscale + self.soff
+    def _transform_packet(self, p, dir):
+        if dir == self.dir:
+            return self._transform(p.time, p.seq)
+        else:
+            return self._transform(p.time, p.ack)
     
     def cmd_press(self, widget, event):
         if event.button == 1:
             try:
-                self._itransform(event.x, event.y) # for signal
-                self.press_x = event.x
+                if self.tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
+                    self.press = self._transform_packet(self.highlight[1], self.highlight[2])
+                else:
+                    self._itransform(event.x, event.y) # for signal
+                    self.press = (event.x, event.y)
+                if self.tool == PlotCanvas.TOOL_IDENTIFY:
+                    self.set_highlight(["bandwidth", 0, event.x, event.y, self.highlight])
             except ValueError:
-                self.press_x = None
+                self.press = None
             self.stuck = True
             self.press_state = event.state | gtk.gdk.BUTTON1_MASK
             self._check_tool(self.press_state)
@@ -1405,22 +1420,32 @@ class PlotCanvas:
     def cmd_motion(self, widget, event):
         x, y, state = widget.window.get_pointer()
         try:
-            if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press_x is not None:
-                if self.stuck and (abs(self.press_x - x) > PlotCanvas.DRAG_STICKINESS):
+            if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
+                if self.stuck and (abs(self.press[0] - x) > PlotCanvas.DRAG_STICKINESS):
                     self.stuck = False
                     self.drag_t0 = self.get_plotted_time_range()[0]
                     self.drag_tscale = self.tscale
                 if not self.stuck:
-                    shift_x = (x - self.press_x) / self.drag_tscale
+                    shift_x = (x - self.press[0]) / self.drag_tscale
                     self.set_time_range(self.drag_t0 - shift_x)
             elif self.show_tool == PlotCanvas.TOOL_IDENTIFY:
-                self.set_highlight(self.closest_packet(x, y))
+                if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None:
+                    cp = self.closest_packet(x, y, mindist=PlotCanvas.DRAG_MAGNETISM)
+                    if cp is not None: x, y = self._transform_packet(cp[1], cp[2])
+                    t, s = self._itransform(x, y, constrain=False)
+                    tt, ss = self._itransform(self.press[0], self.press[1])
+                    h = ["bandwidth", 0, x, y, self.highlight[4]]
+                    if cp is not None: h.append(cp)
+                    if t != tt: h[1] = (s - ss) / (t - tt)
+                    self.set_highlight(h)
+                else:
+                    self.set_highlight(self.closest_packet(x, y))
         except ValueError:
             pass
         return 1
     def cmd_release(self, widget, event):
         try:
-            if event.button != 1 or self.press_x is None:
+            if event.button != 1 or self.press is None:
                 pass
             elif self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
                 when = self._itransform(event.x, event.y)[0]
@@ -1428,10 +1453,12 @@ class PlotCanvas:
             elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
                 when = self._itransform(event.x, event.y)[0]
                 self.zoom(when, 0.25)
+            elif self.show_tool == PlotCanvas.TOOL_IDENTIFY:
+                self.set_highlight(None)
         except ValueError:
             pass
         self._check_tool(self.canvas.window.get_pointer()[2])
-        self.press_x = None
+        self.press = None
         return 1
     def _check_tool(self, state):
         t = self.tool
@@ -1603,48 +1630,65 @@ class PlotCanvas:
 
 
     # higlights
-    def draw_highlight(self):
-        if self.highlight is None:
-            return
-        elif self.highlight[0] == 'packet':
-            p, dir = self.highlight[1:]
-            drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
-            gc = drawable.gc("highlight")
+    def _highlight_packet(self, p, dir):
+        drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+        gc = drawable.gc("highlight")
 
-            if dir == self.dir:
-                x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
-                hb = (x - 5, y2 - 5, 10, y1 - y2 + 10)
-                drawable.fill_rectangle(gc, hb)
-                drawable.draw_data(drawable.gc("data.highlight"), x, y1, y2)
+        if dir == self.dir:
+            x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+            bounds = (x - 5, y2 - 5, 10, y1 - y2 + 10)
+            drawable.fill_rectangle(gc, bounds)
+            drawable.draw_data(drawable.gc("data.highlight"), x, y1, y2)
+        else:
+            x, y = self._transform(p.time, p.ack)
+            bounds = (x - 5, y - 5, 10, 10)
+            if p.dup_acks > 0:
+                layout = drawable.layout("small")
+                bounds = union_rectangle(bounds, expand_rectangle(drawable.text_extents(layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N), 2))
+            drawable.fill_rectangle(gc, bounds)
+            if p.pure_ack():
+                drawable.draw_ack(drawable.gc("ack.highlight"), x, y)
             else:
-                x, y = self._transform(p.time, p.ack)
-                hb = (x - 5, y - 5, 10, 10)
-                if p.dup_acks > 0:
-                    layout = drawable.layout("small")
-                    hb = union_rectangle(hb, expand_rectangle(drawable.text_extents(layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N), 2))
-                drawable.fill_rectangle(gc, hb)
-                if p.pure_ack():
-                    drawable.draw_ack(drawable.gc("ack.highlight"), x, y)
-                else:
-                    drawable.draw_dataack(drawable.gc("dataack.highlight"), x, y)
-                if p.dup_acks > 0:
-                    drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
-            
-            self.highlight_bounds = hb
+                drawable.draw_dataack(drawable.gc("dataack.highlight"), x, y)
+            if p.dup_acks > 0:
+                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
+
+        return bounds
+    
+    def draw_highlight(self):
+        h = self.highlight
+        if h[0] is None:
+            self.highlight_bounds = None
+        elif h[0] == 'packet':
+            self.highlight_bounds = self._highlight_packet(h[1], h[2])
+        elif h[0] == 'bandwidth':
+            x, y = h[2], h[3]
+            bounds = None
+            if abs(x - self.press[0]) > PlotCanvas.DRAG_STICKINESS or abs(y - self.press[1]) > self.DRAG_STICKINESS:
+                bounds = (min(x, self.press[0]), min(y, self.press[1]), abs(x - self.press[0]) + 1, abs(y - self.press[1]) + 1)
+                drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+                gc = drawable.gc("highlight")
+                drawable.draw_line(gc, x, y, self.press[0], self.press[1])
+            for old_h in h[4:]:
+                if old_h[0] == 'packet':
+                    bounds = union_rectangle(bounds, self._highlight_packet(old_h[1], old_h[2]))
+            self.highlight_bounds = expand_rectangle(bounds, 2)
             
     def erase_highlight(self):
-        if self.highlight is not None:
+        if self.highlight_bounds is not None:
             self.expose_rectangle(self.highlight_bounds)
     def set_highlight(self, highlight):
-        if self.highlight is not highlight:
+        if highlight is None:
+            highlight = [None]
+        if self.highlight != highlight:
             self.erase_highlight()
             self.highlight = highlight
             self.draw_highlight()
-            for a in self.highlight_hooks:
-                a(self, self.highlight)
+            for f in self.highlight_hooks:
+                f(self, self.highlight)
 
-    def add_highlight_hook(self, a):
-        self.highlight_hooks.append(a)
+    def add_highlight_hook(self, f):
+        self.highlight_hooks.append(f)
 
 
 class PlotFlowWindow:
@@ -1723,8 +1767,8 @@ class PlotFlowWindow:
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH)
         self.toolbar_tools = { }
-        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool selects packets and prints information in status line", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_toolbar_tool, 0)
-        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Panning and zooming tool", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_toolbar_tool, 0)
+        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_toolbar_tool, 0)
+        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_toolbar_tool, 0)
         toolbar.append_space()
         toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
         toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
@@ -1862,9 +1906,7 @@ class PlotFlowWindow:
         self.item_factory.get_item("/View/Hide Receive Window").get_child().set_label(["Show Receive Window", "Hide Receive Window"][self.canvas.get_show_window()])
 
     def highlight_hook(self, plotcanvas, highlight):
-        if highlight is None:
-            self.statusbar_description()
-        elif highlight[0] == "packet":
+    	if highlight[0] == "packet":
             p, dir = highlight[1:]
             if dir == self.flowref.dir:
                 desc = "%.06fs: <b>Data</b> at %d:%d (+%d)" % (p.time, int(p.seq), int(p.last_seq), int(p.last_seq - p.seq))
@@ -1875,7 +1917,15 @@ class PlotFlowWindow:
                 if not p.pure_ack():
                     desc += " with data (+%d)" % (p.last_seq - p.seq)
             self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
-            
+        elif highlight[0] == "bandwidth":
+            bw = highlight[1]
+            if bw <= 0: desc = "-"
+            elif bw < 1024: desc = "%d B/s" % bw
+            elif bw < 1048576: desc = "%.3f KB/s" % (bw/1024.)
+            else: desc = "%.3f MB/s" % (bw/1048576.)
+            self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b></span>")
+        else:
+            self.statusbar_description()
 
 
 if __name__ == "__main__":
