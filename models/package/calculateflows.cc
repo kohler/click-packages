@@ -22,7 +22,7 @@ CalculateFlows::StreamInfo::StreamInfo()
       max_live_seq(0), max_loss_seq(0),
       total_packets(0), ack_packets(0), total_seq(0),
       loss_events(0), false_loss_events(0),
-      event_id(0),
+      event_id(0), min_ack_latency(make_timeval(0, 0)),
       end_rcv_window(0), rcv_window_scale(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0),
       loss_trail(0)
@@ -217,11 +217,11 @@ void
 CalculateFlows::StreamInfo::options(Pkt *, const click_tcp *tcph, int transport_length, const ConnInfo *)
 {
     // option processing; ignore timestamp
-    if (tcph->th_off > 5
-	&& (tcph->th_off != 8
+    int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
+    if (hlen > 20 
+	&& (hlen != 32
 	    || *(reinterpret_cast<const uint32_t *>(tcph + 1)) != htonl(0x0101080A))) {
 	const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
-	int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
 	for (int oi = 20; oi < hlen; ) {
 	    if (oa[oi] == TCPOPT_NOP) {
 		oi++;
@@ -1077,8 +1077,8 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	    && SEQ_GT(k->ack, ack_stream.loss.seq)) {
 	    // check for a false loss event: we don't believe the ack
 	    // could have seen the retransmitted packet yet
-	    if (k->timestamp - ack_stream.loss.end_time < 0.6 * ack_stream.min_ack_latency
-		&& ack_stream.have_ack_latency)
+	    if (ack_stream.have_ack_latency
+		&& k->timestamp - ack_stream.loss.end_time < 0.6 * ack_stream.min_ack_latency)
 		ack_stream.loss.type = FALSE_LOSS;
 	    ack_stream.output_loss(this, cf);
 	}
