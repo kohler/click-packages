@@ -174,7 +174,7 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 }
 
 void
-CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, int transport_length, const ConnInfo *conn)
+CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, const ConnInfo *conn)
 {
     // update counters
     total_packets++;
@@ -200,13 +200,30 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 	}
     }
 
+    // update max_seq and max_live_seq
+    if (SEQ_GT(np->end_seq, max_seq))
+	max_seq = np->end_seq;
+    if (SEQ_GT(np->end_seq, max_live_seq))
+	max_live_seq = np->end_seq;
+
+    // update end_rcv_window
+    end_rcv_window = np->ack + (ntohs(tcph->th_win) << rcv_window_scale);
+}
+
+void
+CalculateFlows::StreamInfo::options(Pkt *np, const click_tcp *tcph, int transport_length, const ConnInfo *)
+{
     // option processing
     if (tcph->th_off > 5) {
 	// common case: NUL, NUL, TIMESTAMP
 	if (tcph->th_off == 8
-	    && *(reinterpret_cast<const uint32_t *>(tcph + 1)) == htonl(0x0101080A))
+	    && *(reinterpret_cast<const uint32_t *>(tcph + 1)) == htonl(0x0101080A)) {
+	    const uint32_t *oa = reinterpret_cast<const uint32_t *>(tcph + 1);
 	    sent_timestamp = true;
-	else {
+	    np->tcp_stamp = ntohl(oa[1]);
+	    np->tcp_ackstamp = ntohl(oa[2]);
+	    np->flags |= Pkt::F_TCP_STAMP;
+	} else {
 	    const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
 	    int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
 	    for (int oi = 20; oi < hlen; ) {
@@ -224,22 +241,19 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 		    rcv_window_scale = (oa[oi+2] <= 14 ? oa[oi+2] : 14);
 		else if (oa[oi] == TCPOPT_SACK_PERMITTED && xlen == TCPOLEN_SACK_PERMITTED)
 		    sent_sackok = true;
-		else if (oa[oi] == TCPOPT_TIMESTAMP && xlen == TCPOLEN_TIMESTAMP)
+		else if (oa[oi] == TCPOPT_TIMESTAMP && xlen == TCPOLEN_TIMESTAMP) {
+		    uint32_t d[2];
 		    sent_timestamp = true;
+		    memcpy(&d[0], oa + oi + 2, 8);
+		    np->tcp_stamp = ntohl(d[0]);
+		    np->tcp_ackstamp = ntohl(d[1]);
+		    np->flags |= Pkt::F_TCP_STAMP;
+		}
 
 		oi += xlen;
 	    }
 	}
     }
-    
-    // update max_seq and max_live_seq
-    if (SEQ_GT(np->end_seq, max_seq))
-	max_seq = np->end_seq;
-    if (SEQ_GT(np->end_seq, max_live_seq))
-	max_live_seq = np->end_seq;
-
-    // update end_rcv_window
-    end_rcv_window = np->ack + (ntohs(tcph->th_win) << rcv_window_scale);
 }
 
 CalculateFlows::Pkt *
@@ -304,14 +318,15 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 	// XXX what if reordering happened before the trace point?
 	Pkt *r = result->next;
 	// move forward to the first nonsequential packet
-	while (r && SEQ_GEQ(ackk->ack, r->seq))
+	while (r && (SEQ_GEQ(ackk->ack, r->seq) || !(r->flags & Pkt::F_DELIVERED)))
 	    r = r->next;
 	// XXX TCP never acks an ack
 	// move forward a number of steps determined by the duplicate count
 	for (Pkt *dupctr = ackk->prev->prev;
 	     dupctr && r && dupctr->ack == ackk->ack && dupctr->seq == dupctr->end_seq;
 	     dupctr = dupctr->prev)
-	    r = r->next;
+	    for (r = r->next; r && !(r->flags & Pkt::F_DELIVERED); r = r->next)
+		/* nada */;
 	// XXX duplicates *after* a retransmitted block?
 	if (r && ackk->timestamp - r->timestamp >= min_ack_latency)
 	    return r;
@@ -336,6 +351,78 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
     }
 
     return result;
+}
+
+CalculateFlows::Pkt *
+CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_seq_t &max_ack) const
+{
+    while (k_cumack
+	   && (!(k_cumack->flags & Pkt::F_DELIVERED)
+	       || (k_cumack->flags & Pkt::F_ACK_CAUSE)
+	       || (SEQ_LT(k_cumack->end_seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))))
+	k_cumack = k_cumack->next;
+
+    Pkt *k = k_cumack;
+
+    if (k && ackk->ack == k->seq)
+	for (k = k->next;
+	     k && (!(k->flags & Pkt::F_DELIVERED)
+		   || (k->flags & Pkt::F_ACK_CAUSE));
+	     k = k->next)
+	    /* nada */;
+
+    if (k && ackk->timestamp - k->timestamp >= min_ack_latency) {
+	k->flags |= Pkt::F_ACK_CAUSE;
+	if (SEQ_GT(k->end_seq, max_ack))
+	    max_ack = k->end_seq;
+	return k;
+    } else
+	return 0;
+}
+
+bool
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const
+{
+    // move k_time forward
+    while (k_time && ackk->timestamp - k_time->timestamp > 0.8 * min_ack_latency)
+	k_time = k_time->next;
+
+    // go over previous packets, marking them as delivered
+    for (Pkt *k = (k_time ? k_time->prev : pkt_tail); k && k != k_cumack; k = k->prev) {
+	if (SEQ_LEQ(k->end_seq, ackk->ack)) {
+	    // can we find an already-received packet covering these sequence
+	    // numbers?
+	    for (Pkt *kk = k->next; kk != k_time; kk = kk->next)
+		if ((kk->flags & Pkt::F_DELIVERED)
+		    && SEQ_LEQ(kk->seq, k->seq)
+		    && SEQ_GEQ(kk->end_seq, k->end_seq))
+		    goto not_delivered;
+	    // otherwise, this puppy was delivered
+	    k->flags |= Pkt::F_DELIVERED;
+	  not_delivered: ;
+	}}
+    
+    // finally, move k_cumack forward
+    if (!k_cumack)
+	k_cumack = pkt_head;
+    // must be SEQ_LT
+    while (k_cumack && SEQ_LT(k_cumack->end_seq, ackk->ack))
+	k_cumack = k_cumack->next;
+    return k_cumack;
+}
+
+void
+CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
+{
+    Pkt *k_cumack = 0, *k_time = pkt_head;
+    uint32_t last_ack = 0;
+    for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
+	if (last_ack != ackk->ack) {
+	    if (!mark_delivered(ackk, k_cumack, k_time))
+		break;
+	    else
+		last_ack = ackk->ack;
+	}
 }
 
 bool
@@ -526,9 +613,10 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *conn, FILE *f) con
     
     const StreamInfo *acks = conn->stream(!direction);
     Pkt *hint = pkt_head;
+    tcp_seq_t max_ack = 0;
     for (Pkt *ack = acks->pkt_head; ack; ack = ack->next)
 	if (ack->seq == ack->end_seq)
-	    if (Pkt *k = find_ack_cause(ack, hint)) {
+	    if (Pkt *k = find_ack_cause2(ack, hint, max_ack)) {
 		struct timeval latency = ack->timestamp - k->timestamp;
 		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec);
 		hint = k;
@@ -550,6 +638,16 @@ CalculateFlows::StreamInfo::write_full_rcv_window_xml(FILE *f) const
 }
 
 void
+CalculateFlows::StreamInfo::write_undelivered_xml(FILE *f) const
+{
+    fprintf(f, "    <undelivered>\n");
+    for (Pkt *k = pkt_head; k; k = k->next)
+	if (!(k->flags & Pkt::F_DELIVERED) && k->seq != k->end_seq)
+	    fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+    fprintf(f, "    </undelivered>\n");
+}
+
+void
 CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_flags) const
 {
     fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
@@ -562,7 +660,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	fprintf(f, " senttimestamp='yes'");
     if (loss_trail
 	|| ((write_flags & (WR_ACKLATENCY | WR_ACKCAUSALITY)) && have_ack_latency)
-	|| ((write_flags & WR_FULLRCVWND) && filled_rcv_window)) {
+	|| ((write_flags & WR_FULLRCVWND) && filled_rcv_window)
+	|| (write_flags & WR_UNDELIVERED)) {
 	fprintf(f, ">\n");
 	if (loss_trail)
 	    loss_trail->write_xml(f);
@@ -572,6 +671,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	    write_ack_causality_xml(conn, f);
 	if (write_flags & WR_FULLRCVWND)
 	    write_full_rcv_window_xml(f);
+	if (write_flags & WR_UNDELIVERED)
+	    write_undelivered_xml(f);
 	fprintf(f, "  </stream>\n");
     } else
 	fprintf(f, " />\n");
@@ -580,6 +681,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 void
 CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 {
+    _stream[0].finish(this, cf);
+    _stream[1].finish(this, cf);
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
     if (FILE *f = cf->traceinfo_file()) {
@@ -640,6 +743,8 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	np->seq = ntohl(tcph->th_seq) - stream.init_seq;
 	np->end_seq = np->seq + calculate_seqlen(iph, tcph);
 	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
+	if (!(tcph->th_flags & TH_ACK))
+	    np->ack = 0;
 	np->ip_id = (parent->_ip_id ? iph->ip_id : 0);
 	np->timestamp = p->timestamp_anno() - _init_time;
 	np->flags = 0;
@@ -717,7 +822,8 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
 	_stream[direction].categorize(k, this, parent);
-	_stream[direction].update_counters(k, p->tcp_header(), p->transport_length(), this);
+	_stream[direction].update_counters(k, p->tcp_header(), this);
+	_stream[direction].options(k, p->tcp_header(), p->transport_length(), this);
 
 	// update counters, maximum sequence numbers, and so forth
 	post_update_state(p, k, parent);
@@ -752,7 +858,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false;
+    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false;
     if (cp_va_parse(conf, this, errh,
 		    cpOptional,
 		    cpFilename, "output connection info file", &_traceinfo_filename,
@@ -764,7 +870,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element for loss annotations", &tipfd_element,
 		    "ACKLATENCY", cpBool, "output ack latency XML?", &acklatency,
 		    "ACKCAUSALITY", cpBool, "output ack causality XML?", &ackcausality,
-		    "FULLRCVWINDOW", cpBool, "output receive window fillers?", &full_rcv_window,
+		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
+		    "UNDELIVERED", cpBool, "output undelivered packets XML?", &undelivered,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
         return -1;
@@ -783,7 +890,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     _ip_id = ip_id;
     _write_flags = (acklatency ? WR_ACKLATENCY : 0)
 	| (ackcausality ? WR_ACKCAUSALITY : 0)
-	| (full_rcv_window ? WR_FULLRCVWND : 0);
+	| (full_rcv_window ? WR_FULLRCVWND : 0)
+	| (undelivered ? WR_UNDELIVERED : 0);
     return 0;
 }
 

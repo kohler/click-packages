@@ -98,9 +98,16 @@ guaranteed.
 
 =item FULLRCVWINDOW
 
-Boolean. If true, then output a list of data packet timestamps that fill the
-receiver's advertised window to the TRACEINFO file, inside a
-"C<&lt;fullrcvwindow&rt;>" XML element. Each line has the format "I<timestamp>
+Boolean. If true, then output a list of data packets that fill the receiver's
+advertised window to the TRACEINFO file, inside a "C<&lt;fullrcvwindow&rt;>"
+XML element. Each line has the format "I<timestamp> I<seq>", where
+I<timestamp> is the packet's timestamp and I<seq> is its end sequence number.
+
+=item UNDELIVERED
+
+Boolean. If true, then output a list of data packets that did not appear to be
+delivered to the receiver to the TRACEINFO file, inside a
+"C<&lt;undelivered&gt;>" XML element. Each line has the format "I<timestamp>
 I<seq>", where I<timestamp> is the packet's timestamp and I<seq> is its end
 sequence number.
 
@@ -151,7 +158,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4 };
+    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
     static double float_timeval(const struct timeval &);
@@ -195,6 +202,8 @@ struct CalculateFlows::Pkt {
     tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
     uint16_t ip_id;		// IP ID of this packet
+    uint32_t tcp_stamp;		// TCP send timestamp option
+    uint32_t tcp_ackstamp;	// TCP ack timestamp option
 
     enum Flags {
 	F_NEW = 0x1,		// packet contains some new data
@@ -209,6 +218,10 @@ struct CalculateFlows::Pkt {
 	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
 
 	F_FILLS_RCV_WINDOW = 0x100, // packet filled receive window
+	F_TCP_STAMP = 0x200,	// TCP timestamps available?
+
+	F_DELIVERED = 0x400,	// do we think the packet was delivered?
+	F_ACK_CAUSE = 0x800	// do we think it caused an ack?
     };
     int flags;			// packet flags
 
@@ -286,16 +299,23 @@ struct CalculateFlows::StreamInfo {
 
     void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
-    void update_counters(const Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
+    void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
+    void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
-    Pkt *find_acked_pkt(const Pkt *ack, Pkt *search_hint = 0) const;
-    Pkt *find_ack_cause(const Pkt *ack, Pkt *search_hint = 0) const;
+    Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
+    Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
+    Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
+
+    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
+
+    void finish(ConnInfo*, CalculateFlows*);
 
     void output_loss(ConnInfo *, CalculateFlows *);
     void write_xml(ConnInfo *, FILE *, WriteFlags) const;
     void write_ack_latency_xml(ConnInfo *, FILE *) const;
     void write_ack_causality_xml(ConnInfo *, FILE *) const;
     void write_full_rcv_window_xml(FILE *) const;
+    void write_undelivered_xml(FILE *) const;
     
 };
 
