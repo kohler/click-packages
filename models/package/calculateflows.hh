@@ -94,7 +94,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     
   private:
     
-    LossInfo *_loss;
     String _outfilename[2];	
     ToIPFlowDumps *_tipfd;
     
@@ -215,11 +214,11 @@ class CalculateFlows::LossInfo {
     
     struct timeval Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint);
     
-    static double timesub (timeval end_time , timeval start_time){
-	return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
+    static double timesub(const timeval &end_time, const timeval &start_time) {
+	return (end_time.tv_sec - start_time.tv_sec) + 0.000001 * (end_time.tv_usec - start_time.tv_usec);
     }
-    static double timeadd (timeval end_time , timeval start_time){
-	return ((end_time.tv_sec+start_time.tv_sec) + 0.000001 *(end_time.tv_usec+start_time.tv_usec));
+    static double timeadd(const timeval &end_time, const timeval &start_time) {
+	return (end_time.tv_sec + start_time.tv_sec) + 0.000001 * (end_time.tv_usec + start_time.tv_usec);
     }
     
     void calculate_loss_events(tcp_seq_t seq, unsigned seqlen, const timeval &time, unsigned paint);
