@@ -144,7 +144,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
     inline void free_pkt_list(Pkt *, Pkt *);
-    
+
+    friend class LossInfo;
 };
 
 struct CalculateFlows::Pkt {
