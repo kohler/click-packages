@@ -42,12 +42,7 @@ void
 CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *parent)
 {
     assert(np->flags == 0);
-
-    // check that timestamp makes sense
-    if (np->prev && np->timestamp < np->prev->timestamp) {
-	time_confusion = true;
-	np->timestamp = np->prev->timestamp;
-    }
+    assert(!np->prev || np->timestamp >= np->prev->timestamp);
 
     // exit if this is a pure ack
     if (np->seq == np->end_seq)
@@ -998,6 +993,13 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
     if ((tcph->th_flags & TH_ACK) && !ack_stream.have_init_seq) {
 	ack_stream.init_seq = ntohl(tcph->th_ack);
 	ack_stream.have_init_seq = true;
+    }
+
+    // check for timestamp confusion
+    struct timeval timestamp = p->timestamp_anno() - _init_time;
+    if (stream.pkt_tail && timestamp < stream.pkt_tail->timestamp) {
+	stream.time_confusion = true;
+	return 0;
     }
 
     // introduce a Pkt
