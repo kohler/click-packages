@@ -2,7 +2,7 @@
 #include <config.h>
 #include <click/config.h>
 
-#include "flowtoaddress.hh"
+#include "aggregateflows.hh"
 #include <click/error.hh>
 #include <click/hashmap.hh>
 #include <click/straccum.hh>
@@ -12,19 +12,25 @@
 #include <click/click_udp.h>
 #include <click/packet_anno.hh>
 
-FlowToAddress::FlowToAddress()
+AggregateFlows::AggregateFlows()
     : Element(1, 1)
 {
     MOD_INC_USE_COUNT;
 }
 
-FlowToAddress::~FlowToAddress()
+AggregateFlows::~AggregateFlows()
 {
     MOD_DEC_USE_COUNT;
 }
 
+void
+AggregateFlows::notify_noutputs(int n)
+{
+    set_noutputs(n <= 1 ? 1 : 2);
+}
+
 int
-FlowToAddress::configure(const Vector<String> &conf, ErrorHandler *errh)
+AggregateFlows::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     _bidi = false;
     _ports = true;
@@ -36,49 +42,43 @@ FlowToAddress::configure(const Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-FlowToAddress::initialize(ErrorHandler *)
+AggregateFlows::initialize(ErrorHandler *)
 {
-    _next = IPAddress(htonl(1));
+    _next = 1;
     return 0;
 }
 
 Packet *
-FlowToAddress::simple_action(Packet *p)
+AggregateFlows::simple_action(Packet *p)
 {
-    const click_ip *p_ip = p->ip_header();
-    if (!p_ip || (_ports && p_ip->ip_p != IP_PROTO_TCP && p_ip->ip_p != IP_PROTO_UDP)) {
-	p->kill();
+    const click_ip *iph = p->ip_header();
+    if (!iph || (_ports && iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP)) {
+	checked_output_push(1, p);
 	return 0;
     }
 
-    WritablePacket *q = p->uniqueify();
-    if (!q)
-	return 0;
-
-    click_ip *iph = q->ip_header();
-
     IPFlowID flow;
     if (_ports)
-	flow = IPFlowID(q);
+	flow = IPFlowID(p);
     else
 	flow = IPFlowID(iph->ip_src, 0, iph->ip_dst, 0);
 
     Map &m = (iph->ip_p == IP_PROTO_TCP ? _tcp_map : _udp_map);
     
-    IPAddress addr = m.find(flow);
-    if (!addr && _bidi)
-	addr = m.find(flow.rev());
-    if (!addr) {
-	addr = _next;
-	m.insert(flow, addr);
-	_next = IPAddress(htonl(ntohl(_next.addr()) + 1));
+    uint32_t agg = m.find(flow);
+    if (!agg && _bidi)
+	agg = m.find(flow.rev());
+    if (!agg) {
+	agg = _next;
+	m.insert(flow, agg);
+	_next++;
     }
 
-    iph->ip_dst = addr;
-    return q;
+    SET_AGGREGATE_ANNO(p, agg);
+    return p;
 }
 
-ELEMENT_REQUIRES(userlevel false)
-EXPORT_ELEMENT(FlowToAddress)
+ELEMENT_REQUIRES(userlevel)
+EXPORT_ELEMENT(AggregateFlows)
 
 #include <click/bighashmap.cc>
