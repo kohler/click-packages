@@ -154,6 +154,10 @@ MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacit
     while (end > begin && end[-1] >= INTERARRIVAL_CUTOFF)
 	end--;
 
+    // exit early if no useful interarrivals
+    if (begin >= end)
+	return;
+
     double max_scale = MAX_SCALE;
     bool max_scale_adjusted = false;
     int last_nmodes = INT_MAX;
