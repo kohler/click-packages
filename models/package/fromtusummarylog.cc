@@ -32,7 +32,7 @@ FromTUSummaryLog::configure(const Vector<String> &conf, ErrorHandler *errh)
     _active = true;
     _stop = false;
     if (cp_va_parse(conf, this, errh,
-		    cpString, "log filename", &_filename,
+		    cpFilename, "log filename", &_filename,
 		    cpKeywords,
 		    "ACTIVE", cpBool, "active?", &_active,
 		    "STOP", cpBool, "stop when done?", &_stop,

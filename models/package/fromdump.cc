@@ -64,7 +64,7 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 #endif
     
     if (cp_va_parse(conf, this, errh,
-		    cpString, "dump file name", &_filename,
+		    cpFilename, "dump file name", &_filename,
 		    cpOptional,
 		    cpBool, "use original packet timing?", &timing,
 		    cpKeywords,
@@ -132,6 +132,8 @@ FromDump_Fast::read_buffer_mmap(ErrorHandler *errh)
 	size_t page_size = getpagesize();
 	_mmap_unit = (WANT_MMAP_UNIT / page_size) * page_size;
 	_mmap_off = 0;
+	// don't report most errors on the first time through
+	errh = ErrorHandler::silent_handler();
     }
 
     // get length of file
@@ -181,7 +183,8 @@ FromDump_Fast::read_buffer(ErrorHandler *errh)
 	    return result;
 	// else, try a regular read
 	_mmap = false;
-	lseek(_fd, _mmap_off, SEEK_SET);
+	(void) lseek(_fd, _mmap_off, SEEK_SET);
+	_pos = _off = 0;
     }
 #endif
     
@@ -228,7 +231,11 @@ FromDump_Fast::read_into(void *vdata, uint32_t dlen, ErrorHandler *errh)
 int
 FromDump_Fast::initialize(ErrorHandler *errh)
 {
-    _fd = open(_filename.cc(), O_RDONLY);
+    if (_filename == "-") {
+	_fd = STDIN_FILENO;
+	_filename = "<stdin>";
+    } else
+	_fd = open(_filename.cc(), O_RDONLY);
     if (_fd < 0)
 	return errh->error("%s: %s", _filename.cc(), strerror(errno));
 
@@ -278,7 +285,7 @@ FromDump_Fast::initialize(ErrorHandler *errh)
 void
 FromDump_Fast::uninitialize()
 {
-    if (_fd >= 0)
+    if (_fd >= 0 && _fd != STDIN_FILENO)
 	close(_fd);
     if (_packet)
 	_packet->kill();
