@@ -20,6 +20,14 @@ CalculateFlowLifetime::~CalculateFlowLifetime()
 int
 CalculateFlowLifetime::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
+
+    if (cp_va_parse(conf, this, errh,
+		    cpTimeval, "interval in struct timeval", &_timeout_interval,
+		    cpFilename, "filename for output",&_outfilename,
+		    0) < 0) 
+	return -1;
+
+
     return 0;
 }
 
@@ -40,4 +48,8 @@ CalculateFlowLifetime::simple_action(Packet *p)
     dst_ip = (uint32_t) ntohl(dstaddr.addr());
 
     CalculateFlowLifetime::CounterEntry *ent = _hashed_counters.findp(dst_ip);
+   
+    //there is a packet for this flow, update its timeout value
+
+
 }
