@@ -141,7 +141,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     const char *class_name() const	{ return "CalculateTCPLossEvents"; }
     const char *processing() const	{ return "a/ah"; }
-    CalculateFlows *clone() const	{ return new CalculateFlows; }
 
     void notify_noutputs(int);
     int configure_phase() const		{ return ToIPFlowDumps::CONFIGURE_PHASE + 1; } // just after ToIPFlowDumps

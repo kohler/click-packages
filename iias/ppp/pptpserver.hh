@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.hh,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: pptpserver.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
  */
 
 #ifndef CLICK_PPTPSERVER_HH
@@ -47,7 +47,14 @@ Handles PPTP-over-TCP connections.
 
 =d
 
-Handles PPTP-over-TCP connections.
+Handles PPTP-over-TCP connections. The number of tunnels supported is
+equal to the number of input/output pairs.
+
+PPPControlProtocol elements such as IPCP and LCP should feedback from
+the outputs of PPTPServer to its inputs. IP packets destined for
+remote peers should be PPP encapsulated (see PPPEncap) and routed to
+the appropriate input. IP packets from the remote peer are pushed out
+the appropriate output and should be PPP decapsulated (see Strip).
 
 Keyword arguments are:
 
@@ -62,8 +69,50 @@ new connection or drops an old one. Default is false.
 
 =e
 
-  PPTPServer -> ...
-*/
+The following snippet enables a single PPTP tunnel with local address
+10.0.0.1 and remote address 10.0.0.100.
+
+// Shared IP input path and routing table
+ip :: CheckIPHeader(INTERFACES 10.0.0.1)
+rt :: StaticIPLookup(
+	10.0.0.1	0,
+	10.0.0.100	1
+)
+
+// PPTP server
+pptpd :: PPTPServer(VERBOSE 1)
+
+// ppp0
+pptpd[0]
+	-> ppp0 :: Classifier(2/0021, 2/8021, -)
+
+// IP from remote peer 0
+ppp0[0]
+	-> Strip(4)
+	-> ip
+	-> rt
+
+// IPCP negotiation for peer 0
+ppp0[1]
+	-> IPCP(local, remote0, VERBOSE 1)
+	-> [0]pptpd
+
+// LCP negotiation for peer 0
+ppp0[2]
+	-> LCP(VERBOSE 1)
+	-> [0]pptpd
+
+// Local delivery
+rt[0]
+	-> Print(toh)
+	-> Discard
+
+// IP to remote peer 0
+rt[1]
+	-> PPPEncap(0x0021)
+	-> [0]pptpd
+
+=a PPPControlProtocol, IPCP, LCP, PPPEncap, Strip */
 
 class PPTPServer : public Element { public:
 
@@ -71,7 +120,8 @@ class PPTPServer : public Element { public:
   ~PPTPServer();
 
   const char *class_name() const	{ return "PPTPServer"; }
-  PPTPServer *clone() const		{ return new PPTPServer; }
+  const char *processing() const	{ return PUSH; }
+  const char *flow_code() const		{ return "x/y"; }
 
   void notify_ninputs(int n);
   void notify_noutputs(int n);

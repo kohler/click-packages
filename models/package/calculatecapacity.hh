@@ -78,7 +78,6 @@ class CalculateCapacity : public Element, public AggregateListener { public:
 
     const char *class_name() const	{ return "CalculateCapacity"; }
     const char *processing() const	{ return "a/ah"; }
-    CalculateCapacity *clone() const	{ return new CalculateCapacity; }
 
     void notify_noutputs(int);
     int configure_phase() const		{ return ToIPFlowDumps::CONFIGURE_PHASE + 1; } // just after ToIPFlowDumps

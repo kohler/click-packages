@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: checkgreheader.cc,v 1.1 2004/04/17 14:53:45 mhuang Exp $
+ * $Id: checkgreheader.cc,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -47,12 +47,6 @@ CheckGREHeader::~CheckGREHeader()
 {
   MOD_DEC_USE_COUNT;
   delete[] _reason_drops;
-}
-
-CheckGREHeader *
-CheckGREHeader::clone() const
-{
-  return new CheckGREHeader();
 }
 
 void

@@ -44,7 +44,6 @@ class IPAddrColorPaint : public Element, public IPAddrColors { public:
   
     const char *class_name() const	{ return "IPAddrColorPaint"; }
     const char *processing() const	{ return "a/ah"; }
-    IPAddrColorPaint *clone() const	{ return new IPAddrColorPaint; }
 
     void notify_noutputs(int);
     int configure(const Vector<String> &, ErrorHandler *);

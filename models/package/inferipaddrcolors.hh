@@ -163,7 +163,6 @@ class InferIPAddrColors : public Element, public IPAddrColors { public:
   
     const char *class_name() const	{ return "InferIPAddrColors"; }
     const char *processing() const	{ return AGNOSTIC; }
-    InferIPAddrColors *clone() const	{ return new InferIPAddrColors; }
 
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);

@@ -52,7 +52,6 @@ class FTPPortMapper6 : public Element {
 
     const char *class_name() const	{ return "FTPPortMapper6"; }
     const char *processing() const	{ return PUSH; }
-    FTPPortMapper6 *clone() const		{ return new FTPPortMapper6; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void uninitialize();

@@ -63,7 +63,6 @@ class TestIPAddrColors : public Element, public IPAddrColors { public:
   
     const char *class_name() const	{ return "TestIPAddrColors"; }
     const char *processing() const	{ return AGNOSTIC; }
-    TestIPAddrColors *clone() const	{ return new TestIPAddrColors; }
 
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);

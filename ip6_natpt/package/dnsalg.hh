@@ -43,7 +43,6 @@ class DNSAlg : public Element {
 
   const char *class_name() const	{ return "DNSAlg"; }
 
-  DNSAlg *clone() const		{ return new DNSAlg; }
   int configure(Vector<String> &, ErrorHandler *);
   int initialize(ErrorHandler *);
   void uninitialize();

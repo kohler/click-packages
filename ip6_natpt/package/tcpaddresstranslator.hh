@@ -33,7 +33,6 @@ class TCPAddressTranslator : public Element {
   ~TCPAddressTranslator();
 
   const char *class_name() const		{ return "TCPAddressTranslator"; }
-  TCPAddressTranslator *clone() const			{ return new TCPAddressTranslator; }
   const char *processing() const		{ return PUSH; }
   int configure(Vector<String> &, ErrorHandler *);
 

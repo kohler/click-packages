@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: lcp.hh,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: lcp.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
  */
 
 /*
@@ -61,7 +61,6 @@ class LCP : public PPPControlProtocol { public:
   ~LCP() { MOD_DEC_USE_COUNT; }
 
   const char *class_name() const { return "LCP"; }
-  LCP *clone() const { return new LCP; }
 
 protected:
 

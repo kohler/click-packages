@@ -25,7 +25,6 @@ class CollectTCPFlows : public Element { public:
     ~CollectTCPFlows();
 
     const char *class_name() const	{ return "CollectTCPFlows"; }
-    CollectTCPFlows *clone() const	{ return new CollectTCPFlows; }
 
     void notify_noutputs(int);
     int configure(Vector<String> &, ErrorHandler *);

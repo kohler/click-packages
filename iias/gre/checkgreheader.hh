@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: checkgreheader.hh,v 1.1 2004/04/17 14:53:45 mhuang Exp $
+ * $Id: checkgreheader.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
  */
 
 #ifndef CLICK_CHECKGREHEADER_HH
@@ -99,7 +99,6 @@ class CheckGREHeader : public Element { public:
   
   const char *class_name() const		{ return "CheckGREHeader"; }
   const char *processing() const		{ return "a/ah"; }
-  CheckGREHeader *clone() const;
   
   void notify_noutputs(int);
   int configure(Vector<String> &, ErrorHandler *);

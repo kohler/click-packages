@@ -46,7 +46,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pppcontrolprotocol.hh,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: pppcontrolprotocol.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
  */
 
 /*
@@ -99,7 +99,6 @@ class PPPControlProtocol : public Element { public:
 
   const char *class_name() const { return "PPPControlProtocol"; }
   const char *processing() const { return AGNOSTIC; }
-  PPPControlProtocol *clone() const { return new PPPControlProtocol; }
 
   int configure(Vector<String> &, ErrorHandler *);
   int initialize(ErrorHandler *);
