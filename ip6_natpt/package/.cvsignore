@@ -1,0 +1,7 @@
+*.ud *.uo
+*.kd *.ko
+[ku]package.cc
+[ku]elements.conf
+Makefile
+elements.mk
+elementmap-*.xml

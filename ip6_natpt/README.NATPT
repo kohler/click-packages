@@ -1,0 +1,56 @@
+TRANSPARENT ROUTING BETWEEN IPv4/IPv6 NETWORKS.
+http://www.merlinux.org/natpt/
+2002-2003
+version 0.9.2
+July 13 2003
+
+Juan Luis Baptiste <juancho@linuxmail.org>
+Fabian Gonzalez <wgonzalez@javeriana.edu.co>
+
+
+Elements to do transparent routing between IPv6/IPv4 Networks:
+
+* DNSAlg: Translates DNS queries and their responses going from IPv4 to IPv6 or vice versa. It can translate
+  normal queries and inverse quieries. If you are going to do inverse queries from IPv4 to IPv6, you MUST
+  configure the AddressTranslator element (see click documentation) to do Static mapping ONLY.
+
+* FTPPortMapper6: Translates FTP control Packets (PORT/EPRT and PASV/EPSV commands) going from IPv4 to IPv6
+  or vice versa.
+
+* TCPAddressTranslator: Updates seq and ack numbers in packets that their contents have been modified by
+  FTPPortMapper6 (or any other element that modifies the packets payload). It works for IPv4 and IPv6 packets.
+  Click already has an element called TCPRewriter that is much more powerful than this one, but the difference
+  is that TCPRewriter only works with IPv4 packets.
+
+* DNSMessage: Helper class that manipulates DNS queries  (A/AAAA), and inverse queries (in-addr.arpa/ip6.int)
+  and their responses.
+
+
+FILES:
+
+* dnsalg.{cc,hh} : Implementation of DNSAlg
+
+* ftpportmapper6.{cc,hh} : Implementation of FTPPortMapper6
+
+* tcpaddresstranslator.{cc,hh} : Implementation of TCPAddressTranslator
+
+* rfc1035.h : Implementation of the DNS specification (RFC 1035).
+
+* dnsmessage.{cc,hh} : Helper class that manipulates any kind of DNS queries.
+
+In conf/ dir you will find various conf files that use these elements in a simple NAT-PT configuration. You must edit these config files to match your network configuration.
+
+
+INSTALLATION:
+
+1. Download latest Click version. Probably you will want to go ahead with the cvs version.
+2. Copy dnsalg.*, ftpportmapper6.* and tcpaddresstranslator.* files to {CLICK_DIR}/elements/ip6 .
+3. Copy rfc1035.h to {CLICK_DIR}/include/clicknet.
+4. Copy dnsmessage.cc to {CLICK_DIR}/lib and dnsmessage.hh to {CLICK_DIR}/include/click.
+5. From {CLICK_DIR} run 'make elemlist'
+6. Edit {CLICK_DIR}/userlevel/Makefile.in and {CLICK_DIR}/linuxmodule/Makefile.in and add 'dnsmessage.o' to the GENERIC_OBJS rule.
+7. Copy config files to {CLICK_DIR}/conf
+8. Follow Click installation instructions.
+
+
+Any questions you can ask them to the main author at <juancho@linuxmail.org>.
