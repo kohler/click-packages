@@ -388,31 +388,36 @@ CalculateCapacity::StreamInfo::fill_shortrate()
     ackrate = 0;
 
     for(i=0;i<pkt_cnt;i++){
-	ackbytes = 0;
-	databytes = 0;
+	ackbytes = intervals[i].newack;
+	databytes = intervals[i].size;
 	start = intervals[i].time;
 	for(j=i+1 ; j<pkt_cnt ; j++){
 	    assert(j < pkt_cnt);
-	    if(float_timeval(start + intervals[j].time) < time_windowsize){
+	    if(float_timeval(intervals[j].time - start) < time_windowsize){
 		ackbytes += intervals[j].newack;
 		databytes += intervals[j].size;
 	    } else {
 		j--;
 		break;
 	    }
-	    //must be larger than any single flight
-	    double timetmp = j-i > 20 ?
-		float_timeval(intervals[j].time - start) : time_windowsize;
-	    double tmp = ackbytes / timetmp;
-	    if(tmp > ackrate)
-		ackrate = tmp;
-	    tmp = databytes / timetmp;
-	    if(tmp > datarate)
-		datarate = tmp;
 	}
+	//must be larger than any single flight
+	double timetmp = j-i > 20 ?
+	    float_timeval(intervals[j].time - start) : time_windowsize;
+	double tmp = ackbytes / timetmp;
+	if(tmp > ackrate)
+	    ackrate = tmp;
+	tmp = databytes / timetmp;
+	if(tmp > datarate)
+	    datarate = tmp;
 	
+// 	if(ackbytes > 0){
+// 	    printf("ack bytes: %d\n", ackbytes);
+// 	}
 	
+	    //printf("data bytes: %d\nack bytes: %d\n", databytes, ackbytes);
     }
+    
     datarate *=8;
     ackrate *=8;
         
@@ -458,7 +463,17 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	drate = _stream[bigger].datarate;
 	arate = _stream[!bigger].ackrate;
 	    
-	fprintf(f, "<rate data='%lf' ack='%lf' dir='%u' />",
+// 	if((drate == 0 || arate == 0) || _aggregate == 1821){
+// 	    printf("rate zero: %u\n %lf %lf\n %lf %lf\n",
+// 		   _aggregate,
+// 		   _stream[0].datarate,
+// 		   _stream[0].ackrate,
+// 		   _stream[1].datarate,
+// 		   _stream[1].ackrate
+// 		   );
+// 	}
+
+	fprintf(f, "  <rate data='%lf' ack='%lf' dir='%u' />\n",
 		drate, arate, bigger);
 	
 
