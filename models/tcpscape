@@ -7,12 +7,15 @@ from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat
 
-fill_colors = {
-    "data": "red", "ack": "green", "dataack": "blue",
-    "loss": ("gold", "khaki"), "ploss": ("mint cream", "mint cream"), "floss": ("grey80", "grey90"),
-    "border": "dark grey", "lossborder": "yellow"
+_screen_fill_colors = {
+    "data": "red", "ack": "dark green", "dataack": "blue",
+    "loss": "gold", "loss.bg": "khaki",
+    "ploss": "mint cream",
+    "floss": "grey80", "floss.bg": "grey90",
+    "border": "dark grey", "lossborder": "yellow",
+    "bg": "white"
 }
-gc_dashes = {
+_screen_dashes = {
     "lossborder": [4, 4]
 }
 
@@ -763,6 +766,84 @@ class PlotCursors:
 
 
 
+_screen_gcs = { }
+ANCHOR_N = 0
+ANCHOR_E = 1
+
+class PlotCanvas_ScreenDrawable:
+
+    def __init__(self, plotcanvas):
+        self.plotcanvas = plotcanvas
+        self.playout = None
+        self.small_playout = None
+
+    def gc(self, name):
+        if name in _screen_gcs:
+            return _screen_gcs[name]
+        if name not in _screen_fill_colors:
+            name = re.sub("\\..*", "", name)
+        if name not in _screen_fill_colors:
+            raise RuntimeError("bad gc name " + name)
+        cmap = self.plotcanvas.canvas.get_colormap()
+        gc = self.plotcanvas.canvas.window.new_gc(foreground=cmap.alloc_color(_screen_fill_colors[name]), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
+        if name in _screen_dashes:
+            gc.line_style = gtk.gdk.LINE_ON_OFF_DASH
+            gc.set_dashes(0, _screen_dashes[name])
+        _screen_gcs[name] = gc
+        return gc
+
+    def layout(self, name=""):
+        if name == "small":
+            if self.small_playout is None:
+                new_pcontext = self.plotcanvas.canvas.create_pango_context()
+                new_pfontdesc = new_pcontext.get_font_description().copy()
+                new_pfontdesc.set_size(new_pfontdesc.get_size() * 0.75)
+                new_pcontext.set_font_description(new_pfontdesc)
+                self.small_playout = pango.Layout(new_pcontext)
+            return self.small_playout
+        elif name == "":
+            if self.playout is None:
+                self.playout = self.plotcanvas.canvas.create_pango_layout("")
+            return self.playout
+        else:
+            raise RuntimeError("bad layout name " + name)
+
+    def prepare(self):
+        self.drawable = self.plotcanvas.canvas.window
+    
+    def clear(self):
+        self.drawable.clear()
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        self.drawable.draw_line(gc, x1, y1, x2, y2)
+
+    def fill_rectangle(self, gc, x1, y1, w, h):
+        self.drawable.draw_rectangle(gc, gtk.TRUE, x1, y1, w, h)
+
+    def draw_rectangle(self, gc, x1, y1, w, h):
+        self.drawable.draw_rectangle(gc, gtk.FALSE, x1, y1, w, h)
+
+    def draw_text(self, gc, layout, text, x, y, anchor=ANCHOR_N):
+        layout.set_text(text, -1)
+        ir, lr = layout.get_extents()
+        if anchor == ANCHOR_N:
+            self.drawable.draw_layout(gc, x - lr[2]/2048.0, y + 2, layout)
+        elif anchor == ANCHOR_E:
+            self.drawable.draw_layout(gc, x - 4 - lr[2]/1024.0, y - lr[3]/2048.0, layout)
+        else:
+            raise RuntimeError("bad anchor " + str(anchor))
+
+    def text_extents(self, layout, text, x, y, anchor=ANCHOR_N):
+        layout.set_text(text, -1)
+        ir, lr = layout.get_extents()
+        if anchor == ANCHOR_N:
+            return (x - lr[2]/2048.0, y + 2, x + lr[2]/2048.0, y + 2 + lr[3]/1024.0)
+        elif anchor == ANCHOR_E:
+            return (x - 4 - lr[2]/1024.0, y - lr[3]/2048.0, x - 4, y + lr[3]/2048.0)
+        else:
+            raise RuntimeError("bad anchor " + str(anchor))
+
+
 class PlotCanvas:
 
     # initialization
@@ -788,7 +869,6 @@ class PlotCanvas:
         self.right_margin = 20
         self.top_margin = 10
         self.bottom_margin = 20
-        self.gc = {}
         self.plotted = False
         self.press_x = None
         self.press_state = 0
@@ -824,19 +904,8 @@ class PlotCanvas:
     def cmd_configure(self, widget, event):
         x, y, self.wwidth, self.wheight = widget.get_allocation()
 
-        if not self.gc.has_key("data"):
-            cmap = self.canvas.get_colormap()
-            for k in fill_colors.keys():
-                v = fill_colors[k]
-                if type(v) == types.TupleType:
-                    self.gc[k] = (self.canvas.window.new_gc(foreground=cmap.alloc_color(v[0]), line_width=0, cap_style=gtk.gdk.CAP_BUTT),
-                                  self.canvas.window.new_gc(foreground=cmap.alloc_color(v[1]), line_width=0, cap_style=gtk.gdk.CAP_BUTT))
-                else:
-                    self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(v), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
-            for k in gc_dashes.keys():
-                self.gc[k].line_style = gtk.gdk.LINE_ON_OFF_DASH
-                self.gc[k].set_dashes(0, gc_dashes[k])
-            self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
+        # xxx
+        self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
         
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
@@ -856,7 +925,7 @@ class PlotCanvas:
                 if not (event.state & (gtk.gdk.CONTROL_MASK | gtk.gdk.SHIFT_MASK)):
                     self.canvas.window.set_cursor(PlotCursors(self.canvas)["grabhand"])
         except ValueError:
-            pass
+            self.press_x = -1
         self.stuck = True
         self.press_state = event.state
         self.grab_focus()
@@ -864,7 +933,7 @@ class PlotCanvas:
     def cmd_motion(self, widget, event):
         try:
             x, y, state = widget.window.get_pointer()
-            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted:
+            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted and self.press_x >= 0:
                 if self.stuck and (abs(self.press_x - x) > 5):
                     self.stuck = False
                     self.drag_t0 = self.get_time_range()[0]
@@ -925,18 +994,14 @@ class PlotCanvas:
         return 1
 
     # drawing helpers
-    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, playout):
+    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, layout):
         if re.match(".*e\\+0[4-7]$", text):
             text = str(float(text))[:-2]
         if re.match("...*000$", text):
             text = text[:-3] + "K"
-        playout.set_text(text, -1)
-        ir, lr = playout.get_extents()
-        drawable.draw_layout(gc, edge1 - 4 - lr[2]/1024.0, pos - lr[3]/2048.0, playout)
-    def _draw_label_x(self, text, pos, edge1, edge2, drawable, gc, playout):
-        playout.set_text(text, -1)
-        ir, lr = playout.get_extents()
-        drawable.draw_layout(gc, pos - lr[2]/2048.0, edge2 + 2, playout)
+        drawable.draw_text(gc, layout, text, edge1, pos, anchor=ANCHOR_E)
+    def _draw_label_x(self, text, pos, edge1, edge2, drawable, gc, layout):
+        drawable.draw_text(gc, layout, text, pos, edge2, anchor=ANCHOR_N)
     def _draw_tic_x(self, pos, edge1, edge2, len, drawable, gc):
         drawable.draw_line(gc, pos, edge1, pos, edge1 + len)
         drawable.draw_line(gc, pos, edge2, pos, edge2 - len)
@@ -959,7 +1024,8 @@ class PlotCanvas:
                     ticer(mpix, edge1, edge2, 2, drawable, gc)
 
     def plot(self, drawable=None):
-        if drawable is None: drawable = self.canvas.window
+        if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
+        drawable.prepare()
         drawable.clear()
         if self.conn is not None:
 
@@ -981,38 +1047,34 @@ class PlotCanvas:
             self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
 
             # variables
-            playout = self.canvas.create_pango_layout("")
-            new_pcontext = self.canvas.create_pango_context()
-            new_pfontdesc = new_pcontext.get_font_description().copy()
-            new_pfontdesc.set_size(new_pfontdesc.get_size() * 0.75)
-            new_pcontext.set_font_description(new_pfontdesc)
-            small_playout = pango.Layout(new_pcontext)
+            playout = drawable.layout()
+            small_playout = drawable.layout("small")
 
             # clear background
-            drawable.draw_rectangle(self.canvas.get_style().white_gc, gtk.TRUE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
+            drawable.fill_rectangle(drawable.gc("bg"), self.left_margin, self.top_margin, self.plot_width, self.plot_height)
 
             # losses
-            gc = self.gc["lossborder"]
+            gc = drawable.gc("lossborder")
             for l in self.conn.losses(self.dir, t0, t1):
                 x0 = max(t0, l.begin) * tscale + toff
                 x1 = min(t1, l.end) * tscale + toff
                 y0 = max(s0, l.seq) * sscale + soff
                 y1 = min(s1, l.end_seq) * sscale + soff
-                gc1 = self.gc[l.type]
-                drawable.draw_rectangle(gc1[1], gtk.TRUE, x0, self.top_margin, x1 - x0 + 1, self.plot_height)
-                drawable.draw_rectangle(gc1[0], gtk.TRUE, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
-                drawable.draw_rectangle(gc, gtk.FALSE, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+                gc_fg, gc_bg = drawable.gc(l.type), drawable.gc(l.type + ".bg")
+                drawable.fill_rectangle(gc_bg, x0, self.top_margin, x1 - x0 + 1, self.plot_height)
+                drawable.fill_rectangle(gc_fg, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+                drawable.draw_rectangle(gc, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
             
             # border box
-            gc = self.gc["border"]
-            drawable.draw_rectangle(gc, gtk.FALSE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
+            border_gc = drawable.gc("border")
+            drawable.draw_rectangle(border_gc, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
 
             # axes
-            self._draw_axis(tscale, toff, t0, t1, tstep, self.top_margin, self.wheight - self.bottom_margin, self._draw_tic_x, self._draw_label_x, drawable, gc, playout)
-            self._draw_axis(sscale, soff, s0, s1, sstep, self.left_margin, self.wwidth - self.right_margin, self._draw_tic_y, self._draw_label_y, drawable, gc, playout)
+            self._draw_axis(tscale, toff, t0, t1, tstep, self.top_margin, self.wheight - self.bottom_margin, self._draw_tic_x, self._draw_label_x, drawable, border_gc, playout)
+            self._draw_axis(sscale, soff, s0, s1, sstep, self.left_margin, self.wwidth - self.right_margin, self._draw_tic_y, self._draw_label_y, drawable, border_gc, playout)
             
             # data packets
-            gc = self.gc["data"]
+            gc = drawable.gc("data")
             for p in self.conn.packets(self.dir, t0, t1):
                 x, y, yy = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
                 drawable.draw_line(gc, x - 2, y, x + 3, y)
@@ -1020,17 +1082,17 @@ class PlotCanvas:
                 drawable.draw_line(gc, x, y, x, yy)
             
             # ack packets
-            gc, gc1, gc2 = self.gc["border"], self.gc["ack"], self.gc["dataack"]
+            gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
             last_dupack, last_dupack_x = -1, None
             for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
                 if p.dup_acks > 0 and (p.ack != last_dupack or x < last_dupack_x):
-                    small_playout.set_text(str(p.dup_acks + 1), -1)
-                    ir, lr = small_playout.get_extents()
-                    if p.ack != last_dupack or x + lr[2]/2048.0 < last_dupack_x:
-                        drawable.draw_layout(gc, x - lr[2]/2048.0, y + 2, small_playout)
+                    text = str(p.dup_acks + 1)
+                    extents = drawable.text_extents(small_playout, text, x, y, anchor=ANCHOR_N)
+                    if p.ack != last_dupack or extents[2] < last_dupack_x:
+                        drawable.draw_text(border_gc, small_playout, text, x, y, anchor=ANCHOR_N)
                         last_dupack = p.ack
-                        last_dupack_x = x - lr[2]/2048.0 - 4
+                        last_dupack_x = extents[0] - 4
                 if p.pure_ack():
                     drawable.draw_line(gc1, x - 2, y - 2, x + 2, y + 2)
                     drawable.draw_line(gc1, x - 2, y + 2, x + 2, y - 2)
@@ -1167,7 +1229,7 @@ class PlotFlowWindow:
    	    ))
         self._activate_flow_items()
         menubar = self.item_factory.get_widget("<main>")
-        vbox.add(menubar)
+        vbox.pack_start(menubar, 0, 0)
         menubar.show()
 
     def cmd_exit(self, *args):
