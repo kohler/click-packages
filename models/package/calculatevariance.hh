@@ -18,6 +18,8 @@
 class CalculateVariance : public Element {
 
     struct timeval _interval;
+    struct timeval end_time;
+    unsigned num_intervals;
 
     public:
     CalculateVariance();
@@ -34,37 +36,27 @@ class CalculateVariance : public Element {
     Packet *simple_action(Packet *);
     double get_variance(int);
     void reset();
+    void print_all_variance(); 
 
     class CounterEntry {
 	public:
-	CounterEntry():num_intervals(0),pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0) {end_time.tv_sec=0;end_time.tv_usec=0;};
-	CounterEntry(int num_int,int num):num_intervals(num_int),pkt_sum_interval(num),pkt_sum(0),pkt_sum_sq(0) {end_time.tv_sec=0;end_time.tv_usec=0;};
-	double get_pkt_variance() {
-	    if (num_intervals<=0) {
-		click_chatter("Number of Intervals is less than 1!");
-		return 0.0;
-	    }else{
-		double tmp_mean_sqr = pkt_sum/num_intervals;
-		tmp_mean_sqr = tmp_mean_sqr * tmp_mean_sqr;
-		return (pkt_sum_sq/num_intervals) - tmp_mean_sqr;
-	    }
+	CounterEntry():pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0) {};
+	double get_pkt_variance(unsigned num_int) {
+	    assert(num_int>0);
+	    double tmp_mean_sqr = (double) pkt_sum/num_int;
+	    tmp_mean_sqr = tmp_mean_sqr * tmp_mean_sqr;
+	    return ((double)pkt_sum_sq/num_int) - tmp_mean_sqr;
 	};
 
 	void init() {
-	    num_intervals = 0;
 	    pkt_sum_interval = 0;
 	    pkt_sum = 0;
 	    pkt_sum_sq = 0;
-	    end_time.tv_sec = 0;
-	    end_time.tv_usec = 0;
 	}
-
-	int num_intervals; //total number of completed intervals processed
 
 	unsigned pkt_sum_interval; //number of packets accumulated in the current (unfinished) interval
 	unsigned pkt_sum; // Sum(X) where X is ther number of packets in the previous intervals.
 	unsigned pkt_sum_sq; //Sum(X^2) where X is ther number of packets in the previous intervals. var(X) = E(X^2) - E(X)^2;
-	struct timeval end_time; //the end time of current interval
 /*
 	double pkt_bytes_sum;
 	double pkt_bytes_sum_sq;
