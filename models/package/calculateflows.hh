@@ -138,6 +138,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		short int doubling[2];
 		short int prev_doubling[2];
 		short int outoforder_pckt;
+		unsigned max_ack[2];
 		
 		
 		void init() { 
@@ -154,6 +155,7 @@ class CalculateFlows : public Element, public AggregateListener {
 			prev_diff[0] = 0;
 			doubling[0] = -1;
 			prev_doubling[0] = 0;
+			max_ack[0] = 0;
 			_upper_wind_seq[0] = 0;
 			_max_wind_seq[0] = 0;
 			_last_seq[0] = 0;
@@ -172,6 +174,7 @@ class CalculateFlows : public Element, public AggregateListener {
 			prev_diff[1]=0;
 			doubling[1] = -1;
 			prev_doubling[1] = 0;
+			max_ack[1] = 0;
 			_upper_wind_seq[1] = 0;
 			_max_wind_seq[1] = 0;
 			_last_seq[1] = 0;
@@ -442,10 +445,9 @@ class CalculateFlows : public Element, public AggregateListener {
 	   	    short int num_of_acks = acks[paint].find(seq);
 			short int  num_of_rexmt = rexmt[paint].find(seq);
 			short int possible_loss_event=0; //0 for loss event 1 for possible loss event
-						
 			//printf("seq:%u ,rexmt: %d\n",seq , num_of_rexmt);
-			if ( seq < _max_seq[paint] 
-				&& (seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we have a new event.
+			if ( ((seq+1) < _max_seq[paint]) && ((seq+seqlen) > max_ack[paint]) &&  // Change to +1 for keep alives
+ 				(seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we have a new event.
 					//printf("last_seq[%d]=%u \n",paint,seq );
 				timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
 				if (!outoforder_pckt){
@@ -468,9 +470,9 @@ class CalculateFlows : public Element, public AggregateListener {
 							outfileg[paint+6] = fopen(outfilenameg[paint+6].cc(), "a");
 							fprintf(outfileg[paint+6],"%f %.1f %f %.1f\n",
 									timeadd(time,time_last_sent)/2.,
-									(double)(seq+seqlen+seqlen/4.),
+									(double)(seq+seqlen/2.),
 									timesub(time,time_last_sent)/2.,
-									seqlen/4.); 
+									seqlen/2.); 
 							if (fclose(outfileg[paint+6])){ 
 				   				click_chatter("error closing file!");
 							}
@@ -562,9 +564,9 @@ class CalculateFlows : public Element, public AggregateListener {
 		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
 			
 			if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)){
-				printf("Possible gap in Byte Sequence flow %d:%d %d - %d\n",agganno,paint,_max_seq[paint],seq);
+				printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n",agganno,paint,_max_seq[paint],seq);
 			}
-			if (seq < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
+			if ((seq+1) < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
 				MapS &m_rexmt = rexmt[paint];
 			//	printf("ok:%u:%u",seq,_max_seq[paint]);
 				m_rexmt.insert(seq, m_rexmt.find(seq)+1 );					

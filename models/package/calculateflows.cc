@@ -1,7 +1,6 @@
 // -*- mode: c++; c-basic-offset: 4 -*-
 #include <config.h>
 #include <click/config.h>
-
 #include "calculateflows.hh"
 #include <click/error.hh>
 #include <click/hashmap.hh>
@@ -11,6 +10,8 @@
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
+
+#include <limits.h>
 
 CalculateFlows::CalculateFlows()
     : Element(1, 1)
@@ -84,6 +85,7 @@ CalculateFlows::simple_action(Packet *p)
     switch (iph->ip_p) { 
 	 
 	 case IP_PROTO_TCP: {
+	  // if (aggp == 1765){
 	   int type = 0;// 0 ACK or 1 DACK
  	   loss = loss_map.find(aggp);
 	   MapS &m_acks = loss->acks[cpaint];
@@ -121,12 +123,17 @@ CalculateFlows::simple_action(Packet *p)
 	   //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
 	   
 	   // converting the Sequences from Absolute to Relative
-	   if ( !loss->init_seq[paint]){ 
+	   if ( !loss->init_seq[paint]){ //first time case 
 	   	loss->init_seq[paint] = seq;
 	   	seq = 0;
 	   }
 	   else{
-	   	seq = seq - loss->init_seq[paint];
+	   	if (seq > loss->init_seq[paint]){//hmm we may have a "wrap around" case
+			seq = seq + (UINT_MAX - loss->init_seq[paint]);
+		}
+		else { //normal case no "wrap around"
+			seq = seq - loss->init_seq[paint];
+	   	}
 	   }
 		 
 	   if (tcph->th_flags & TH_SYN){ // Is this a SYN packet?
@@ -159,13 +166,22 @@ CalculateFlows::simple_action(Packet *p)
 	   if (ackp){ // check for ACK and update as necessary 
 	   	   // converting the Sequences from Absolute to Relative (we need that
 		   // for acks also!)
-		   if ( !loss->init_seq[cpaint]){
-	   	   	loss->init_seq[cpaint] = ack;
-			ack = 0;
-		   }
-	   	   else{
-		   	ack = ack - loss->init_seq[cpaint];
-		   }	
+			if ( !loss->init_seq[cpaint]){ //first time case
+	   	   		loss->init_seq[cpaint] = ack;
+				ack = 0;
+			}
+			else {
+				if (ack > loss->init_seq[cpaint]){//hmm we may have a "wrap around" case
+					ack = ack + (UINT_MAX - loss->init_seq[cpaint]);
+				}
+				else { //normal case no "wrap around"
+					ack = ack - loss->init_seq[cpaint];
+	   			}
+	   		}
+			
+			if (loss->max_ack[cpaint] < ack){
+				loss->max_ack[cpaint] = ack;
+			}
 			
 			loss->set_last_ack(ack,cpaint);
 			m_acks.insert(ack, m_acks.find(ack)+1 );
@@ -190,7 +206,7 @@ CalculateFlows::simple_action(Packet *p)
        loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
 	   loss->set_total_bytes((loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
 	 //  printf("[%u] %u:%u:%u\n",paint,loss->packets(paint),loss->total_bytes(paint),seq);
-	   
+	// }  
 	   break;
      }
      	 
@@ -212,6 +228,7 @@ CalculateFlows::simple_action(Packet *p)
 				
 	 }
 	}
+	
 	 /*if (aggp == 905){
 	 printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
 	 printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
