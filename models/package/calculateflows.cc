@@ -460,7 +460,7 @@ CalculateFlows::initialize(ErrorHandler *errh)
 void
 CalculateFlows::cleanup(CleanupStage)
 {
-    for (MapLoss::Iterator iter = _loss_map.first(); iter; iter++) {
+    for (MapLoss::iterator iter = _loss_map.begin(); iter; iter++) {
 	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
 	losstmp->kill(this);
     }

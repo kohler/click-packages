@@ -127,7 +127,7 @@ CollectTCPFlows::clear(bool write_flows)
     Vector<Flow *> poo;
     Flow *to_free = 0;
 
-    for (Map::Iterator iter = _map.first(); iter; iter++)
+    for (Map::iterator iter = _map.begin(); iter; iter++)
 	if (Flow *m = iter.value()) {
 	    if (m->is_primary()) {
 		m->_free_next = to_free;

@@ -126,7 +126,7 @@ TraceInfo::print_master_file()
 
     unsigned *permutation = new unsigned[_hashed_counters.size()];
     int i=0;
-    for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+    for (counter_table::iterator iter = _hashed_counters.begin(); iter; iter++) {
 	permutation[i] = (unsigned) iter.key();
 	i++;
     }

@@ -107,7 +107,7 @@ CalculateVariance::simple_action(Packet *p)
 	    int max_pkts_in_interval = 0;
 	    int top_agg = 0;
 
-	    for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	    for (counter_table::iterator iter = _hashed_counters.begin(); iter; iter++) {
 
 		CalculateVariance::CounterEntry e = iter.value();
 
@@ -198,7 +198,7 @@ void
 CalculateVariance::print_all_variance()
 {
     if (_use_hash) {
-	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	for (counter_table::iterator iter = _hashed_counters.begin(); iter; iter++) {
 	    CounterEntry e = iter.value();
 	    printf("agg no: %d var: %E num intevals: %d pkt_sum %d pkt_sum_sq %f pkt_count %d\n",iter.key(),variance(iter.key()),_num_intervals,e.pkt_sum,e.pkt_sum_sq,e.pkt_count);
 	}
@@ -239,7 +239,7 @@ CalculateVariance::print_edf_function()
     if (_use_hash) {
 	permutation = new unsigned[_hashed_counters.size()];
 	int i=0;
-	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	for (counter_table::iterator iter = _hashed_counters.begin(); iter; iter++) {
 	    permutation[i] = iter.key();
 	    CounterEntry ent = iter.value();
 	    i++;
@@ -337,7 +337,7 @@ CalculateVariance::print_all_aggregates()
     if (_use_hash) {
 	unsigned *permutation = new unsigned[_hashed_counters.size()];
 	int i=0;
-	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	for (counter_table::iterator iter = _hashed_counters.begin(); iter; iter++) {
 	    permutation[i] = (unsigned) iter.key();
 	    CounterEntry ent = iter.value();
 	    i++;

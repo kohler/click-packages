@@ -140,7 +140,7 @@ OnOffModel::write_file(String where, ErrorHandler *errh) const
     timersub(&_end_time, &_start_time, &diff);
     double total_trace_time = diff.tv_sec + 0.000001 * diff.tv_usec;
 
-    for (onoff_countertable::Iterator iter = _hashed_counters.first(); iter; iter++) {
+    for (onoff_countertable::const_iterator iter = _hashed_counters.begin(); iter; iter++) {
 
 	IPAddress addr = (IPAddress) iter.key();
 	OnOffConnCounter c = iter.value();
