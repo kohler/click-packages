@@ -86,8 +86,11 @@ class CalculateFlows : public Element, public AggregateListener { public:
 	TimeInterval(): start_byte(0), end_byte(0) { }
     };
 
+    class HalfConnectionInfo;
     class LossInfo;
 
+    static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
+    
     typedef BigHashMap<unsigned, short int> MapS;
     typedef BigHashMap<unsigned, timeval> MapT;
     typedef BigHashMap<unsigned, TimeInterval> MapInterval;
@@ -108,6 +111,21 @@ class CalculateFlows : public Element, public AggregateListener { public:
     inline void free_pkt(Pkt *);
 #endif
     
+};
+
+struct CalculateFlows::HalfConnectionInfo {
+    bool have_init_seq : 1;
+    bool have_syn : 1;
+    bool have_fin : 1;
+    
+    tcp_seq_t init_seq;		// first sequence number seen, if any
+    tcp_seq_t syn_seq;		// sequence number of SYN, if any
+    tcp_seq_t fin_seq;		// sequence number of FIN, if any
+    
+    uint32_t total_packets;	// total number of packets seen (incl. rexmits)
+    uint32_t total_seq;		// total sequence space seen (incl. rexmits)
+
+    HalfConnectionInfo();
 };
 
 class CalculateFlows::LossInfo {
@@ -135,16 +153,15 @@ class CalculateFlows::LossInfo {
     // 6,7 for Possible loss Events, 8,9 for Data Acks
     
     uint32_t _aggregate;
+
+    bool _have_init_time : 1;
     
   public:
-    bool _has_syn[2];
-    bool _has_fin[2];
     MapT time_by_firstseq[2];
     MapT time_by_lastseq[2];
     MapInterval inter_by_time[2];
     MapS acks[2];
     MapS rexmt[2];
-    tcp_seq_t _init_seq[2];
     timeval _init_time;
     tcp_seq_t _max_ack[2];
     
@@ -154,12 +171,11 @@ class CalculateFlows::LossInfo {
     void init() { 
 	_gnuplot = _eventfiles = false;
 	_aggregate = 0;
+	_have_init_time = false;
 	_init_time.tv_usec = 0;
 	_init_time.tv_sec = 0;
 	_outoforder_pckt = 0;
 	
-	_has_syn[0] = _has_fin[0] = false;
-	_init_seq[0] = 0;
 	_prev_diff[0] = 0;
 	_doubling[0] = -1;
 	_prev_doubling[0] = 0;
@@ -169,15 +185,11 @@ class CalculateFlows::LossInfo {
 	_last_seq[0] = 0;
 	_last_ack[0] = 0;
 	_max_seq[0] = 0;
-	_total_bytes[0] = 0;
 	_bytes_lost[0] = 0;
 	_packets_lost[0] = 0;
-	_packets[0] = 0;
 	_loss_events[0] = 0;
 	_p_loss_events[0] = 0;
 	
-	_has_syn[1] = _has_fin[1] = false;
-	_init_seq[1] = 0;
 	_prev_diff[1]=0;
 	_doubling[1] = -1;
 	_prev_doubling[1] = 0;
@@ -187,10 +199,8 @@ class CalculateFlows::LossInfo {
 	_last_seq[1] = 0;
 	_last_ack[1] = 0;
 	_max_seq[1] = 0;
-	_total_bytes[1] = 0;
 	_bytes_lost[1] = 0;
 	_packets_lost[1] = 0;
-	_packets[1] = 0;
 	_loss_events[1] = 0;
 	_p_loss_events[1] = 0;
     }
@@ -219,6 +229,11 @@ class CalculateFlows::LossInfo {
     String output_directory() const	{ return _outputdir; }
     
     void print_stats();
+
+    void handle_packet(const Packet *, ToIPFlowDumps *);
+    
+    void pre_update_state(const Packet *);
+    void post_update_state(const Packet *);
     
     struct timeval Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint);
     
@@ -247,14 +262,6 @@ class CalculateFlows::LossInfo {
 	assert(paint < 2);
 	_total_bytes[paint] = bytes;
     }
-    void set_packets(unsigned packets, unsigned paint) {
-	assert(paint < 2);
-	_packets[paint] = packets;
-    }
-    void inc_packets(unsigned paint) {
-	assert(paint < 2);
-	_packets[paint]++;
-    }
     
     tcp_seq_t last_seq(unsigned paint) const {
 	assert(paint < 2);
@@ -264,13 +271,13 @@ class CalculateFlows::LossInfo {
 	assert(paint < 2);
 	return _last_seq[paint];
     }
-    unsigned total_bytes(unsigned paint) const {
+    unsigned total_seq(unsigned paint) const {
 	assert(paint < 2);
-	return  _total_bytes[paint];
+	return _hc[paint].total_seq;
     }
-    unsigned packets(unsigned paint) const {
+    uint32_t total_packets(unsigned paint) const {
 	assert(paint < 2);
-	return _packets[paint];
+	return _hc[paint].total_packets;
     }
     unsigned bytes_lost(unsigned paint) const {
 	assert(paint < 2);
@@ -293,8 +300,18 @@ class CalculateFlows::LossInfo {
     void print_send_event(unsigned, const timeval &, tcp_seq_t, tcp_seq_t);
     void gplotp_ack_event(unsigned, int, const timeval &, tcp_seq_t);
     void gplotp_send_event(unsigned, const timeval &, tcp_seq_t);
+
+  private:
+
+    HalfConnectionInfo _hc[2];
     
 };
+
+inline uint32_t
+CalculateFlows::calculate_seqlen(const click_ip *iph, const click_tcp *tcph)
+{
+    return (ntohs(iph->ip_len) - (iph->ip_hl << 2) - (tcph->th_off << 2)) + (tcph->th_flags & TH_SYN ? 1 : 0) + (tcph->th_flags & TH_FIN ? 1 : 0);
+}
 
 #if CF_PKT
 inline void
