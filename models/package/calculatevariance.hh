@@ -32,7 +32,7 @@ class CalculateVariance : public Element {
     void add_handlers();
 
     Packet *simple_action(Packet *);
-    double get_variance(unsigned);
+    double get_variance(int);
     void reset();
 
     class CounterEntry {
