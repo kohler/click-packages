@@ -16,11 +16,124 @@
 
 CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
+      have_ack_bounce(false),
       init_seq(0), max_seq(0), max_ack(0), max_live_seq(0), max_loss_seq(0),
-      total_packets(0), total_seq(0), loss_events(0), possible_loss_events(0),
-      lost_packets(0), lost_seq(0)
+      total_packets(0), total_seq(0),
+      loss_events(0), possible_loss_events(0), false_loss_events(0),
+      event_id(0),
+      lost_packets(0), lost_seq(0),
+      pkt_head(0), pkt_tail(0),
+      loss_type(NO_LOSS)
 {
 }
+
+void
+CalculateFlows::StreamInfo::insert(Pkt *k)
+{
+    // check for empty list
+    if (!pkt_tail) {
+	assert(!pkt_head);
+	pkt_head = pkt_tail = k;
+	k->type = Pkt::ALL_NEW;
+	return;
+    }
+
+    // check that timestamp makes sense
+    if (k->timestamp < pkt_tail->timestamp) {
+	click_chatter("timestamp confusion");
+	k->timestamp = pkt_tail->timestamp;
+    }
+
+    // insert packet into list
+    k->prev = pkt_tail;
+    k->next = 0;
+    k->prev->next = pkt_tail = k;
+
+    // check for retransmissions
+    if (SEQ_GEQ(k->seq, max_seq)) {
+	k->type = Pkt::ALL_NEW;
+	return;
+    }
+
+    // Otherwise, it is a reordering, or possibly a retransmission.
+    // Find the most recent retransmission of overlapping data.
+    Pkt *x = pkt_tail->prev;
+    while (k->type == Pkt::UNKNOWN && x) {
+	if (k->seq == x->seq && k->last_seq == x->last_seq) {
+	    // complete retransmission
+	    k->type = Pkt::REXMIT;
+	    k->rexmit_pkt = x;
+	} else if (k->seq == x->seq) {
+	    // partial retransmission
+	    k->type = Pkt::PARTIAL_REXMIT;
+	    k->rexmit_pkt = x;
+	} else if (x->type == Pkt::ALL_NEW && SEQ_LEQ(x->last_seq, k->seq))
+	    // reordering
+	    k->type = Pkt::REORDERED;
+	else if ((SEQ_LEQ(x->seq, k->seq) && SEQ_LT(k->seq, x->last_seq))
+		 || (SEQ_LT(x->seq, k->last_seq) && SEQ_LEQ(k->last_seq, x->last_seq))) {
+	    // odd partial retransmission
+	    k->type = Pkt::ODD_REXMIT;
+	    k->rexmit_pkt = x;
+	} else
+	    x = x->prev;
+    }
+    
+    // If we ran out of packets, it's a reordering.
+    if (k->type == Pkt::UNKNOWN)
+	k->type = Pkt::REORDERED;
+}
+
+CalculateFlows::Pkt *
+CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &timestamp)
+{
+    // XXX start from the middle?
+    Pkt *potential_answer = 0;
+    for (Pkt *k = pkt_tail; k; k = k->prev) {
+	if (k->last_seq == ack) {
+	    if (k->type == Pkt::REXMIT
+		&& have_ack_bounce
+		&& timestamp - k->timestamp < min_ack_bounce)
+		potential_answer = k;
+	    else
+		return k;
+	} else if (SEQ_LT(k->seq, ack) && SEQ_LEQ(ack, k->last_seq))
+	    // partial ack
+	    potential_answer = k;
+    }
+    return potential_answer;
+}
+
+void
+CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, ToIPFlowDumps *td)
+{
+    assert(direction < 2);
+    if (loss_type != NO_LOSS) {
+	const char *direction_str = (direction ? " < " : " > ");
+	const char *loss_type_str;
+	if (loss_type == LOSS) {
+	    loss_type_str = "loss";
+	    loss_events++;
+	} else if (loss_type == POSSIBLE_LOSS) {
+	    loss_type_str = "ploss";
+	    possible_loss_events++;
+	} else {
+	    assert(loss_type == FALSE_LOSS);
+	    loss_type_str = "floss";
+	    false_loss_events++;
+	}
+	StringAccum sa;
+	sa << loss_type_str << direction_str << loss_time
+	   << ' ' << loss_seq << ' ' << loss_end_time
+	   << ' ' << loss_last_seq << ' ' << '0'; // XXX nacks
+	printf("# %u %s\n", aggregate, sa.cc());
+	td->add_note(aggregate, sa.take_string());
+	loss_type = NO_LOSS;
+    }
+}
+
+
+// LOSSINFO
 
 CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const String *outfilenamep)
     : _aggregate(AGGREGATE_ANNO(p))
@@ -57,6 +170,18 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const Strin
 }
 
 void
+CalculateFlows::LossInfo::kill(CalculateFlows *f)
+{
+    _stream[0].output_loss(_aggregate, 0, f->tipfd());
+    _stream[1].output_loss(_aggregate, 1, f->tipfd());
+    f->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
+    f->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
+    if (_eventfiles)
+	print_stats();
+    delete this;
+}
+
+void
 CalculateFlows::LossInfo::print_stats()
 {
     if (!_eventfiles)
@@ -82,39 +207,8 @@ CalculateFlows::LossInfo::print_stats()
     }
 }
 
-struct timeval
-CalculateFlows::LossInfo::Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint)
-{
-    assert(paint < 2);
-    struct timeval tbstart = time_by_firstseq[paint].find(start_seq);
-    struct timeval tbend = time_by_lastseq[paint].find(end_seq);
-
-    if (timerisset(&tbend))
-	return tbend;
-    else if (timerisset(&tbstart))
-	return tbstart;
-    else {			// We have a partial retransmission...
-	MapInterval &ibtime = inter_by_time[paint];
-	for (MapInterval::Iterator iter = ibtime.first(); iter; iter++) {
-	    const TimeInterval &tinter = iter.value();
-	    if (SEQ_LT(tinter.start_seq, start_seq)
-		&& SEQ_GT(tinter.end_seq, start_seq))
-		return tinter.time;
-	}
-	// nothing matches (that cannot be possible unless there is
-	// reordering)
-	_out_of_order = true;	// set the out-of-order indicator
-	printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
-	       _aggregate,
-	       paint, 
-	       start_seq,
-	       end_seq);
-	return make_timeval(0, 0);
-    }
-}
-
-void
-CalculateFlows::LossInfo::pre_update_state(const Packet *p)
+CalculateFlows::Pkt *
+CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *parent)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
@@ -122,104 +216,83 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p)
     // set TCP sequence number offsets
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
-    if (!_stream[direction].have_init_seq) {
-	_stream[direction].init_seq = ntohl(tcph->th_seq);
-	_stream[direction].have_init_seq = true;
+    StreamInfo &stream = _stream[direction];
+    if (!stream.have_init_seq) {
+	stream.init_seq = ntohl(tcph->th_seq);
+	stream.have_init_seq = true;
     }
-    if ((tcph->th_flags & TH_ACK) && !_stream[!direction].have_init_seq) {
-	_stream[!direction].init_seq = ntohl(tcph->th_ack);
-	_stream[!direction].have_init_seq = true;
+    StreamInfo &ack_stream = _stream[!direction];
+    if ((tcph->th_flags & TH_ACK) && !ack_stream.have_init_seq) {
+	ack_stream.init_seq = ntohl(tcph->th_ack);
+	ack_stream.have_init_seq = true;
     }
 
-    // clear out-of-order indicator
-    _out_of_order = false;
+    // introduce a Pkt
+    Pkt *k = parent->new_pkt();
+    if (!k)
+	return 0;
+    const click_ip *iph = p->ip_header();
+    k->init(ntohl(tcph->th_seq) - stream.init_seq, calculate_seqlen(iph, tcph),
+	    p->timestamp_anno() - _init_time, stream.event_id);
+    stream.insert(k);
     
     // save everything else for later
+    return k;
 }
 
 
 void
-CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen, const struct timeval &time, unsigned paint, ToIPFlowDumps *tipfdp)
+CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, ToIPFlowDumps *tipfd)
 {
-    assert(paint < 2);
-    StreamInfo &stream = _stream[paint];
+    assert(direction < 2);
+    StreamInfo &stream = _stream[direction];
+    tcp_seq_t seq = k->seq;
+    tcp_seq_t last_seq = k->last_seq;
 
     // Return if this is new or already-acknowledged data
-    if (SEQ_GEQ(seq + 1, stream.max_seq) // Change to +1 for keep alives
-				// XXX Should be SEQ_GT ?
-	|| SEQ_LEQ(seq + seqlen, stream.max_ack))
+    if (SEQ_GEQ(seq, stream.max_seq))
 	return;
 
-    // XXX What does this mean?
-    short num_of_rexmt = rexmt[paint].find(seq);
-    if (SEQ_LT(seq, stream.max_loss_seq) && num_of_rexmt <= 0)
+    // Return if this retransmission is due to a previous loss event
+    if (k->event_id != k->rexmit_pkt->event_id)
 	return;
 
-    // XXX Return if packets are out of order
-    if (_out_of_order)
+    // Return if this is a keepalive (XXX)
+    if (stream.max_seq == k->last_seq && k->last_seq == k->seq + 1)
+	return;
+    
+    // Return if packets are out of order
+    if (k->type == Pkt::REORDERED)
 	return;
 
     // If we get this far, it is a new loss event.
     
-    rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
+    // Update the event ID
+    stream.event_id++;
+    k->event_id = stream.event_id;
 
-    // Generate message
-    StringAccum sa;
-    const char *direction_str = paint ? " < " : " > ";
-    struct timeval time_last_sent = Search_seq_interval(seq, seq + seqlen, paint);	
-    short num_of_acks = _acks[paint].find(seq);
-    bool possible_loss_event; // true if possible loss event
-    if (SEQ_LT(seq + seqlen, stream.max_live_seq)) {
-	possible_loss_event = false;
-	sa << "loss" << direction_str << time_last_sent
-	   << ' ' << (seq + seqlen) << ' ' << time
-	   << ' ' << stream.max_live_seq << ' ' << num_of_acks;
-	stream.loss_events++;
-    } else {
-	possible_loss_event = true;
-	sa << "ploss" << direction_str << time_last_sent
-	   << ' ' << seq << ' ' << time
-	   << ' ' << seqlen << ' ' << num_of_acks;
-	stream.possible_loss_events++;
-    }
-    tipfdp->add_note(_aggregate, sa.cc());
-
-    if (!possible_loss_event)
-	printf("We have a loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u\n", _aggregate, time.tv_sec, time.tv_usec, seq, num_of_acks);
+    // Store information about the loss event
+    if (stream.loss_type != NO_LOSS)
+	stream.output_loss(_aggregate, direction, tipfd);
+    if (SEQ_GT(stream.max_ack, seq))
+	stream.loss_type = FALSE_LOSS;
+    else if (SEQ_GEQ(last_seq, stream.max_live_seq))
+	stream.loss_type = POSSIBLE_LOSS;
     else
-	printf("We have a POSSIBLE loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u\n", _aggregate, time.tv_sec, time.tv_usec, seq, num_of_acks);
-    _acks[paint].insert(seq, -10000);
+	stream.loss_type = LOSS;
+    stream.loss_time = k->rexmit_pkt->timestamp;
+    stream.loss_seq = seq;
+    stream.loss_end_time = k->timestamp;
+    stream.loss_last_seq = stream.max_live_seq;
 
     // We just completed a loss event, so reset max_live_seq and max_loss_seq.
-    stream.max_live_seq = seq + seqlen;
+    stream.max_live_seq = last_seq;
     if (SEQ_GT(stream.max_seq, stream.max_loss_seq))
 	stream.max_loss_seq = stream.max_seq;
 }
 
 void
-CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigned paint)
-{
-    assert(paint < 2);
-    StreamInfo &stream = _stream[paint];
-    
-    if (SEQ_LT(stream.max_seq + 1, seq) && stream.total_packets) {
-	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, stream.max_seq, seq);
-    }
-
-    if (SEQ_LT(seq + 1, stream.max_seq) && !_out_of_order) {  // we do a retransmission  (Bytes are lost...)
-	MapS &m_rexmt = rexmt[paint];
-	m_rexmt.insert(seq, m_rexmt.find(seq) + 1);
-	if (SEQ_LT(seq + seqlen, stream.max_seq)) { // are we transmiting totally new bytes also?
-	    stream.lost_seq += seqlen;
-	} else { // we retransmit something old but partial
-	    stream.lost_seq += stream.max_seq - seq;
-	}
-	stream.lost_packets++;
-    }
-}
-
-void
-CalculateFlows::LossInfo::post_update_state(const Packet *p)
+CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFlows *cf)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
@@ -264,56 +337,54 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p)
 	tcp_seq_t ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
 	if (SEQ_GT(ack, ack_stream.max_ack))
 	    ack_stream.max_ack = ack;
-	// XXX what about -100000 ?
-	short &num_acks = _acks[!direction].find_force(ack);
-	num_acks++;
+	
+	// find acked packet
+	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(ack, k->timestamp)) {
+	    acked_pkt->nacks++;
+	    struct timeval bounce = k->timestamp - acked_pkt->timestamp;
+	    if (!ack_stream.have_ack_bounce || bounce < ack_stream.min_ack_bounce) {
+		ack_stream.have_ack_bounce = true;
+		ack_stream.min_ack_bounce = bounce;
+	    }
+	    // check whether this acknowledges something in the last loss
+	    // event; if so, we should output the loss event
+	    if (ack_stream.loss_type != NO_LOSS
+		&& SEQ_GT(ack, ack_stream.loss_seq)) {
+		// check for a false loss event: we don't believe the ack
+		// could have seen the retransmitted packet yet
+		if (k->timestamp - ack_stream.loss_end_time < ack_stream.min_ack_bounce)
+		    ack_stream.loss_type = FALSE_LOSS;
+		ack_stream.output_loss(_aggregate, !direction, cf->tipfd());
+	    }
+	}
     }
 }
 
 void
-CalculateFlows::LossInfo::handle_packet(const Packet *p, ToIPFlowDumps *flowdumps)
+CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent, ToIPFlowDumps *flowdumps)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
     // update timestamp and sequence number offsets at beginning of connection
-    pre_update_state(p);
+    Pkt *k = pre_update_state(p, parent);
 
-    int paint = (PAINT_ANNO(p) & 1);
-    MapT &m_tbfirst = time_by_firstseq[paint];
-    MapT &m_tblast = time_by_lastseq[paint];
-    MapInterval &m_ibtime = inter_by_time[paint];
+    int direction = (PAINT_ANNO(p) & 1);
     
-    const click_tcp *tcph = p->tcp_header(); 
-    tcp_seq_t seq = ntohl(tcph->th_seq) - _stream[paint].init_seq;
-    uint32_t seqlen = calculate_seqlen(p->ip_header(), tcph);
-
-    struct timeval ts = p->timestamp_anno() - _init_time;
-    
-    if (seqlen > 0) {
-	calculate_loss_events2(seq, seqlen, ts, paint, flowdumps); //calculate loss if any
-	calculate_loss(seq, seqlen, paint); //calculate loss if any
-	m_tbfirst.insert(seq, ts);
-	m_tblast.insert(seq + seqlen, ts);
-	TimeInterval ti;
-	ti.start_seq = seq;
-	ti.end_seq = seq + seqlen;
-	ti.time = ts;
-	m_ibtime.insert(total_packets(paint), ti);
+    if (k->last_seq != k->seq) {
+	calculate_loss_events2(k, direction, flowdumps); //calculate loss if any
+	// XXX calculate_loss(seq, seqlen, direction); //calculate loss if any
     }
 
     // update counters, maximum sequence numbers, and so forth
-    post_update_state(p);
+    post_update_state(p, k, parent);
 }
 
 
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1), _tipfd(0)
-#if CF_PKT
-    , _free_pkt(0)
-#endif
+    : Element(1, 1), _tipfd(0), _free_pkt(0)
 {
     MOD_INC_USE_COUNT;
 }
@@ -325,10 +396,8 @@ CalculateFlows::~CalculateFlows()
 	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
 	delete losstmp;
     }
-#if CF_PKT
     for (int i = 0; i < _pkt_bank.size(); i++)
 	delete[] _pkt_bank[i];
-#endif
 }
 
 void
@@ -369,7 +438,6 @@ CalculateFlows::initialize(ErrorHandler *)
     return 0;
 }
 
-#if CF_PKT
 CalculateFlows::Pkt *
 CalculateFlows::new_pkt()
 {
@@ -390,7 +458,6 @@ CalculateFlows::new_pkt()
 	return p;
     }
 }
-#endif
 
 Packet *
 CalculateFlows::simple_action(Packet *p)
@@ -430,7 +497,7 @@ CalculateFlows::simple_action(Packet *p)
 		  return 0;
 	      }
 	  }
-	  loss->handle_packet(p, _tipfd);
+	  loss->handle_packet(p, this, _tipfd);
 	  break;
       }
       
@@ -462,7 +529,7 @@ CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const
     if (event == DELETE_AGG) {
 	if (LossInfo *tmploss = _loss_map.find(aggregate)) {
 	    _loss_map.remove(aggregate);
-	    delete tmploss;
+	    tmploss->kill(this);
 	}
     }
 }
@@ -528,6 +595,29 @@ CalculateFlows::LossInfo::calculate_loss_events(tcp_seq_t seq, uint32_t seqlen, 
 	}
     }	
     
+}
+#endif
+
+#if 0
+void
+CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigned paint)
+{
+    assert(paint < 2);
+    StreamInfo &stream = _stream[paint];
+    
+    if (SEQ_LT(stream.max_seq + 1, seq) && stream.total_packets) {
+	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, stream.max_seq, seq);
+    }
+
+    // XXX this code is broken
+    if (SEQ_LT(seq + 1, stream.max_seq) && !_out_of_order) {  // we do a retransmission  (Bytes are lost...)
+	if (SEQ_LT(seq + seqlen, stream.max_seq)) { // are we transmiting totally new bytes also?
+	    stream.lost_seq += seqlen;
+	} else { // we retransmit something old but partial
+	    stream.lost_seq += stream.max_seq - seq;
+	}
+	stream.lost_packets++;
+    }
 }
 #endif
 
