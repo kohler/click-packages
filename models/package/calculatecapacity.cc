@@ -72,16 +72,16 @@ void
 CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 {
     struct Peak *p;
-    fprintf(f, "  <stream dir='%d' beginseq='%u' maxsize='%u'\n",
+    fprintf(f, "  <stream dir='%d' beginseq='%u' maxsize='%u'>\n",
 	    direction, init_seq, max_size);
     for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
 	iter!= peaks.end(); iter++){
 	p = *iter;
-	fprintf(f, "   <peak center='%lf' index='%d' area='%d' left='%d' right='%d'>\n",
+	fprintf(f, "   <peak center='%lf' index='%d' area='%d' left='%d' right='%d' />\n",
 		p->center, p->index, p->area, p->left, p->right);
     }
     
-    
+    fprintf(f,"    <interarrival>\n");
     for(unsigned int i=0; i < pkt_cnt; i++){
 	fprintf(f, "%d %ld.%06ld %d %ld.%06ld\n", intervals[i].size,
 		intervals[i].interval.tv_sec,
@@ -90,7 +90,8 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 		intervals[i].time.tv_sec,
 		intervals[i].time.tv_usec);
     }
-    fprintf(f, " />\n");
+    fprintf(f,"    </interarrival>\n");
+    fprintf(f, " </stream>\n");
 }
 
 static int compare(const void *a, const void *b){
