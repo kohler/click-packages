@@ -157,12 +157,23 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
     }
 
     // swivel is first bit 'a' and 'n->aggregate' differ
-    assert(a != n->aggregate);
     int swivel = first_bit_set(a ^ n->aggregate);
     // bitvalue is the value of that bit of 'a'
-    int bitvalue = (a >> (32 - swivel)) & 1;
+    int bitvalue;
     // mask masks off all bits before swivel
-    uint32_t mask = (swivel == 1 ? 0 : (0xFFFFFFFFU << (33 - swivel)));
+    uint32_t mask;
+    
+    // We might be asked to make a peer for this node even for the same
+    // aggregate if F_COLORSUBTREE is true. Requires rigamarole.
+    if (swivel == 0) {
+	assert(!n->child[0] && (n->flags & F_COLORSUBTREE));
+	bitvalue = 1;
+	mask = 0xFFFFFFFEU;
+	a |= 1;
+    } else {
+	bitvalue = (a >> (32 - swivel)) & 1;
+	mask = (swivel == 1 ? 0 : (0xFFFFFFFFU << (33 - swivel)));
+    }
     
     down[bitvalue]->aggregate = a;
     down[bitvalue]->color = NULLCOLOR;
@@ -185,7 +196,8 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
     n->child[1] = down[1];
 
     _allocated = true;
-    return down[bitvalue];
+    // check for zero swivel
+    return down[swivel ? bitvalue : 0];
 }
 
 IPAddrColors::Node *
@@ -284,8 +296,6 @@ IPAddrColors::set_color_subtree(uint32_t a, int prefix, color_t color)
     else {
 	n->color = color;
 	n->flags |= F_COLORSUBTREE;
-	node_print(_root, 0);
-	ok();
 	return 0;
     }
 }
@@ -635,7 +645,6 @@ IPAddrColors::read_file(FILE *f, ErrorHandler *errh)
     }
     if (ferror(f))
 	return errh->error("file error");
-    node_print(_root, 0);
     return 0;
 }
 
