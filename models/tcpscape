@@ -2,13 +2,13 @@
 
 from __future__ import generators
 from bisect import bisect
-import sys, re, types, string, struct
+import sys, re, types, string, struct, gzip
 from math import *
 import gtk, pango
 
 fill_colors = {
     "data": "red", "ack": "green", "dataack": "blue",
-    "loss": "gold", "ploss": "mint cream", "floss": "grey80",
+    "loss": ("gold", "khaki"), "ploss": ("mint cream", "mint cream"), "floss": ("grey80", "grey90"),
     "border": "dark grey", "lossborder": "yellow"
 }
 gc_dashes = {
@@ -60,8 +60,15 @@ class LossEvent:
 
 
 class ConnectionFormatError(Exception):
-    def __init__(self):
-        pass
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
+class ConnectionFileCompressedError(ConnectionFormatError):
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
 
 def direction(dir):
     if dir == '>':
@@ -145,6 +152,8 @@ class Connection:
             self._check_data()
         elif re.match('!eof$', line):
             return 1
+        elif line[:2] == "\037\235" or line[:2] == "\037\213": # compressed data
+            raise ConnectionFileCompressedError
         return 0
 
     def _read_binary(self, f):
@@ -174,10 +183,10 @@ class Connection:
 
     def read(self, f):
         last_ack = [-1, -1]; dup_acks = [0, 0]
-        read_state = 0; self.read_state = ""
+        read_state = 0; self.read_state = ""; self.read_data = ""
         f = Connection.Fileboy(f)
         for line in f:
-            if not re.match('[\\!\\#]', line):
+            if line and line[0] >= '0' and line[0] <= '9':
                 if read_state == 0:
                     read_state = 1; self.read_state = "a"
                     self._check_data()
@@ -239,7 +248,7 @@ class Connection:
             if l.time_overlaps(begin, end):
                 yield l
     
-    def time_range(self, dir=None):
+    def get_time_range(self, dir=None):
         if not self.available:
             self.load()
         if dir is None:
@@ -292,7 +301,13 @@ class Connection:
         if type(self.filename) != types.StringType:
             raise RuntimeError, "cannot load this Connection"
         elif not self.available:
-            self.read(self.filename)
+            f = file(self.filename, 'rb')
+            try:
+                self.read(f)
+            except ConnectionFileCompressedError:
+                f.seek(0)
+                self.read(gzip.GzipFile(fileobj=f))
+            f.close()
     
     def unload(self):
         if type(self.filename) == types.StringType:
@@ -326,12 +341,10 @@ def fix_range(a, b, min_step_frac):
     # bound a and b to multiples of step, if appropriate
     a_try = floor(a / step) * step
     if a - a_try < 0.1*d:
-        a = a_try
+        a = a_try; d = b - a
     b_try = ceil(b / step) * step
     if b_try - b < 0.1*d:
         b = b_try
-    else:
-        b += 0.01*d
     
     # return a dictionary
     return { "low": a, "high": b, "step": step }
@@ -441,15 +454,15 @@ class PlotCanvas:
             return self.begin, self.end
 
     # setting properties
-    def set_connection(self, conn, dir, begin=None, end=None, duration=None):
-        if begin is not None and duration is not None and end is None:
-            end = begin + duration
-        self.conn, self.dir, self.begin, self.end = conn, direction(dir), begin, end
-        if self.plotted: self.plot()
+    def set_connection(self, conn, dir, begin=None, end=None):
+        self.conn, self.dir = conn, direction(dir)
+        self.set_time_range(begin, end)
     def set_direction(self, dir):
         self.dir = direction(dir)
         if self.plotted: self.plot()
     def set_time_range(self, begin, end):
+        if begin is None: begin = self.conn.get_time_range()[0]
+        if end is None: end = self.conn.get_time_range()[1]
         self.begin, self.end = begin, end
         if self.plotted: self.plot()
 
@@ -459,7 +472,12 @@ class PlotCanvas:
         if not self.gc.has_key("data"):
             cmap = self.canvas.get_colormap()
             for k in fill_colors.keys():
-                self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(fill_colors[k]), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
+                v = fill_colors[k]
+                if type(v) == types.TupleType:
+                    self.gc[k] = (self.canvas.window.new_gc(foreground=cmap.alloc_color(v[0]), line_width=0, cap_style=gtk.gdk.CAP_BUTT),
+                                  self.canvas.window.new_gc(foreground=cmap.alloc_color(v[1]), line_width=0, cap_style=gtk.gdk.CAP_BUTT))
+                else:
+                    self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(v), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
             for k in gc_dashes.keys():
                 self.gc[k].line_style = gtk.gdk.LINE_ON_OFF_DASH
                 self.gc[k].set_dashes(0, gc_dashes[k])
@@ -490,23 +508,22 @@ class PlotCanvas:
     def cmd_motion(self, widget, event):
         try:
             x, y, state = widget.window.get_pointer()
-            if (state & gtk.gdk.BUTTON1_MASK):
+            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted:
                 if self.stuck and (abs(self.press_x - x) > 5):
                     self.stuck = False
-                    t0, t1 = self.get_time_range()
-                    self.initial_t0 = t0
-                    self.dt = t1 - t0
+                    self.drag_t0 = self.get_time_range()[0]
+                    self.drag_tscale = self.tscale
                 if not self.stuck:
-                    shift_x = (x - self.press_x) / self.tscale
-                    t0 = max(self.initial_t0 - shift_x, 0)
-                    self.set_time_range(t0, t0 + self.dt)
+                    shift_x = (x - self.press_x) / self.drag_tscale
+                    t0 = max(self.drag_t0 - shift_x, 0)
+                    self.set_time_range(t0, t0 + self.end - self.begin)
         except ValueError:
             pass
         return 1
     def _zoom_click(self, event, factor):
         x, y = self._itransform(event.x, event.y)
         t0, t1 = self.get_time_range()
-        new_dt = (t1 - t0) * factor
+        new_dt = (self.end - self.begin) * factor
         self.begin = max(x - new_dt * ((x - t0) / (t1 - t0)), 0)
         self.end = self.begin + new_dt
         self.plot()
@@ -578,12 +595,7 @@ class PlotCanvas:
         if self.conn is not None:
 
             # analyze time ranges
-            t0, t1 = self.begin, self.end
-            if t0 is None:
-                t0 = self.conn.time_range()[0]
-            if t1 is None:
-                t1 = self.conn.time_range()[1]
-            ranges = fix_range(t0, t1, 30.0 / self.plot_width)
+            ranges = fix_range(self.begin, self.end, 30.0 / self.plot_width)
             t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
 
             # analyze sequence ranges
@@ -616,10 +628,12 @@ class PlotCanvas:
             for l in self.conn.losses(self.dir, t0, t1):
                 x0 = max(t0, l.begin) * tscale + toff
                 x1 = min(t1, l.end) * tscale + toff
-                y0 = max(s0, l.seq) * sscale + soff + 1
+                y0 = max(s0, l.seq) * sscale + soff
                 y1 = min(s1, l.end_seq) * sscale + soff
-                drawable.draw_rectangle(self.gc[l.type], gtk.TRUE, x0, y1, x1 - x0, y0 - y1)
-                drawable.draw_rectangle(gc, gtk.FALSE, x0, y1, x1 - x0, y0 - y1)
+                gc1 = self.gc[l.type]
+                drawable.draw_rectangle(gc1[1], gtk.TRUE, x0, self.top_margin, x1 - x0 + 1, self.plot_height)
+                drawable.draw_rectangle(gc1[0], gtk.TRUE, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+                drawable.draw_rectangle(gc, gtk.FALSE, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
             
             # border box
             gc = self.gc["border"]
@@ -702,7 +716,7 @@ class PlotBox:
 
 
 class PlotFlowWindow:
-    def __init__(self):
+    def __init__(self, f):
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
         win.set_title("PlotFlow")
@@ -714,8 +728,8 @@ class PlotFlowWindow:
         self._init_menus(win, vbox)
         self.plotbox = PlotBox(vbox)
 
-        c = Connection(sys.stdin)
-        self.plotbox.set_connection(c, '>')
+        c = Connection(f)
+        self.plotbox.set_connection(c, '<')
 
         win.show()
 
@@ -753,7 +767,10 @@ class PlotFlowWindow:
 
 if __name__ == "__main__":
     try:
-        window = PlotFlowWindow()
+        if len(sys.argv) >= 2:
+            window = PlotFlowWindow(sys.argv[1])
+        else:
+            window = PlotFlowWindow(sys.stdin)
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
