@@ -142,8 +142,10 @@ FromDump_Fast::read_buffer_mmap(ErrorHandler *errh)
 	return error_helper(errh, String("stat: ") + strerror(errno));
 
     // check for end of file
+    // But return -1 if we have not mmaped before: it might be a pipe, not
+    // true EOF.
     if (_mmap_off >= statbuf.st_size)
-	return 0;
+	return (_mmap_off == 0 ? -1 : 0);
 
     // actually mmap
     _len = _mmap_unit;
@@ -239,9 +241,13 @@ FromDump_Fast::initialize(ErrorHandler *errh)
     if (_fd < 0)
 	return errh->error("%s: %s", _filename.cc(), strerror(errno));
 
-    if (read_buffer(errh) <= 0) {
+    int result = read_buffer(errh);
+    if (result < 0) {
 	uninitialize();
 	return -1;
+    } else if (result == 0) {
+	uninitialize();
+	return errh->error("%s: empty file", _filename.cc());
     } else if (_len < sizeof(fake_pcap_file_header)) {
 	uninitialize();
 	return errh->error("%s: not a tcpdump file (too short)", _filename.cc());
