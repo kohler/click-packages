@@ -1,0 +1,83 @@
+/*
+ * GetSSRC.{cc,hh} -- element copies 4 bytes inside the Click packet annotation.
+ * (when offset = 50 and packets pertain to an RTP flow, the SSRC field used
+ * inside the RTP protocol header is so extracted). The SSRC
+ * field identifies each single RTP flow - see RFC 3550.
+ *
+ * Example of usage in Click Configuration:
+ *
+ * elementclass class_RTP {
+ *    $ssrc, $dscp |
+ *    get::GetSSRC($ssrc);
+ *    rtp::RTPClassifier;
+ *    set::SetIPDSCP($dscp);
+ *    input->get[0]->rtp;
+ *    get[1]->[1]output;
+ *    rtp[0]->set->[0]output;
+ *    rtp[1]->[1]output;
+ *    }
+ *
+ *
+ * Giorgio Calarco, Carla Raffaelli
+ *
+ * Copyright (c) 2003 DEIS - Dept.of Electronics, Computer Science and Systems
+ * University of Bologna
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, subject to the conditions
+ * listed in the Click LICENSE file. These conditions include: you must
+ * preserve this copyright notice, and you cannot mention the copyright
+ * holders in advertising related to the Software without their permission.
+ * The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
+ * notice is a summary of the Click LICENSE file; the license in that file is
+ * legally binding.
+ */
+	 
+
+#include <click/config.h>
+#include "getssrc.hh"
+#include <click/confparse.hh>
+#include <click/error.hh>
+#include <clicknet/ip.h>
+
+GetSSRC::GetSSRC()
+  : Element(1, 2)
+{
+  MOD_INC_USE_COUNT;
+}
+
+GetSSRC::~GetSSRC()
+{
+  MOD_DEC_USE_COUNT;
+}
+
+int
+GetSSRC::configure(Vector<String> &conf, ErrorHandler *errh)
+{
+  return cp_va_parse(conf, this, errh,
+		     cpUnsigned, "byte offset of SSRC", &_offset,
+		     0);
+}
+
+void
+GetSSRC::push(int,Packet *p)
+{
+  if ((p->length())<(_offset+4)) output(1).push(p);
+    else  { 
+      for (i=0; i<4 ; i++) {
+          _ssrc=*(p->data() + _offset + i);
+          p->set_user_anno_c(8 + i , _ssrc);
+          }
+      output(0).push(p);
+      } 
+}
+
+EXPORT_ELEMENT(GetSSRC)
+ELEMENT_MT_SAFE(GetSSRC)
+.push(p);
+      } 
+}
+
+EXPORT_ELEMENT(GetSSRC)
+ELEMENT_MT_SAFE(GetSSRC)
