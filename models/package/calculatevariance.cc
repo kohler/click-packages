@@ -203,32 +203,53 @@ CalculateVariance::print_edf_function()
     fprintf(outfile,"#total number of packets %lld \n",_total_pkts);
     
     //to get edf i need to first sort the data
-    unsigned *permutation = new unsigned[_num_aggregates];
+    unsigned *permutation;
 
+    ::sorting_cv = this;
     if (_use_hash) {
+	permutation = new unsigned[_hashed_counters.size()];
 	int i=0;
 	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
 	    permutation[i] = iter.key();
+	    CounterEntry ent = iter.value();
+	    printf("key %d perm %d val %d\n",iter.key(),permutation[i],ent.pkt_count);
 	    i++;
 	}
 	assert(i < _num_aggregates);
+	printf("perm %d\n",permutation[0]);
+	qsort(permutation,i, sizeof(unsigned), &pktsorter);
+        printf("perm %d\n",permutation[0]);
+
     }else{
+	permutation = new unsigned[_num_aggregates];
 	for (unsigned i = 0; i < _num_aggregates; i++)
 	    permutation[i] = i;
+	qsort(permutation, _num_aggregates, sizeof(unsigned), &pktsorter);
+
     }
 
-    ::sorting_cv = this;
-    qsort(permutation, _num_aggregates, sizeof(unsigned), &pktsorter);
 
     double step = (double) 1/_num_aggregates;
     unsigned prev_edf_x_size;
     unsigned prev_count = 0;
-    double edf_y_val = step;
+    double edf_y_val = 0.0;
+    unsigned _num_aggregates_save;
 
-    if (_use_hash) 
-	prev_edf_x_size = (_hashed_counters.findp(permutation[0]))->pkt_count;
-    else
+    if (_use_hash) {
+	edf_y_val = step * (_num_aggregates - _hashed_counters.size());
+	fprintf(outfile,"%d\t %0.10f \t(%d)\n",0,edf_y_val,_num_aggregates - _hashed_counters.size());
+	prev_edf_x_size = (_hashed_counters.findp((int)permutation[0]))->pkt_count;
+	_num_aggregates_save = _num_aggregates;
+	_num_aggregates = _hashed_counters.size();
+
+	prev_edf_x_size = (_hashed_counters.findp( permutation[0] ))->pkt_count;
+
+    }else{
 	prev_edf_x_size = _counters[ permutation[0] ].pkt_count;
+    }
+
+    edf_y_val += step;
+     
 
     unsigned i = 1;
     CounterEntry *entry;
@@ -312,7 +333,7 @@ CalculateVariance::add_handlers()
 EXPORT_ELEMENT(CalculateVariance)
 
 #include <click/vector.cc>
-#include <click/hashmap.cc>
+#include <click/bighashmap.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class BigHashMap<IP6FlowID, CalculateVariance::CounterEntry>
 #endif
