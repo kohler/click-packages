@@ -9,7 +9,7 @@
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
-#include "aggregateipflows.hh"
+#include "elements/analysis/aggregateipflows.hh"
 #include "elements/analysis/toipsumdump.hh"
 CLICK_DECLS
 
@@ -652,7 +652,7 @@ CalculateFlows::add_handlers()
 }
 
 
-ELEMENT_REQUIRES(userlevel ToIPFlowDumps AggregateNotifier)
+ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(CalculateFlows)
 #include <click/bighashmap.cc>
 CLICK_ENDDECLS

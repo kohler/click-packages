@@ -4,8 +4,8 @@
 #include <click/element.hh>
 #include <click/bighashmap.hh>
 #include <click/handlercall.hh>
-#include "aggregatenotifier.hh"
-#include "toipflowdumps.hh"
+#include "elements/analysis/aggregatenotifier.hh"
+#include "elements/analysis/toipflowdumps.hh"
 CLICK_DECLS
 class ToIPSummaryDump;
 
