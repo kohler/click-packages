@@ -276,18 +276,21 @@ FromDump_Fast::initialize(ErrorHandler *errh)
     
     fake_pcap_file_header swapped_fh;
     const fake_pcap_file_header *fh = (const fake_pcap_file_header *)_buffer;
-    
-    if (fh->magic == FAKE_TCPDUMP_MAGIC)
+
+    // check magic number
+    if (fh->magic == FAKE_PCAP_MAGIC || fh->magic == FAKE_MODIFIED_PCAP_MAGIC)
 	_swapped = false;
     else {
 	swap_file_header(fh, &swapped_fh);
 	_swapped = true;
 	fh = &swapped_fh;
     }
-    if (fh->magic != FAKE_TCPDUMP_MAGIC) {
+    if (fh->magic != FAKE_PCAP_MAGIC && fh->magic != FAKE_MODIFIED_PCAP_MAGIC) {
 	uninitialize();
 	return errh->error("%s: not a tcpdump file (bad magic number)", _filename.cc());
     }
+    // compensate for extra crap appended to packet headers
+    _extra_pkthdr_crap = (fh->magic == FAKE_PCAP_MAGIC ? 0 : sizeof(fake_modified_pcap_pkthdr) - sizeof(fake_pcap_pkthdr));
 
     if (fh->version_major != FAKE_PCAP_VERSION_MAJOR) {
 	uninitialize();
@@ -335,9 +338,11 @@ bool
 FromDump_Fast::check_force_ip(Packet *p)
 {
     if (_linktype == FAKE_DLT_RAW) {
-	if (!p->ip_header())
+	if (!p->ip_header()) {
 	    // packet was too small for an IP header
-	    return (p->kill(), false);
+	    checked_output_push(1, p);
+	    return false;
+	}
     } else {
 	/* assert(_linktype == FAKE_DLT_EN10MB); */
 	const click_ether *ethh = (const click_ether *)p->data();
@@ -345,8 +350,10 @@ FromDump_Fast::check_force_ip(Packet *p)
 	if (p->length() < 14 + 20
 	    || (ethh->ether_type != htons(ETHERTYPE_IP)
 		&& ethh->ether_type != htons(ETHERTYPE_IP6))
-	    || (int)p->length() < 14 + (iph->ip_hl << 2))
-	    return (p->kill(), false);
+	    || (int)p->length() < 14 + (iph->ip_hl << 2)) {
+	    checked_output_push(1, p);
+	    return false;
+	}
 	p->set_ip_header(iph, iph->ip_hl << 2);
     }
     return true;
@@ -391,6 +398,9 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
 	return 0;
     }
 
+    // compensate for modified pcap versions
+    _pos += _extra_pkthdr_crap;
+    
     // checking sampling probability
     if (_sampling_prob < (1 << 28) && (uint32_t)(random() & 0xFFFFFFF) >= _sampling_prob) {
 	_pos += caplen;

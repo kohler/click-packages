@@ -107,6 +107,7 @@ class FromDump_Fast : public Element { public:
 #ifdef ALLOW_MMAP
     bool _mmap : 1;
 #endif
+    unsigned _extra_pkthdr_crap;
     unsigned _sampling_prob;
     int _minor_version;
     int _linktype;
