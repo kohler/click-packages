@@ -117,7 +117,7 @@ Default is false.
 
 =a
 
-AggregateIPFlows */
+AggregateIPFlows, MultiQ */
 
 class TCPCollector : public Element, public AggregateListener { public:
 
