@@ -2088,6 +2088,12 @@ class PlotCanvas:
         return self.adjustment
     def get_show_window(self):
         return self.show_window
+    def get_lit_link(self):
+        pd = self.lit.get("H.link", [])
+        if len(pd) == 0:
+            return None
+        else:
+            return pd[0]
 
     # setting properties
     def set_flowref(self, fref, keeptime=False):
@@ -2384,7 +2390,7 @@ class PlotCanvas:
         t0, t1 = self.get_plotted_time_range()
         if dir == self.dir:
             for l in self.conn.links(dir, t0, t1):
-                if l.t0 == p.time:
+                if abs(l.t0 - p.time) < 0.000001:
                     pp = self.conn.find_packet(l.t1, 1 - dir)
                     if pp is not None:
                         self._add_lit("H.link", (pp, 1 - dir))
@@ -2400,7 +2406,7 @@ class PlotCanvas:
                         self._add_lit("H.effect", (pp, 1 - dir))
         else:
             for l in self.conn.links(self.dir, t0, t1):
-                if l.t1 == p.time:
+                if abs(l.t1 - p.time) < 0.000001:
                     pp = self.conn.find_packet(l.t0, self.dir)
                     if pp is not None:
                         self._add_lit("H.link", (pp, self.dir))
@@ -3280,6 +3286,9 @@ class PlotFlowWindow:
                     desc += " (" + ordinal(p.dup_count) + " dup)"
                 if not p.pure_ack():
                     desc += " with data (+%d)" % (p.last_seq - p.seq)
+            lit_link = plotcanvas.get_lit_link()
+            if lit_link is not None:
+                desc += " (latency %.06fs)" % (abs(lit_link[0].time - p.time))
             self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
         elif h[0] == "bandwidth":
             bw = h[1]
