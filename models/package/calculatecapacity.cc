@@ -71,10 +71,12 @@ CalculateCapacity::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepo
 void
 CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 {
+    struct Peak *p;
     fprintf(f, "  <stream dir='%d' beginseq='%u' maxsize='%u'\n",
 	    direction, init_seq, max_size);
-    for(Vector<struct Peak *>::const_iterator iter = peaks.begin(); iter; iter++){
-	const struct Peak *p = *iter;
+    for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
+	iter!= peaks.end(); iter++){
+	p = *iter;
 	fprintf(f, "    <peak center='%lf' index='%d' area='%d'>\n",
 		p->center, p->index, p->area);
     }
@@ -129,7 +131,7 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	
 	if(maxi > histpoints){
 	    //no new ones
-	    return;
+	    break;
 	}
 
 	//remove surrounding areas
@@ -160,9 +162,15 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	peak->index = maxi;
 	peaks.push_back(peak);
 
+	//printf("added new peak: %d %lf %d\n", peak->area,
+	//      peak->center, peak->index);
+
 
 	npeaks--;
     }
+
+    //printf("done adding peaks\n");
+    fflush(stdout);
 
 }
 
@@ -293,11 +301,11 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	
 	_stream[0].fill_intervals();
 	_stream[0].histogram();
-	_stream[0].findpeaks(5);
+	_stream[0].findpeaks(7);
 	_stream[0].write_xml(f);
 	_stream[1].fill_intervals();
 	_stream[1].histogram();
-	_stream[1].findpeaks(5);
+	_stream[1].findpeaks(7);
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }
