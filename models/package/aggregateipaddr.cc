@@ -4,6 +4,7 @@
 #include "aggregateipaddr.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
+#include <click/router.hh>
 #include <packet_anno.hh>
 
 AggregateIPAddress::AggregateIPAddress()
