@@ -4,7 +4,7 @@
 #include <click/error.hh>
 #include <click/packet_anno.hh>
 #include <packet_anno.hh>
-#include <click/click_tcp.h>
+#include <clicknet/tcp.h>
 #include <click/router.hh>
 
 
