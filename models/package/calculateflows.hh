@@ -234,7 +234,7 @@ class CalculateFlows : public Element, public AggregateListener {
 					outfilenametmp.append("_xmts.gp",8);
 					outfilenameg[i+2] = outfilenametmp;
 					outfileg[i+2] = fopen(outfilenametmp.cc(), "w");
-	    			if (!outfileg[i]){
+	    			if (!outfileg[i+2]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
 	        			return;
 					}
@@ -244,7 +244,7 @@ class CalculateFlows : public Element, public AggregateListener {
 					outfilenametmp.append("_levt.gp",8);
 					outfilenameg[i+4] = outfilenametmp;
 					outfileg[i+4] = fopen(outfilenametmp.cc(), "w");
-	    			if (!outfileg[i]){
+	    			if (!outfileg[i+4]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
 	        			return;
 					}
@@ -254,7 +254,7 @@ class CalculateFlows : public Element, public AggregateListener {
 					outfilenametmp.append("_plevt.gp",9);
 					outfilenameg[i+6] = outfilenametmp;
 					outfileg[i+6] = fopen(outfilenametmp.cc(), "w");
-	    			if (!outfileg[i]){
+	    			if (!outfileg[i+6]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
 	        			return;
 					}
@@ -264,7 +264,7 @@ class CalculateFlows : public Element, public AggregateListener {
 					outfilenametmp.append("_dacks.gp",9);
 					outfilenameg[i+8] = outfilenametmp;
 					outfileg[i+8] = fopen(outfilenametmp.cc(), "w");
-	    			if (!outfileg[i]){
+	    			if (!outfileg[i+8]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
 	        			return;
 					}
@@ -279,7 +279,7 @@ class CalculateFlows : public Element, public AggregateListener {
 				}
 			}
 			if (gnuplot){  // check if gnuplot output is requested.
-				for (int i = 0 ; i < 8 ; i++){
+				for (int i = 0 ; i < 10 ; i++){
 					if (fclose(outfileg[i])){ 
     		    		click_chatter("error closing file!");
 					}
