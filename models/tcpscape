@@ -3323,22 +3323,29 @@ def initial_read_complete():
     idle_add(initial_sort_flows)
 
 def initial_sort_flows():
+    global all_connections, window, initial_aggregate
     all_connections.sort_by_loss_count()
-    window.set_flow(id=0)
+    if initial_aggregate is None:
+        window.set_flow(id=0)
+    else:
+        window.set_flow(fref=window.get_flowset().find_aggregate(initial_aggregate).opposite())
+
 
 if __name__ == "__main__":
     all_connections = FlowSet()
     try:
-        optlist, args = getopt.getopt(sys.argv[1:], "t:", ["time="])
+        optlist, args = getopt.getopt(sys.argv[1:], "t:f:", ["time=", "flow="])
         window = PlotFlowWindow(all_connections)
         for o, a in optlist:
             if o == "-t" or o == "--time":
                 window.time_range = map(float, a.split(':'))
                 window.time_range[1] -= window.time_range[0]
+            elif o == "-f" or o == "--flow":
+                initial_aggregate = int(a)
         if len(args) >= 1:
             f = file(args[0])
-            p = ConnectionReader(flowset=all_connections).read_process(sys.argv[1], f)
-            window.watch_process(p, complete=initial_read_complete, text="Reading " + sys.argv[1] + "...")
+            p = ConnectionReader(flowset=all_connections).read_process(args[0], f)
+            window.watch_process(p, complete=initial_read_complete, text="Reading " + args[0] + "...")
         else:
             p = ConnectionReader(flowset=all_connections).read_process("<stdin>", sys.stdin)
             window.watch_process(p, complete=initial_read_complete, text="Reading <stdin>...")
