@@ -171,6 +171,6 @@ AggregateFirst::aggregate_notify(uint32_t agg, AggregateEvent event, const Packe
     }
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(AggregateFirst)
 CLICK_ENDDECLS

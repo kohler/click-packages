@@ -576,7 +576,7 @@ AggregateIPFlows::add_handlers()
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
 }
 
-ELEMENT_REQUIRES(userlevel AggregateNotifier)
+ELEMENT_REQUIRES(userlevel AggregateNotifier false)
 EXPORT_ELEMENT(AggregateIPFlows)
 #include <click/bighashmap.cc>
 CLICK_ENDDECLS

@@ -500,7 +500,7 @@ AggregateIP::pull(int)
     return p;
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(AggregateIP)
 #include <click/vector.cc>
 CLICK_ENDDECLS

@@ -73,7 +73,7 @@ AggregateLength::pull(int)
     return p;
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(AggregateLength)
 
 #include <click/vector.cc>

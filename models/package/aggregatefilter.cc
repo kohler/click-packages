@@ -162,6 +162,6 @@ AggregateFilter::push(int, Packet *p)
     checked_output_push(port, p);
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(AggregateFilter)
 CLICK_ENDDECLS
