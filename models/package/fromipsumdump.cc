@@ -80,7 +80,7 @@ FromIPSummaryDump::error_helper(ErrorHandler *errh, const char *x)
     if (errh)
 	errh->error("%s: %s", _filename.cc(), x);
     else
-	click_chatter("%s: %s", declaration().cc(), x);
+	click_chatter("%s: %s", id().cc(), x);
     return -1;
 }
 
@@ -229,8 +229,10 @@ FromIPSummaryDump::bang_data(const String &line, ErrorHandler *errh)
 	int what = ToIPSummaryDump::parse_content(word);
 	if (what > W_NONE && what < W_LAST)
 	    _contents.push_back(what);
-	else
-	    error_helper(errh, "unknown content type `" + word + "'");
+	else {
+	    error_helper(errh, "warning: unknown content type `" + word + "'");
+	    _contents.push_back(W_NONE);
+	}
     }
 
     if (_contents.size() == 0)
@@ -255,7 +257,7 @@ FromIPSummaryDump::read_packet(ErrorHandler *errh)
     
     String line;
     Vector<String> words;
-    int j;
+    uint32_t j;
     
     while (1) {
 
@@ -286,61 +288,80 @@ FromIPSummaryDump::read_packet(ErrorHandler *errh)
 	    && (uint32_t)(random() & ((1 << SAMPLING_SHIFT) - 1)) >= _sampling_prob)
 	    continue;
     
-	bool ok = true;
-	for (int i = 0; i < _contents.size() && ok; i++)
+	int ok = 0;
+	for (int i = 0; i < _contents.size(); i++)
 	    switch (_contents[i]) {
 
 	      case W_TIMESTAMP:
-		ok = cp_timeval(words[i], &q->timestamp_anno());
+		ok += cp_timeval(words[i], &q->timestamp_anno());
 		break;
 
 	      case W_TIMESTAMP_SEC:
-		ok = cp_integer(words[i], (int32_t *)&q->timestamp_anno().tv_sec);
+		ok += cp_integer(words[i], (int32_t *)&q->timestamp_anno().tv_sec);
 		break;
 
 	      case W_TIMESTAMP_USEC:
-		ok = cp_integer(words[i], (int32_t *)&q->timestamp_anno().tv_usec);
+		ok += cp_integer(words[i], (int32_t *)&q->timestamp_anno().tv_usec);
 		break;
 		
 	      case W_SRC:
-		ok = cp_ip_address(words[i], (unsigned char *)&iph->ip_src);
+		ok += cp_ip_address(words[i], (unsigned char *)&iph->ip_src);
 		break;
 
 	      case W_DST:
-		ok = cp_ip_address(words[i], (unsigned char *)&iph->ip_dst);
+		ok += cp_ip_address(words[i], (unsigned char *)&iph->ip_dst);
 		break;
 		
 	      case W_LENGTH:
-		ok = (cp_integer(words[i], &j) && j >= 0 && j <= 0xFFFF);
+		ok += (cp_unsigned(words[i], &j) && j <= 0xFFFF);
 		iph->ip_len = htons(j);
 		break;
 		
-	      case W_PROTO:
-		ok = (cp_integer(words[i], &j) && j >= 0 && j <= 255);
-		iph->ip_p = j;
-		break;
+	      case W_PROTO: {
+		  const String &w = words[i];
+		  if (w.length() == 1) {
+		      if (w[0] == 'T')
+			  j = IP_PROTO_TCP;
+		      else if (w[0] == 'U')
+			  j = IP_PROTO_UDP;
+		      else if (w[0] == 'I')
+			  j = IP_PROTO_ICMP;
+		      else if (w[0] >= '0' && w[0] <= '9')
+			  j = w[0] - '0';
+		      else
+			  break;
+		  } else if (cp_unsigned(words[i], &j) && j <= 255)
+		      /* nada */;
+		  else
+		      break;
+		  iph->ip_p = j;
+		  ok++;
+		  break;
+	      }
 
 	      case W_IPID:
-		ok = (cp_integer(words[i], &j) && j >= 0 && j <= 0xFFFF);
-		iph->ip_id = htons(j);
+		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
+		    iph->ip_id = htons(j), ok++;
 		break;
 
-	      case W_SPORT: {
-		  ok = (cp_integer(words[i], &j) && j >= 0 && j <= 0xFFFF);
-		  click_udp *udph = (click_udp *)q->transport_header();
-		  udph->uh_sport = htons(j);
-		  break;
-	      }
+	      case W_SPORT:
+		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
+		    q->udp_header()->uh_sport = htons(j), ok++;
+		break;
 
-	      case W_DPORT: {
-		  ok = (cp_integer(words[i], &j) && j >= 0 && j <= 0xFFFF);
-		  click_udp *udph = (click_udp *)q->transport_header();
-		  udph->uh_dport = htons(j);
-		  break;
-	      }
+	      case W_DPORT:
+		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
+		    q->udp_header()->uh_dport = htons(j), ok++;
+		break;
 
-	      default:
-		ok = false;
+	      case W_TCP_SEQ:
+		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
+		    q->tcp_header()->th_seq = htonl(j), ok++;
+		break;
+
+	      case W_TCP_ACK:
+		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
+		    q->tcp_header()->th_ack = htonl(j), ok++;
 		break;
 
 	    }

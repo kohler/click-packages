@@ -22,6 +22,7 @@
 #include <click/error.hh>
 #include <click/click_ip.h>
 #include <click/click_udp.h>
+#include <click/click_tcp.h>
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -130,7 +131,8 @@ ToIPSummaryDump::uninitialize()
 static const char *content_names[] = {
     "??", "timestamp", "ts sec", "ts usec",
     "ip src", "ip dst", "ip len", "ip proto", "ip id",
-    "sport", "dport",
+    "sport", "dport", "tcp seq", "tcp ack", "tcp flags",
+    "payload len"
 };
 
 const char *
@@ -165,6 +167,14 @@ ToIPSummaryDump::parse_content(const String &word)
 	return W_IPID;
     else if (word == "proto" || word == "ip proto")
 	return W_PROTO;
+    else if (word == "tcp seq" || word == "tcp seqno")
+	return W_TCP_SEQ;
+    else if (word == "tcp ack" || word == "tcp ackno")
+	return W_TCP_ACK;
+    else if (word == "tcp flags")
+	return W_TCP_FLAGS;
+    else if (word == "payload len" || word == "payload length")
+	return W_PAYLOAD_LENGTH;
     else
 	return W_NONE;
 }
@@ -172,6 +182,11 @@ ToIPSummaryDump::parse_content(const String &word)
 bool
 ToIPSummaryDump::ascii_summary(Packet *p, StringAccum &sa) const
 {
+    // Not all of these will be valid, but we calculate them just once.
+    const click_ip *iph = p->ip_header();
+    const click_tcp *tcph = p->tcp_header();
+    const click_udp *udph = p->udp_header();
+    
     for (int i = 0; i < _contents.size(); i++) {
 	if (i)
 	    sa << ' ';
@@ -187,51 +202,79 @@ ToIPSummaryDump::ascii_summary(Packet *p, StringAccum &sa) const
 	  case W_TIMESTAMP_USEC:
 	    sa << p->timestamp_anno().tv_usec;
 	    break;
-	  case W_SRC: {
-	      const click_ip *iph = p->ip_header();
-	      if (!iph) return false;
-	      sa << IPAddress(iph->ip_src);
+	  case W_SRC:
+	    if (!iph) goto no_data;
+	    sa << IPAddress(iph->ip_src);
+	    break;
+	  case W_DST:
+	    if (!iph) goto no_data;
+	    sa << IPAddress(iph->ip_dst);
+	    break;
+	  case W_SPORT:
+	    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP))
+		goto no_data;
+	    sa << ntohs(udph->uh_sport);
+	    break;
+	  case W_DPORT:
+	    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP))
+		goto no_data;
+	    sa << ntohs(udph->uh_dport);
+	    break;
+	  case W_LENGTH:
+	    if (!iph) goto no_data;
+	    sa << ntohs(iph->ip_len);
+	    break;
+	  case W_IPID:
+	    if (!iph) goto no_data;
+	    sa << ntohs(iph->ip_id);
+	    break;
+	  case W_PROTO:
+	    if (!iph) goto no_data;
+	    switch (iph->ip_p) {
+	      case IP_PROTO_TCP:	sa << 'T'; break;
+	      case IP_PROTO_UDP:	sa << 'U'; break;
+	      case IP_PROTO_ICMP:	sa << 'I'; break;
+	      default:			sa << (int)(iph->ip_p); break;
+	    }
+	    break;
+	  case W_TCP_SEQ:
+	    if (!iph || iph->ip_p != IP_PROTO_TCP)
+		goto no_data;
+	    sa << ntohl(tcph->th_seq);
+	    break;
+	  case W_TCP_ACK:
+	    if (!iph || iph->ip_p != IP_PROTO_TCP)
+		goto no_data;
+	    sa << ntohl(tcph->th_ack);
+	    break;
+	  case W_TCP_FLAGS: {
+	      if (!iph || iph->ip_p != IP_PROTO_TCP)
+		  goto no_data;
+	      int flags = tcph->th_flags;
+	      for (int i = 0; i < 7; i++)
+		  if (flags & (1 << i))
+		      sa << tcp_flags_word[i];
+	      if (!flags)
+		  sa << '.';
 	      break;
 	  }
-	  case W_DST: {
-	      const click_ip *iph = p->ip_header();
-	      if (!iph) return false;
-	      sa << IPAddress(iph->ip_dst);
+	  case W_PAYLOAD_LENGTH: {
+	      uint16_t len;
+	      if (const click_ip *iph = p->ip_header()) {
+		  len = ntohs(iph->ip_len) - p->ip_header_length();
+		  if (iph->ip_p == IP_PROTO_TCP)
+		      len -= (tcph->th_off << 2);
+		  else if (iph->ip_p == IP_PROTO_UDP)
+		      len -= sizeof(click_udp);
+	      } else
+		  len = p->length();
+	      sa << len;
 	      break;
 	  }
-	  case W_SPORT: {
-	      const click_ip *iph = p->ip_header();
-	      const click_udp *udph = (const click_udp *)p->transport_header();
-	      if (!iph || !udph) return false;
-	      sa << ntohs(udph->uh_sport);
-	      break;
-	  }
-	  case W_DPORT: {
-	      const click_ip *iph = p->ip_header();
-	      const click_udp *udph = (const click_udp *)p->transport_header();
-	      if (!iph || !udph) return false;
-	      sa << ntohs(udph->uh_dport);
-	      break;
-	  }
-	  case W_LENGTH: {
-	      const click_ip *iph = p->ip_header();
-	      if (!iph) return false;
-	      sa << ntohs(iph->ip_len);
-	      break;
-	  }
-	  case W_IPID: {
-	      const click_ip *iph = p->ip_header();
-	      if (!iph) return false;
-	      sa << ntohs(iph->ip_id);
-	      break;
-	  }
-	  case W_PROTO: {
-	      const click_ip *iph = p->ip_header();
-	      if (!iph) return false;
-	      sa << (int)(iph->ip_p);
-	      break;
-	  }
-
+	  no_data:
+	  default:
+	    sa << '-';
+	    break;
 	}
     }
     sa << '\n';

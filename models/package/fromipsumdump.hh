@@ -92,9 +92,10 @@ class FromIPSummaryDump : public Element { public:
     void run_scheduled();
     Packet *pull(int);
   
-    enum Content {	// must agree with FromIPSummaryDump
+    enum Content {	// must agree with ToIPSummaryDump
 	W_NONE, W_TIMESTAMP, W_TIMESTAMP_SEC, W_TIMESTAMP_USEC,
-	W_SRC, W_DST, W_LENGTH, W_PROTO, W_IPID, W_SPORT, W_DPORT,
+	W_SRC, W_DST, W_LENGTH, W_PROTO, W_IPID,
+	W_SPORT, W_DPORT, W_TCP_SEQ, W_TCP_ACK,
 	W_LAST
     };
 
