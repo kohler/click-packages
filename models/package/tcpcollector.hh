@@ -8,7 +8,109 @@
 #include "elements/analysis/aggregatenotifier.hh"
 CLICK_DECLS
 class HandlerCall;
-#define TCPCOLLECTOR_XML 1
+#if CLICK_USERLEVEL
+# define TCPCOLLECTOR_XML 1
+#endif
+
+/*
+=c
+
+TCPCollector([TRACEINFO, I<keywords> TRACEINFO, SOURCE, TRACEINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACKLATENCY])
+
+=s
+
+collects information about TCP flows
+
+=d
+
+Expects TCP packets with aggregate annotations set as if by AggregateIPFlows.
+Packets must have timestamps in increasing order.  Collects information about
+the TCP connections, including a small record for every packet, and can
+optionally write that information to an XML file.  Other elements can call
+TCPCollector methods to write other information to the XML file, or to attach
+more data to each packet record or connection record.
+
+Keywords are:
+
+=over 8
+
+=item TRACEINFO
+
+Filename.  If given, then output information about each aggregate to that
+file, in an XML format.  The XML format looks like this:
+
+   <trace file='/Users/kohler/click-pkg/models/examples/sample.dump'>
+   <flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909' duration='131.647561' filepos='24'>
+     <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' sentsackok='yes'>
+     </stream>
+     <stream dir='1' ndata='2487' nack='0' beginseq='2831743689' seqlen='3548305'>
+     </stream>
+   </flow>
+   ...
+   </trace>
+
+=item SOURCE
+
+Element. If provided, the results of that element's 'C<filename>' and
+'C<packet_filepos>' read handlers will be recorded in the TRACEINFO dump.  (It
+is not an error if the element doesn't have those handlers.)  The
+'C<packet_filepos>' results may be particularly useful, since a reader can use
+those results to skip ahead through a trace file.  'C<filename>' is stored as
+a C<file> attribute on the C<trace> element, and 'C<packet_filepos>' is stored
+as C<filepos> attributes on any C<flow> elements.
+
+=item NOTIFIER
+
+An AggregateNotifier element, such as AggregateIPFlows.
+CalculateTCPLossEvents registers with the notifier to receive "delete
+aggregate" messages.  It uses these messages to delete state.  If you don't
+provide a NOTIFIER, CalculateTCPLossEvents will keep some state for every
+aggregate it sees until the router quits.
+
+=item IP_ID
+
+Boolean.  If true, then use IP ID to distinguish network duplicates from
+retransmissions.  Default is true.
+
+=item PACKET
+
+Boolean.  If true, then write summaries of each data packet to the TRACEINFO
+file, in "C<E<lt>packetE<gt>>" elements nested inside each
+"C<E<lt>streamE<gt>>".  Each line has the format "I<timestamp> I<seq>
+I<seqlen> I<ack>", where I<timestamp> is the packet's timestamp, I<seq> its
+initial sequence number, I<seqlen> its sequence number length, and I<ack> its
+acknowledgement number.  Default is false.
+
+=item FULLRCVWINDOW
+
+Boolean.  If true, then write summaries of any data packets that fill the
+receiver's advertised window to the TRACEINFO file, in
+"C<E<lt>fullrcvwindowE<gt>>" XML elements nested inside each
+"C<E<lt>streamE<gt>>".  Each line has the format "I<timestamp> I<endseq>",
+where I<timestamp> is the packet's timestamp and I<endseq> is its end sequence
+number.  Default is false.
+
+=item WINDOWPROBE
+
+Boolean.  If true, then write summaries of any window probes to the TRACEINFO
+file, in "C<E<lt>windowprobe<gt>>" XML elements nested inside each
+"C<E<lt>streamE<gt>>".  Each line has the format "I<timestamp> I<endseq>",
+where I<timestamp> is the packet's timestamp and I<endseq> is its end sequence
+number.  Default is false.
+
+=back
+
+=e
+
+   FromDump(-, STOP true, FORCE_IP true)
+      -> IPClassifier(tcp)
+      -> af :: AggregateIPFlows
+      -> TCPCollector(tcpinfo.xml, NOTIFIER af)
+      -> Discard;
+
+=a
+
+AggregateIPFlows */
 
 class TCPCollector : public Element, public AggregateListener { public:
 
