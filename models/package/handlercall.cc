@@ -6,6 +6,8 @@
 #include <click/router.hh>
 #include <click/error.hh>
 
+const char * const HandlerCall::READ_MARKER = "r";
+
 int
 HandlerCall::initialize(String what, bool write, Element *context, ErrorHandler *errh)
 {
@@ -14,21 +16,23 @@ HandlerCall::initialize(String what, bool write, Element *context, ErrorHandler 
     _value = String();
 
     if (write)
-	return cp_va_space_parse(what, context, errh,
-				 cpWriteHandler, "write handler name", &_e, &_hi,
-				 cpOptional,
-				 cpString, "value", &_value,
-				 0);
+	return cp_va_space_parse
+	    (what, context, errh,
+	     cpWriteHandler, "write handler name", &_e, &_hi,
+	     cpOptional,
+	     cpString, "value", &_value,
+	     0);
     else
-	return cp_va_space_parse(what, context, errh,
-				 cpReadHandler, "read handler name", &_e, &_hi,
-				 0);
+	return cp_va_space_parse
+	    (what, context, errh,
+	     cpReadHandler, "read handler name", &_e, &_hi,
+	     0);
 }
 
 String
 HandlerCall::call_read(Element *context)
 {
-    if (!ok())
+    if (!ok() || !is_read())
 	return String();
     const Router::Handler &h = context->router()->handler(_hi);
     return h.call_read(_e);
@@ -37,10 +41,10 @@ HandlerCall::call_read(Element *context)
 int
 HandlerCall::call_write(Element *context, ErrorHandler *errh)
 {
-    if (!ok())
-	return String();
     if (!errh)
 	errh = ErrorHandler::default_handler();
+    if (!ok() || is_read())
+	return errh->error("not a write handler");
     const Router::Handler &h = context->router()->handler(_hi);
     return h.call_write(_value, _e, errh);
 }

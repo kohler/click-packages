@@ -25,7 +25,7 @@ class HandlerCall { public:
     
   private:
     
-    static const char * const READ_MARKER = "r";
+    static const char * const READ_MARKER;
     
     Element *_e;
     int _hi;
