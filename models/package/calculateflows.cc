@@ -372,7 +372,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 }
 
 bool
-CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, uint32_t &dupcount) const
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const
 {
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp > 0.8 * min_ack_latency)
@@ -380,38 +380,39 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 
     // go over previous packets, marking them as delivered
     if (!k_time || k_time != k_cumack) {
-	Pkt *k_loss = (k_time ? k_time->prev : pkt_tail);
-	for (Pkt *k = k_loss; k && k != k_cumack; k = k->prev) {
+	Pkt *k_time_hint = k_time;
+	bool ack_jump_section = (ackk->prev && ackk->prev->ack != ackk->ack);
+	uint32_t ack_jump_end_seq = ackk->ack;
+	for (Pkt *k = (k_time ? k_time->prev : pkt_tail); k && k != k_cumack; k = k->prev) {
 	    if (SEQ_LEQ(k->end_seq, ackk->ack) && k->seq != k->end_seq) {
 		// can we find an already-received packet covering these
 		// sequence numbers?
-		for (Pkt *kk = k->next; kk != k_time; kk = kk->next)
+		for (Pkt *kk = k->next; kk != k_time_hint; kk = kk->next)
 		    if ((kk->flags & Pkt::F_DELIVERED)
 			&& SEQ_LEQ(kk->seq, k->seq)
 			&& SEQ_GEQ(kk->end_seq, k->end_seq))
 			goto not_delivered;
+		
 		// otherwise, this puppy was delivered
 		k->flags |= Pkt::F_DELIVERED;
-#if 0
-		// does a preexisting duplicate count indicate more
-		// deliveries?
-		if (dupcount > 0 && SEQ_GT(k->seq, ackk->prev->ack)) {
-		    if (init_seq == 2831743689)
-			click_chatter("%{timeval}: dupcount %u", &k->timestamp, dupcount);
-		    while (k_loss
-			   && (!(k_loss->flags & Pkt::F_NONORDERED) || SEQ_GEQ(k_loss->seq, ackk->prev->ack))
-			   && ((k_loss->flags & Pkt::F_DELIVERED) || k_loss->seq == k_loss->end_seq))
-			k_loss = k_loss->prev;
-		    if (k_loss && !(k_loss->flags & Pkt::F_DELIVERED) && SEQ_GEQ(k_loss->seq, ackk->prev->ack)) {
-			if (init_seq == 2831743689)
-			    click_chatter("%{timeval}: did it @ %u", &k_loss->timestamp, k_loss->seq);
-			k_loss->flags |= Pkt::F_DELIVERED;
-			dupcount--;
-		    }
+
+		// if the ack number jumped inside a reordered section,
+		// previous packets were delivered too
+		if (ack_jump_section
+		    && (k->flags & Pkt::F_NONORDERED)
+		    && SEQ_LEQ(k->end_seq, ack_jump_end_seq)
+		    && SEQ_GT(k->seq, ackk->prev->ack)) {
+		    k_time_hint = k;
+		    ack_jump_end_seq = k->seq;
 		}
-#endif
+
 	      not_delivered: ;
 	    }
+
+	    // we have left the ack jump section if we've encountered a packet
+	    // starting at or after the previous ack
+	    if (ack_jump_section && SEQ_LEQ(k->seq, ackk->prev->ack))
+		ack_jump_section = false;
 	}
     }
     
@@ -429,15 +430,13 @@ CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
     Pkt *k_cumack = 0, *k_time = pkt_head;
     uint32_t last_ack = 0;
-    uint32_t dupcount = 0;
     for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
 	if (last_ack != ackk->ack) {
-	    if (!mark_delivered(ackk, k_cumack, k_time, dupcount))
+	    if (!mark_delivered(ackk, k_cumack, k_time))
 		break;
 	    else
 		last_ack = ackk->ack;
-	} else if (ackk->seq == ackk->end_seq)
-	    dupcount++;
+	}
 }
 
 bool
