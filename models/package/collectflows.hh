@@ -114,7 +114,7 @@ class CollectTCPFlows::Flow { public:
     bool _is_primary : 1;
     bool _flow_over : 1;
     bool _free_tracked : 1;
-    
+ 
     Flow *_free_next;
 
     Flow(const IPFlowID &, bool);
