@@ -289,10 +289,10 @@ struct CalculateFlows::StreamInfo {
 				// event
     
     uint32_t total_packets;	// total number of packets seen (incl. rexmits)
+    uint32_t ack_packets;	// total number of pure acks seen
     uint32_t total_seq;		// total sequence space seen (incl. rexmits)
     
     uint32_t loss_events;	// number of loss events
-    uint32_t possible_loss_events; // number of possible loss events
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
 

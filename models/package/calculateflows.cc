@@ -20,8 +20,8 @@ CalculateFlows::StreamInfo::StreamInfo()
       sent_window_probe(false), sent_sackok(false), time_confusion(false),
       init_seq(0), max_seq(0), max_ack(0),
       max_live_seq(0), max_loss_seq(0),
-      total_packets(0), total_seq(0),
-      loss_events(0), possible_loss_events(0), false_loss_events(0),
+      total_packets(0), ack_packets(0), total_seq(0),
+      loss_events(0), false_loss_events(0),
       event_id(0),
       end_rcv_window(0), rcv_window_scale(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0),
@@ -170,6 +170,8 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     // update counters
     total_packets++;
     total_seq += np->end_seq - np->seq;
+    if (np->end_seq - np->seq == 0)
+	ack_packets++;
     
     // SYN processing
     if (tcph->th_flags & TH_SYN) {
@@ -637,8 +639,6 @@ CalculateFlows::LossInfo::unparse(StringAccum &sa, const StreamInfo *cstr, const
     // figure out loss type, count loss
     if (type == LOSS)
 	sa << "loss ";
-    else if (type == POSSIBLE_LOSS)
-	sa << "ploss ";
     else
 	sa << "floss ";
 
@@ -683,8 +683,6 @@ CalculateFlows::StreamInfo::output_loss(ConnInfo *conn, CalculateFlows *cf)
     // figure out loss type, count loss
     if (loss.type == LOSS)
 	loss_events++;
-    else if (loss.type == POSSIBLE_LOSS)
-	possible_loss_events++;
     else {
 	assert(loss.type == FALSE_LOSS);
 	false_loss_events++;
@@ -761,8 +759,6 @@ CalculateFlows::LossInfo::unparse_xml(StringAccum &sa) const
     sa << "    <anno type='";
     if (type == LOSS)
 	sa << "loss' ";
-    else if (type == POSSIBLE_LOSS)
-	sa << "ploss' ";
     else
 	sa << "floss' ";
 
@@ -828,7 +824,7 @@ void
 CalculateFlows::StreamInfo::write_reordered_xml(FILE *f, WriteFlags write_flags, int nreordered) const
 {
     if ((write_flags & WR_REORDERED) && nreordered) {
-	fprintf(f, "    <reordered count='%d'>\n", nreordered);
+	fprintf(f, "    <reordered n='%d'>\n", nreordered);
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if ((k->flags & Pkt::F_REORDER)
 		|| (k->caused_ack && k->next && k->next->caused_ack
@@ -837,7 +833,7 @@ CalculateFlows::StreamInfo::write_reordered_xml(FILE *f, WriteFlags write_flags,
 	    }
 	fprintf(f, "    </reordered>\n");
     } else
-	fprintf(f, "    <reordered count='%d' />\n", nreordered);
+	fprintf(f, "    <reordered n='%d' />\n", nreordered);
 }
 
 void
@@ -868,13 +864,13 @@ void
 CalculateFlows::StreamInfo::write_undelivered_xml(FILE *f, WriteFlags write_flags, int nundelivered) const
 {
     if ((write_flags & WR_UNDELIVERED) && nundelivered) {
-	fprintf(f, "    <undelivered count='%d'>\n", nundelivered);
+	fprintf(f, "    <undelivered n='%d'>\n", nundelivered);
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (!(k->flags & Pkt::F_DELIVERED) && k->seq != k->end_seq)
 		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
 	fprintf(f, "    </undelivered>\n");
     } else
-	fprintf(f, "    <undelivered count='%d' />\n", nundelivered);
+	fprintf(f, "    <undelivered n='%d' />\n", nundelivered);
 }
 
 void
@@ -889,8 +885,9 @@ CalculateFlows::StreamInfo::write_packets_xml(FILE *f) const
 void
 CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_flags) const
 {
-    fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
-	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
+    fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u' nloss='%u' nfloss='%u'",
+	    direction, total_packets - ack_packets, ack_packets,
+	    init_seq, total_seq, loss_events, false_loss_events);
     if (have_ack_latency)
 	fprintf(f, " minacklatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
     if (sent_sackok)
