@@ -93,7 +93,6 @@ class CalculateVariance : public Element {
     unsigned top_agg_index;
 
     String _outfilename;
-    String _topaggoutfilename;
 
 };
 

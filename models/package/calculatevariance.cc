@@ -31,7 +31,6 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    cpTimeval, "interval in struct timeval", &_interval,
 		    cpUnsigned, "number of aggregates expected", &naggregates,
 		    cpFilename, "filename for output",&_outfilename,
-		    cpFilename, "filename for output of topagg",&_topaggoutfilename,
 		    cpKeywords,
 		    "BITS", cpBool, "number of aggregates is in bits?", &bits,
 		    "USEHASH",cpBool,"use hash table for classifying aggregates?",&_use_hash,
@@ -311,9 +310,9 @@ void
 CalculateVariance::print_top_aggregates()
 {
 
-    FILE *outfile = fopen(_topaggoutfilename.cc(), "w");
+    FILE *outfile = fopen(_outfilename.cc(), "w");
     if (!outfile) {
-        click_chatter("%s: %s", _topaggoutfilename.cc(), strerror(errno));
+        click_chatter("%s: %s", _outfilename.cc(), strerror(errno));
 	return;
     }
 
