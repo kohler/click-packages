@@ -7,21 +7,55 @@ from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat
 
-_screen_fill_colors = {
-    "data": "red", "ack": "olive drab", "dataack": "blue",
-    "loss": "gold", "loss.bg": "khaki",
-    "ploss": "mint cream",
-    "floss": "grey80", "floss.bg": "grey90",
-    "border": "dark grey", "lossborder": "yellow",
-    "bg": "white"
-}
-_screen_dashes = {
-    "lossborder": [4, 4]
-}
-_postscript_fill_colors = { }
-_postscript_line_widths = {
-    "data": 0.5, "ack": 0.5, "dataack": 0.5
-}
+class LineDescriptor:
+    def __init__(self, r, g, b, **args):
+        self.red = r
+        self.green = g
+        self.blue = b
+        self.attrs = args
+    def __getattr__(self, name):
+        if name in self.attrs:
+            return self.attrs[name]
+        elif name == "dash":
+            return []
+        elif name == "linewidth":
+            return 1
+
+_screen_style = {
+    "data": LineDescriptor(1, 0, 0),
+    "ack": LineDescriptor(0.42, 0.56, 0.14),
+    "dataack": LineDescriptor(0, 0, 1),
+    
+    "loss": LineDescriptor(1, 0.84, 0),
+    "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
+    "ploss": LineDescriptor(0.56, 0.74, 0.56),
+    "ploss.bg": LineDescriptor(0.66, 0.9, 0.66),
+    "floss": LineDescriptor(0.8, 0.8, 0.8),
+    "floss.bg": LineDescriptor(0.9, 0.9, 0.9),
+    "lossborder": LineDescriptor(1, 1, 0, dash=[4, 4]),
+
+    "border": LineDescriptor(0.66, 0.66, 0.66),
+    "bg": LineDescriptor(1, 1, 1),
+    "label": LineDescriptor(0.66, 0.66, 0.66)
+    }
+
+_postscript_style = {
+    "data": LineDescriptor(1, 0, 0, linewidth=0.5),
+    "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
+    "dataack": LineDescriptor(0, 0, 1, linewidth=0.5),
+    
+    "loss": LineDescriptor(1, 0.84, 0),
+    "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
+    "ploss": LineDescriptor(0.56, 0.74, 0.56),
+    "ploss.bg": LineDescriptor(0.66, 0.9, 0.66),
+    "floss": LineDescriptor(0.8, 0.8, 0.8),
+    "floss.bg": LineDescriptor(0.9, 0.9, 0.9),
+    "lossborder": LineDescriptor(1, 1, 0, dash=[4, 4]),
+
+    "border": LineDescriptor(0, 0, 0),
+    "bg": LineDescriptor(1, 1, 1),
+    "label": LineDescriptor(0, 0, 0)
+    }
 
 
 def frange(start, stop, step):
@@ -41,6 +75,11 @@ def uncompressed_file(filename):
         return gzip.GzipFile(fileobj=f)
     else:
         return f
+
+def stock_image(stock_id):
+    image = gtk.Image()
+    image.set_from_stock(stock_id, gtk.ICON_SIZE_SMALL_TOOLBAR)
+    return image
 
 
 class Packet:
@@ -233,6 +272,7 @@ class Connection:
         self.available = True
         del self.read_state
         del self.read_data
+        self.loss_count = [len(self.loss[0]), len(self.loss[1])]
         return self
     
     def first_index_after(self, time, dir=None):
@@ -407,7 +447,6 @@ class FlowSet:
     def __init__(self, f=None):
         self.conns = []
         self.flows = []
-        self.sum_loss_count = [0, 0, 0]
         if type(f) == types.StringType:
             slash = f.rfind('/')
             if slash >= 0: dir = f[:slash+1]
@@ -489,9 +528,6 @@ class FlowSet:
             try:
                 d, l, pl, fl = int(attrs["dir"]), int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
                 self.reading_connection.loss_count[d] += l + pl + fl
-                self.sum_loss_count[0] += l
-                self.sum_loss_count[1] += pl
-                self.sum_loss_count[2] += fl
             except KeyError:
                 pass
 
@@ -514,6 +550,7 @@ class FlowSet:
         return len(self.flows)
 
     def append(self, conn):
+        conn.load()
         self.conns.append(conn)
         self.flows.append(FlowRef(conn, 0))
         self.flows.append(FlowRef(conn, 1))
@@ -784,16 +821,17 @@ class PlotCanvas_ScreenDrawable:
     def gc(self, name):
         if name in _screen_gcs:
             return _screen_gcs[name]
-        if name not in _screen_fill_colors:
+        orig_name = name
+        if name not in _screen_style:
             name = re.sub("\\..*", "", name)
-        if name not in _screen_fill_colors:
-            raise RuntimeError("bad gc name " + name)
+        s = _screen_style[name]
         cmap = self.plotcanvas.canvas.get_colormap()
-        gc = self.plotcanvas.canvas.window.new_gc(foreground=cmap.alloc_color(_screen_fill_colors[name]), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
-        if name in _screen_dashes:
-            gc.line_style = gtk.gdk.LINE_ON_OFF_DASH
-            gc.set_dashes(0, _screen_dashes[name])
-        _screen_gcs[name] = gc
+        gc = self.plotcanvas.canvas.window.new_gc(foreground=cmap.alloc_color(red=s.red * 65535, green=s.green * 65535, blue=s.blue * 65535), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
+        if s.linewidth != 1:
+            gc.line_width = s.linewidth
+        if len(s.dash) > 0:
+            gc.set_dashes(0, s.dash)
+        _screen_gcs[orig_name] = gc
         return gc
 
     def layout(self, name=""):
@@ -883,11 +921,11 @@ class Helvetica:
   1 index /FID ne {def} {pop pop} ifelse\n\
 } forall\n\
 /Encoding[StandardEncoding aload pop]dup 45/minus put def\n\
-currentdict end /Helvetica-PlotFlow exch definefont pop\n")
+currentdict end /Helvetica.tcpplot exch definefont pop\n")
     write_define = staticmethod(write_define)
 
     def write_select(self, f):
-        f.write('/Helvetica-PlotFlow ' + str(self.size) + ' selectfont\n')
+        f.write('/Helvetica.tcpplot ' + str(self.size) + ' selectfont\n')
 
     def height(self):
         return 0.718 * self.size
@@ -924,20 +962,13 @@ class PlotCanvas_PostScriptDrawable:
         self.f.write("%!PS-Adobe-3.0\n")
         self.FONT.write_define(self.f)
         self.f.write("/m/moveto load def/l{lineto stroke}bind def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
-        if "data" not in _postscript_fill_colors:
-            for key in _screen_fill_colors:
-                _postscript_fill_colors[key] = gtk.gdk.color_parse(_screen_fill_colors[key])
-        for key in _postscript_fill_colors:
-            c = _postscript_fill_colors[key]
-            self.f.write("/GC" + key + "{" + str(c.red / 65535.0) + " " + str(c.green / 65535.0) + " " + str(c.blue / 65535.0) + " setrgbcolor")
-            if key in _screen_dashes:
-                self.f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), _screen_dashes[key]) + "]0 setdash ")
+        for key in _postscript_style:
+            s = _postscript_style[key]
+            self.f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
+            if len(s.dash):
+                self.f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
             else:
                 self.f.write("[]0 setdash ")
-            if key in _postscript_line_widths:
-                self.f.write(str(_postscript_line_widths[key]) + " setlinewidth")
-            else:
-                self.f.write("1 setlinewidth")
             self.f.write("}bind def\n")
         self.f.write("/Pd{moveto -2 0 rmoveto 4 0 rlineto 0 1 index rmoveto -4 0 rlineto 2 0 rmoveto 0 exch neg rlineto stroke}bind def\n\
 /Pa{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto stroke}bind def\n\
@@ -1037,30 +1068,66 @@ class PlotCanvas:
         self.press_x = None
         self.press_state = 0
         self.mod_state = 0
+        self.begin = 0
+        self.end = 1000000000.0
+
+        self.adjustment = gtk.Adjustment()
+        self.adjustment.connect("value_changed", self.adj_value_changed)
+        self.adjusting = False
 
     # getting properties
     def get_direction(self):
         return self.dir
     def get_flowref(self):
         return FlowRef(self.conn, self.dir)
-    def get_time_range(self):
+    def get_plotted_time_range(self):
         if self.plotted:
             return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
         else:
             return self.begin, self.end
+    def get_time_adjustment(self):
+        return self.adjustment
 
     # setting properties
-    def set_flowref(self, fref, begin=None, end=None):
+    def set_flowref(self, fref):
         self.conn, self.dir = fref.conn, fref.dir
-        self.set_time_range(begin, end)
+        self.view_all()
     def set_direction(self, dir):
         self.dir = direction(dir)
         if self.plotted: self.plot()
-    def set_time_range(self, begin, end):
-        if begin is None: begin = self.conn.get_time_range()[0]
-        if end is None: end = self.conn.get_time_range()[1]
-        self.begin, self.end = begin, end
+    def view_all(self):
+        self.set_time_range(None, interval=1000000000.0)
+    def set_time_range(self, begin, interval=None):
+        true_begin = max(self.conn.get_time_range()[0] - 0.001, 0)
+        true_end = self.conn.get_time_range()[1]
+        if begin is None: begin = true_begin
+        if interval is None: interval = self.end - self.begin
+        self.end = min(max(begin, 0) + interval, true_end)
+        self.begin = max(min(begin, self.end - interval), 0)
         if self.plotted: self.plot()
+
+        # now, emit changed values onto the adjustment
+        begin, end = self.get_plotted_time_range()
+        self.adjusting = True
+        a = self.adjustment
+        a.lower = float(true_begin)
+        a.upper = float(max(end, true_end))
+        a.page_size = float(end - self.begin)
+        a.page_increment = a.page_size * 0.7
+        a.step_increment = a.page_size * 0.03
+        a.emit("changed")
+        a.set_value(self.begin)
+        self.adjusting = False
+    def adj_value_changed(self, adj):
+        if not self.adjusting:
+            self.set_time_range(adj.value)
+        
+    def zoom(self, when=None, factor=1):
+        if when is None: when = (self.begin + self.end) / 2
+        new_dt = (self.end - self.begin) * factor
+        t0, t1 = self.get_plotted_time_range()
+        new_t0 = max(when - new_dt * ((when - t0) / (t1 - t0)), 0)
+        self.set_time_range(new_t0, new_dt)        
 
     def grab_focus(self):
         self.canvas.grab_focus()
@@ -1100,30 +1167,23 @@ class PlotCanvas:
             if (state & gtk.gdk.BUTTON1_MASK) and self.plotted and self.press_x is not None:
                 if self.stuck and (abs(self.press_x - x) > 5):
                     self.stuck = False
-                    self.drag_t0 = self.get_time_range()[0]
+                    self.drag_t0 = self.get_plotted_time_range()[0]
                     self.drag_tscale = self.tscale
                 if not self.stuck:
                     shift_x = (x - self.press_x) / self.drag_tscale
-                    t0 = max(self.drag_t0 - shift_x, 0)
-                    self.set_time_range(t0, t0 + self.end - self.begin)
+                    self.set_time_range(self.drag_t0 - shift_x)
         except ValueError:
             pass
         return 1
-    def _zoom_click(self, event, factor):
-        x, y = self._itransform(event.x, event.y)
-        t0, t1 = self.get_time_range()
-        new_dt = (self.end - self.begin) * factor
-        self.begin = max(x - new_dt * ((x - t0) / (t1 - t0)), 0)
-        self.end = self.begin + new_dt
-        self.plot()
     def cmd_release(self, widget, event):
         try:
             if event.button == 1 and self.press_x is not None:
                 if self.press_state & gtk.gdk.CONTROL_MASK:
+                    when = self._itransform(event.x, event.y)[0]
                     if self.press_state & gtk.gdk.MOD1_MASK:
-                        self._zoom_click(event, 4)
+                        self.zoom(when, 4)
                     else:
-                        self._zoom_click(event, 0.25)
+                        self.zoom(when, 0.25)
                 else:
                     self.mod_state = -1 # lie
         except ValueError:
@@ -1172,7 +1232,7 @@ class PlotCanvas:
     def _draw_tic_y(self, pos, edge1, edge2, len, drawable, gc):
         drawable.draw_line(gc, edge1, pos, edge1 + len, pos)
         drawable.draw_line(gc, edge2, pos, edge2 - len, pos)
-    def _draw_axis(self, scale, off, pos1, pos2, step, edge1, edge2, ticer, labeller, drawable, gc, playout):
+    def _draw_axis(self, scale, off, pos1, pos2, step, edge1, edge2, ticer, labeller, drawable, gc_tic, gc_label, playout):
         if abs(step * scale) >= 75:
             mstep = step / 10
         else:
@@ -1180,12 +1240,12 @@ class PlotCanvas:
         for pos in frange(floor(pos1 / step) * step, pos2, step):
             pix = pos * scale + off
             if pos >= pos1:
-                ticer(pix, edge1, edge2, 5, drawable, gc)
-                labeller("%g" % pos, pix, edge1, edge2, drawable, gc, playout)
+                ticer(pix, edge1, edge2, 5, drawable, gc_tic)
+                labeller("%g" % pos, pix, edge1, edge2, drawable, gc_label, playout)
             for mpos in frange(pos + mstep, min(pos + step, pos2), mstep):
                 mpix = mpos * scale + off
                 if mpos >= pos1:
-                    ticer(mpix, edge1, edge2, 2, drawable, gc)
+                    ticer(mpix, edge1, edge2, 2, drawable, gc_tic)
 
     def plot(self, drawable=None):
         if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
@@ -1235,8 +1295,9 @@ class PlotCanvas:
             drawable.draw_rectangle(border_gc, left_margin, top_margin, plot_width, plot_height)
 
             # axes
-            self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, playout)
-            self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, playout)
+            label_gc = drawable.gc("label")
+            self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, label_gc, playout)
+            self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
             
             # data packets
             gc = drawable.gc("data")
@@ -1269,9 +1330,8 @@ class PlotCanvas:
             
 
 class PlotBox:
-    def __init__(self, master):
+    def __init__(self):
         self.frame = gtk.VBox()
-        master.pack_start(self.frame, expand=1, fill=1)
         self.frame.show()
         
         self.lframe = gtk.HBox()
@@ -1285,8 +1345,12 @@ class PlotBox:
         self.lframe.pack_start(self.l0, expand=0, fill=0); self.l0.show()
         self.lframe.pack_start(self.dirbutton, expand=0, fill=0); self.dirbutton.show()
         self.lframe.pack_start(self.l1, expand=0, fill=0); self.l1.show()
-        
+
         self.canvas = PlotCanvas(self.frame)
+
+        self.scale = gtk.HScrollbar(adjustment=self.canvas.get_time_adjustment())
+        self.frame.pack_start(self.scale, 0, 0)
+        self.scale.show()
     def cmd_dirbutton(self, *args):
         self.set_flowref(self.canvas.get_flowref().opposite())
     def set_flowref(self, fref):
@@ -1298,20 +1362,22 @@ class PlotBox:
         self.l0.set_markup(s)
         self.l1.set_label(desc[mid + 2:])
         self.dirbutton.set_label("><"[fref.dir])
-    def set_time_range(self, begin, end):
-        self.canvas.set_time_range(begin, end)
+    def view_all(self):
+        self.canvas.view_all()
     def zoom_in(self):
-        t0, t1 = self.canvas.get_time_range()
-        self.canvas.set_time_range(0.667*t0 + 0.333*t1, 0.333*t0 + 0.667*t1)
+        self.canvas.zoom(factor=0.75)
+    def zoom_out(self):
+        self.canvas.zoom(factor=1.5)
     def pack(self, *args, **keys):
         self.frame.pack(*args, **keys)
+    def get_widget(self):
+        return self.frame
 
 
 class FlowTree:
-    def __init__(self, parent, fset, plotbox=None):
-        scrolled_window = gtk.ScrolledWindow()
-        scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        parent.add(scrolled_window)
+    def __init__(self, fset, plotbox):
+        self.scrolled_window = gtk.ScrolledWindow()
+        self.scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
 
         self.model = FlowSetTreeModelByLosses(fset)
         self.treeview = gtk.TreeView(self.model)
@@ -1328,12 +1394,11 @@ class FlowTree:
         self.treeview.append_column(column)
         self.treeview.show()
 
-        scrolled_window.add(self.treeview)
-        scrolled_window.show()
+        self.scrolled_window.add(self.treeview)
+        self.scrolled_window.show()
 
         self.plotbox = plotbox
-        if self.plotbox is not None:
-            self.treeview.connect("row_activated", self.cmd_row_activated)
+        self.treeview.connect("row_activated", self.cmd_row_activated)
 
     def select_flowref(self, fref):
         #self.model.flowref_changed(fref) 
@@ -1341,8 +1406,12 @@ class FlowTree:
 
     def cmd_row_activated(self, widget, path, column):
         fref = self.model.path2flowref(path)
-        self.plotbox.set_flowref(fref)
+        if self.plotbox is not None:
+            self.plotbox.set_flowref(fref)
         self.select_flowref(fref)
+
+    def get_widget(self):
+        return self.scrolled_window
 
 
 class PlotFlowWindow:
@@ -1352,16 +1421,24 @@ class PlotFlowWindow:
         
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
-        win.set_title("PlotFlow")
+        win.set_title("tcpplot")
 
         vbox = gtk.VBox()
         win.add(vbox)
         vbox.show()
 
         self._init_menus(win, vbox)
-        self.plotbox = PlotBox(vbox)
+        self._init_toolbar(win, vbox)
 
-        self.flowtree = FlowTree(vbox, fset, self.plotbox)
+        paned = gtk.VPaned()
+        vbox.add(paned)
+        paned.show()
+        
+        self.plotbox = PlotBox()
+        self.flowtree = FlowTree(fset, self.plotbox)
+
+        paned.add1(self.plotbox.get_widget())
+        paned.add2(self.flowtree.get_widget())
 
         if len(fset):
             self.plotbox.set_flowref(fset[0])
@@ -1378,14 +1455,14 @@ class PlotFlowWindow:
         self.item_factory.create_items((
             ( "/_File",         None,         None, 0, "<Branch>" ),
    	    ( "/File/_Open",    "<control>O", None, 0, None ),
-   	    ( "/File/_Save",    "<control>S", None, 0, None ),
-   	    ( "/File/Save _As", None,         None, 0, None ),
-            ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
    	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
+            ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
+   	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, None ),
             ( "/_View",		None,		None, 0, "<Branch>" ),
             ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
             ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
+            ( "/View/View _All", None, self.cmd_zoom_fit, 0, None ),
    	    ( "/View/sep1",     None,         None, 0, "<Separator>" ),
             ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, None ),
             ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, None ),
@@ -1395,11 +1472,19 @@ class PlotFlowWindow:
         vbox.pack_start(menubar, 0, 0)
         menubar.show()
 
+    def _init_toolbar(self, win, vbox):
+        toolbar = gtk.Toolbar()
+        toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
+        toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
+        toolbar.append_item("All", "Show whole connection", "", stock_image(gtk.STOCK_ZOOM_FIT), self.cmd_zoom_fit, 0)
+        vbox.pack_start(toolbar, 0, 0)
+        toolbar.show()
+
     def cmd_exit(self, *args):
         gtk.main_quit()
 
     def cmd_print(self, widget, event):
-        f = file("/tmp/plotflow.ps", "w")
+        f = file("/tmp/tcpplot.ps", "w")
         self.plotbox.canvas.plot(PlotCanvas_PostScriptDrawable(self.plotbox.canvas, f))
         f.close()
         
@@ -1407,7 +1492,10 @@ class PlotFlowWindow:
         self.plotbox.zoom_in()
 
     def cmd_zoom_out(self, widget, event):
-        self.plotbox.set_time_range(None, None)
+        self.plotbox.zoom_out()
+
+    def cmd_zoom_fit(self, widget, event):
+        self.plotbox.view_all()
 
     def _activate_flow_items(self):
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
@@ -1443,7 +1531,6 @@ if __name__ == "__main__":
         else:
             all_connections.append(Connection(sys.stdin))
         all_connections.sort_by_loss_count()
-        print all_connections.sum_loss_count
         window = PlotFlowWindow(all_connections)
         gtk.main()
     except KeyboardInterrupt:
