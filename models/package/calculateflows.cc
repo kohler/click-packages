@@ -10,7 +10,7 @@
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
-#include "aggregateflows.hh"
+#include "aggregateipflows.hh"
 
 #include <limits.h>
 
@@ -382,19 +382,22 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
     if (cp_va_parse(conf, this, errh,
-                    cpElement,  "AggregateFlows element pointer (notifier)", &af_element,
+                    cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    cpOptional,
 		    cpFilename, "filename for output flow1", &_outfilename[0],
 		    cpFilename, "filename for output flow2", &_outfilename[1],
 		    0) < 0)
         return -1;
-    AggregateFlows *af;
-    if (!af_element || !(af = (AggregateFlows *)(af_element->cast("AggregateFlows"))))
-	return errh->error("first element not an AggregateFlows");
-    af->add_listener(this);	// this is a handler to AggregateFlows Element
+    
+    AggregateIPFlows *af;
+    if (!af_element || !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
+	return errh->error("first element not an AggregateIPFlows");
+    af->add_listener(this);
+    
     if (!tipfd_element || !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("first element not an ToIPFlowDumps");
+    
     return 0;
 }
 
@@ -431,7 +434,7 @@ Packet *
 CalculateFlows::simple_action(Packet *p)
 {
     const click_ip *iph = p->ip_header();
-    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from Aggregateflows
+    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from AggregateIPFlows
 	|| !IP_FIRSTFRAG(iph)
 	|| p->transport_length() < (int)sizeof(click_udp)) {
 	checked_output_push(1, p);
