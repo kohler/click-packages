@@ -142,10 +142,11 @@ class TCPCollector : public Element, public AggregateListener { public:
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
     
     Packet *simple_action(Packet *);
-    
+
+    struct Pkt;
+    struct SACKBuf;
     struct Stream;
     class Conn;
-    struct Pkt;
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
 
@@ -171,7 +172,7 @@ class TCPCollector : public Element, public AggregateListener { public:
   private:
     
     ConnMap _conn_map;
-    Pkt *_free_pkt;
+    Pkt* _free_pkt;
     
     int _pkt_size;
     Vector<char*> _pktbuf_bank;
@@ -191,9 +192,7 @@ class TCPCollector : public Element, public AggregateListener { public:
 #if TCPCOLLECTOR_XML
     String _traceinfo_filename;
     FILE*_traceinfo_file;
-#endif
-    
-#if TCPCOLLECTOR_XML
+
     // XML hooks
     Vector<String> _trace_xmlattr_name;
     Vector<String> _trace_xmlattr_value;
@@ -238,6 +237,7 @@ struct TCPCollector::Pkt {
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
+    uint32_t* sack;		// pointer to sack information
     struct timeval timestamp;	// timestamp of this packet
     uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
@@ -255,6 +255,13 @@ struct TCPCollector::Pkt {
 	F_FRAGMENT = 0x1000,	// packet was a fragment
     };
     int flags;			// packet flags
+};
+
+struct TCPCollector::SACKBuf {
+    enum { SACKBUFSIZ = 256 };
+    uint32_t buf[SACKBUFSIZ];
+    uint32_t pos;
+    SACKBuf* next;
 };
 
 struct TCPCollector::Stream {
@@ -295,7 +302,7 @@ struct TCPCollector::Stream {
     Stream(unsigned direction);
 
     void process_data(Pkt*, const Packet*, Conn*);
-    void process_options(const click_tcp *, int transport_length);
+    void process_options(const click_tcp*, int transport_length, Pkt*, Conn*);
     void process_ack(Pkt*, const Packet*, Stream*);
     void attach_packet(Pkt *);
 
@@ -312,6 +319,7 @@ struct TCPCollector::Stream {
 class TCPCollector::Conn {  public:
     
     Conn(const Packet*, const HandlerCall*, bool ip_id, Stream*, Stream*);
+    ~Conn();
 
     uint32_t aggregate() const		{ return _aggregate; }
     bool ip_id() const			{ return _ip_id; }
@@ -322,6 +330,7 @@ class TCPCollector::Conn {  public:
     Stream* ack_stream(Stream* s) const	{ return stream(1 - s->direction); }
 
     void handle_packet(const Packet *, TCPCollector *);
+    uint32_t* allocate_sack(int);
     
 #if TCPCOLLECTOR_XML
     void write_xml(FILE*, const TCPCollector *);
@@ -336,6 +345,7 @@ class TCPCollector::Conn {  public:
     bool _ip_id : 1;		// use IP ID to distinguish duplicates?
     bool _clean : 1;		// have packets been added since we finished?
     Stream* _stream[2];
+    SACKBuf* _sackbuf;
 
 };
 

@@ -42,26 +42,25 @@ TCPCollector::Pkt *
 TCPCollector::new_pkt()
 {
     if (!_free_pkt)
-	if (char *pktbuf = new char[_pkt_size * 1024]) {
+	if (char* pktbuf = new char[_pkt_size * 1024]) {
 	    _pktbuf_bank.push_back(pktbuf);
 	    for (int i = 0; i < 1024; i++, pktbuf += _pkt_size) {
-		Pkt *p = reinterpret_cast<Pkt *>(pktbuf);
+		Pkt *p = reinterpret_cast<Pkt*>(pktbuf);
 		p->next = _free_pkt;
 		_free_pkt = p;
 	    }
 	}
-    if (!_free_pkt)
-	return 0;
-    else {
+    if (_free_pkt) {
 	Pkt *p = _free_pkt;
 	_free_pkt = p->next;
 	p->next = p->prev = 0;
 	return p;
-    }
+    } else
+	return 0;
 }
 
 void
-TCPCollector::Stream::process_data(Pkt *k, const Packet *p, Conn *conn)
+TCPCollector::Stream::process_data(Pkt* k, const Packet* p, Conn* conn)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header()));
@@ -109,7 +108,7 @@ TCPCollector::Stream::process_data(Pkt *k, const Packet *p, Conn *conn)
 
     // process options, if there are any
     // (do this before end_rcv_window, to get any rcv_window_scale)
-    process_options(tcph, p->transport_length());
+    process_options(tcph, p->transport_length(), k, conn);
 
     // update end_rcv_window
     end_rcv_window = k->ack + (ntohs(tcph->th_win) << rcv_window_scale);
@@ -122,31 +121,83 @@ TCPCollector::Stream::process_data(Pkt *k, const Packet *p, Conn *conn)
 }
 
 void
-TCPCollector::Stream::process_options(const click_tcp *tcph, int transport_length)
+TCPCollector::Stream::process_options(const click_tcp* tcph, int transport_length, Pkt* k, Conn* conn)
 {
     // option processing; ignore timestamp
     int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
-    if (hlen > 20 
+    if (hlen > (int) sizeof(click_tcp) 
 	&& (hlen != 32
 	    || *(reinterpret_cast<const uint32_t *>(tcph + 1)) != htonl(0x0101080A))) {
-	const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
-	for (int oi = 20; oi < hlen; ) {
-	    if (oa[oi] == TCPOPT_NOP) {
-		oi++;
+	const uint8_t* opt = reinterpret_cast<const uint8_t*>(tcph + 1);
+	const uint8_t* end_opt = opt + hlen - sizeof(click_tcp);
+
+	int nsack = 0;
+	while (opt < end_opt) {
+	    if (*opt == TCPOPT_NOP) {
+		opt++;
 		continue;
-	    } else if (oa[oi] == TCPOPT_EOL)
+	    } else if (*opt == TCPOPT_EOL || opt + 1 > end_opt || opt + opt[1] > end_opt || opt[1] < 2)
 		break;
 
-	    int xlen = oa[oi+1];
-	    if (xlen < 2 || oi + xlen > hlen) // bad option
-		break;
-
-	    if (oa[oi] == TCPOPT_WSCALE && xlen == TCPOLEN_WSCALE && (tcph->th_flags & TH_SYN))
-		rcv_window_scale = (oa[oi+2] <= 14 ? oa[oi+2] : 14);
-	    else if (oa[oi] == TCPOPT_SACK_PERMITTED && xlen == TCPOLEN_SACK_PERMITTED)
+	    if (*opt == TCPOPT_WSCALE && opt[1] == TCPOLEN_WSCALE && (tcph->th_flags & TH_SYN))
+		rcv_window_scale = (opt[2] <= 14 ? opt[2] : 14);
+	    else if (*opt == TCPOPT_SACK_PERMITTED && opt[1] == TCPOLEN_SACK_PERMITTED)
 		sent_sackok = true;
+	    else if (*opt == TCPOPT_SACK && (opt[1] % 8) == 2)
+		nsack += (opt[1] - 2) / 4;
+	    opt += opt[1];
+	}
 
-	    oi += xlen;
+	// store any sack options in the packet recrod
+	if (nsack && (k->sack = conn->allocate_sack(nsack + 1))) {
+	    uint32_t* sack = k->sack;
+	    *sack++ = nsack;
+	    tcp_seq_t init_ack = conn->stream(!direction)->init_seq;
+	    opt = reinterpret_cast<const uint8_t*>(tcph + 1);
+	    while (opt < end_opt) {
+		if (*opt == TCPOPT_NOP) {
+		    opt++;
+		    continue;
+		} else if (*opt == TCPOPT_EOL || opt + 1 > end_opt || opt + opt[1] > end_opt || opt[1] < 2)
+		    break;
+		if (*opt == TCPOPT_SACK && (opt[1] % 8) == 2) {
+		    const uint8_t* end_sack = opt + opt[1];
+		    for (opt += 2; opt < end_sack; opt += 4, sack++) {
+			memcpy(sack, opt, 4);
+			*sack = ntohl(*sack) - init_ack;
+		    }
+		} else
+		    opt += opt[1];
+	    }
+
+	    // now clean up the data
+	    // first sort sack blocks
+	    uint32_t* end_sack = k->sack + *k->sack + 1;
+	    for (sack = k->sack + 1; sack < end_sack; sack += 2) {
+		uint32_t* min_sack = sack;
+		for (uint32_t* trav = min_sack + 2; trav < end_sack; trav += 2)
+		    if (SEQ_LT(trav[0], min_sack[0]))
+			min_sack = trav;
+		if (min_sack != sack) {
+		    uint32_t tmp[2];
+		    memcpy(&tmp[0], min_sack, 8);
+		    memcpy(min_sack, sack, 8);
+		    memcpy(sack, &tmp[0], 8);
+		}
+	    }
+
+	    // then compress overlapping ranges
+	    uint32_t delta = 2;
+	    for (sack = k->sack + 1; sack < end_sack; sack += 2) {
+		if (delta != 2)
+		    memcpy(sack, sack + delta - 2, 8);
+		while (sack + delta < end_sack && SEQ_LEQ(sack[delta], sack[1])) {
+		    if (SEQ_LEQ(sack[1], sack[delta+1]))
+			sack[1] = sack[delta+1];
+		    delta += 2;
+		}
+	    }
+	    *k->sack -= delta - 2;
 	}
     }
 }
@@ -284,6 +335,23 @@ TCPCollector::Conn::handle_packet(const Packet *p, TCPCollector *parent)
 	stream->max_seq = k->end_seq;
 }
 
+uint32_t*
+TCPCollector::Conn::allocate_sack(int amount)
+{
+    if (amount < 0 || amount > SACKBuf::SACKBUFSIZ)
+	return 0;
+    if (!_sackbuf || _sackbuf->pos + amount > SACKBuf::SACKBUFSIZ) {
+	if (SACKBuf* nbuf = new SACKBuf) {
+	    nbuf->next = _sackbuf;
+	    nbuf->pos = 0;
+	    _sackbuf = nbuf;
+	} else
+	    return 0;
+    }
+    uint32_t* ptr = &_sackbuf->buf[_sackbuf->pos];
+    _sackbuf->pos += amount;
+    return ptr;
+}
 
 
 
@@ -306,7 +374,7 @@ TCPCollector::Stream::Stream(unsigned direction_)
 }
 
 TCPCollector::Conn::Conn(const Packet* p, const HandlerCall* filepos_call, bool ip_id, Stream* stream0, Stream* stream1)
-    : _aggregate(AGGREGATE_ANNO(p)), _ip_id(ip_id), _clean(true)
+    : _aggregate(AGGREGATE_ANNO(p)), _ip_id(ip_id), _clean(true), _sackbuf(0)
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
@@ -327,15 +395,24 @@ TCPCollector::Conn::Conn(const Packet* p, const HandlerCall* filepos_call, bool 
     _stream[1] = stream1;
 }
 
+TCPCollector::Conn::~Conn()
+{
+    while (SACKBuf* s = _sackbuf) {
+	_sackbuf = s->next;
+	delete s;
+    }
+}
+
 TCPCollector::Conn*
 TCPCollector::new_conn(Packet* p)
+    /* inserts new connection into _conn_map */
 {
     char* connbuf = new char[_conn_size];
     char* stream0buf = new char[_stream_size];
     char* stream1buf = new char[_stream_size];
     if (connbuf && stream0buf && stream1buf) {
 	Stream* stream0 = new((void*)stream0buf) Stream(0);
-	Stream* stream1 = new((void*)stream0buf) Stream(1);
+	Stream* stream1 = new((void*)stream1buf) Stream(1);
 	Conn* conn = new((void*)connbuf) Conn(p, _filepos_h, _ip_id, stream0, stream1);
 	for (int i = 0; i < _conn_attachments.size(); i++)
 	    _conn_attachments[i]->new_conn_hook(conn, _conn_attachment_offsets[i]);
@@ -343,6 +420,7 @@ TCPCollector::new_conn(Packet* p)
 	    _stream_attachments[i]->new_stream_hook(stream0, conn, _stream_attachment_offsets[i]);
 	    _stream_attachments[i]->new_stream_hook(stream1, conn, _stream_attachment_offsets[i]);
 	}
+	_conn_map.insert(AGGREGATE_ANNO(p), conn);
 	return conn;
     } else {
 	delete[] connbuf;
@@ -354,6 +432,7 @@ TCPCollector::new_conn(Packet* p)
 
 void
 TCPCollector::kill_conn(Conn* conn)
+    /* DOES NOT delete connection from _conn_map */
 {
 #if TCPCOLLECTOR_XML
     if (_traceinfo_file)
@@ -525,10 +604,17 @@ void
 TCPCollector::Stream::packet_xmltag(FILE* f, Stream* stream, Conn*, const String& tagname, void*)
 {
     if (stream->pkt_head) {
-	fprintf(f, "    <%s>\n", tagname.c_str());
-	for (Pkt *k = stream->pkt_head; k; k = k->next)
-	    fprintf(f, "%ld.%06ld %u %u %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
-	fprintf(f, "    </%s>\n", tagname.c_str());
+	fprintf(f, "    <%s>", tagname.c_str());
+	for (Pkt *k = stream->pkt_head; k; k = k->next) {
+	    fprintf(f, "\n%ld.%06ld %u %u %u", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
+	    if (const uint32_t* sack = k->sack) {
+		const uint32_t* end_sack = sack + *sack + 1;
+		char sep = ' ';
+		for (sack++; sack < end_sack; sack += 2, sep = ';')
+		    fprintf(f, "%c%u-%u", sep, sack[0], sack[1]);
+	    }
+	}
+	fprintf(f, "\n    </%s>\n", tagname.c_str());
     }
 }
 
