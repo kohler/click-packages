@@ -39,6 +39,7 @@ _screen_style = {
     "border": LineDescriptor(0.66, 0.66, 0.66),
     "bg": LineDescriptor(1, 1, 1),
     "label": LineDescriptor(0.4, 0.4, 0.4),
+    "link": LineDescriptor(0.8, 0.8, 0.8, dash=[4, 4]),
 
     "H": LineDescriptor(1, 0.9, 0, linewidth=2),
     "H.cause": LineDescriptor(1, 200/255., 200/255.),
@@ -62,7 +63,8 @@ _postscript_style = {
 
     "border": LineDescriptor(0, 0, 0),
     "bg": LineDescriptor(1, 1, 1),
-    "label": LineDescriptor(0, 0, 0)
+    "label": LineDescriptor(0, 0, 0),
+    "link": LineDescriptor(0.8, 0.8, 0.8, dash=[4, 4])
     }
 
 PRINT_PRINTER = 0
@@ -310,11 +312,24 @@ class LossEvent:
                    type, float(begin), float(seq), float(end), float(end_seq)
     def time_overlaps(self, begin, end):
         return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
-    def adjust(self, time_adj, seq_adj, ack_adj):
-        self.begin -= time_adj
-        self.end -= time_adj
-        self.seq = seqadj(self.seq, seq_adj)
-        self.end_seq = seqadj(self.end_seq, seq_adj)
+
+class PacketLink:
+    def __init__(self, t0, s0, t1, s1):
+        if t0 > t1:
+            self.t0, self.s0, self.t1, self.s1 = t1, s1, t0, s0
+        else:
+            self.t0, self.s0, self.t1, self.s1 = t0, s0, t1, s1
+    def time_overlaps(self, begin, end):
+        return (begin is None or self.t1 >= begin) and (end is None or end >= self.t0)
+    def fix(self, conn, dir):
+        if self.s0 is None:
+            p = conn.find_packet(self.t0, dir)
+            if p is not None:
+                self.s0 = (p.seq + p.last_seq) // 2
+        if self.s1 is None:
+            p = conn.find_packet(self.t1, dir)
+            if p is not None:
+                self.s1 = (p.seq + p.last_seq) // 2
 
 
 ####################
@@ -353,11 +368,12 @@ def direction(dir):
 
 class Connection(object):
 
-    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime']
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime', 'link']
 
     def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None, filepos=None, endtime=None):
         self.s = ([], [])
         self.loss = ([], [])
+        self.link = ([], [])
         self.available = False
         self.dynload = dynload
         if src is not None:
@@ -402,20 +418,11 @@ class Connection(object):
                 t0 = min(self.s[1][0].time, t0)
                 s0 = min(self.s[1][0].ack, s0)
                 s1 = min(self.s[1][0].seq, s1)
-            # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXxx
-            #if len(self.loss[0]):
-            #    t0 = min(self.loss[0][0].begin, t0)
-            #if len(self.loss[1]):
-            #    t0 = min(self.loss[1][0].begin, t0)
             t0 -= 0.000001
             for p in self.s[0]:
                 p.adjust(t0, s0, s1)
             for p in self.s[1]:
                 p.adjust(t0, s1, s0)
-            #for l in self.loss[0]:
-            #    l.adjust(t0, s0, s1)
-            #for l in self.loss[1]:
-            #    l.adjust(t0, s1, s0)
     
     def first_index_after(self, time, dir=None):
         if not self.available:
@@ -425,6 +432,22 @@ class Connection(object):
         else:
             fake_pkt = Packet(time, 0, 0, 0, 0)
             return bisect(self.s[direction(dir)], fake_pkt)
+
+    def find_packet(self, time, dir=None):
+        if not self.available:
+            self.load()
+        if dir is None:
+            p = self.find_packet(time, 0)
+            if p is None: p = self.find_packet(time, 1)
+            return p
+        else:
+            dir = direction(dir)
+            i = self.first_index_after(time, dir)
+            if i > 0 and i <= len(self.s[dir]) and abs(self.s[dir][i-1].time - time) < 0.000001:
+                return self.s[dir][i-1]
+            elif i >= 0 and i < len(self.s[dir]) and abs(self.s[dir][i].time - time) < 0.000001:
+                return self.s[dir][i]
+            return None
     
     def packets(self, dir, begin=None, end=None, fuzz=0):
         if not self.available:
@@ -458,6 +481,23 @@ class Connection(object):
         for l in self.loss[dir]:
             if l.time_overlaps(begin, end):
                 yield l
+    
+    def links(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        i = 0
+        if begin is not None:
+            i = bisect_with_cmp(self.link[dir], lambda l: begin - l.t0) - 1
+            if i < 0: i = 0
+        while i < len(self.link[dir]):
+            l = self.link[dir][i]
+            l.fix(self, dir)
+            if l.time_overlaps(begin, end):
+                yield l
+            if end is not None and l.t0 > end:
+                break
+            i += 1
     
     def get_time_range(self, dir=None):
         if not self.available:
@@ -1113,6 +1153,10 @@ class FlowSet:
     SORT_NONE = 0
     SORT_LOSS = 1
 
+    READ_NONE = 0
+    READ_TRACE = 1
+    READ_ACKCAUSALITY = 2
+
     def __init__(self):
         self.conns = []
         self.flows = []
@@ -1134,7 +1178,8 @@ class FlowSet:
         self.parser.returns_unicode = 0
         self.parser.StartElementHandler = self._start_element
         self.parser.EndElementHandler = self._end_element
-        self.reading_state = 0
+        self.parser.CharacterDataHandler = self._char_data
+        self.reading_state = FlowSet.READ_NONE
         self.reading_connection = self.reading_direction = None
 
         return self._read_process
@@ -1202,12 +1247,12 @@ class FlowSet:
 
     def _start_element(self, name, attrs):
         if name == 'trace':
-            if self.reading_state != 0:
+            if self.reading_state != FlowSet.READ_NONE:
                 raise ConnectionFormatError, "nested <trace>"
             self.reading_output_pattern = self.fix_directory(attrs.get("flowfilepattern", None))
             self.reading_tracefile = self.fix_directory(attrs.get("file", None))
-            self.reading_state = 1
-        elif name == 'flow' and self.reading_state == 1:
+            self.reading_state = FlowSet.READ_TRACE
+        elif name == 'flow' and self.reading_state == FlowSet.READ_TRACE:
             agg, src, sport, dst, dport = long(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
             filepos = endtime = None
             if self.reading_output_pattern is not None:
@@ -1232,14 +1277,28 @@ class FlowSet:
                 self.reading_connection.loss[self.reading_direction].append(LossEvent(type, t0, s0, t1, s1))
             except KeyError:
                 pass
+        elif name == 'ackcausality' and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_ACKCAUSALITY
 
     def _end_element(self, name):
-        if name == 'connections':
-            self.reading_state = 0
+        if name == 'trace':
+            self.reading_state = FlowSet.READ_NONE
         elif name == 'connection':
             self.reading_connection = None
         elif name == 'flow':
             self.reading_direction = None
+        elif name == 'ackcausality' and self.reading_state == FlowSet.READ_ACKCAUSALITY:
+            self.reading_state = FlowSet.READ_TRACE
+
+    def _char_data(self, data):
+        if self.reading_state == FlowSet.READ_ACKCAUSALITY:
+            links = self.reading_connection.link[self.reading_direction]
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 3:
+                    t0, s1, t1 = x[0:3]
+                    ft0 = float(t0)
+                    links.append(PacketLink(ft0, None, ft0 + float(t1), float(s1)))
 
     def _flow_sorter(a, b):
         return int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
@@ -1626,14 +1685,20 @@ class PlotCanvas_ScreenDrawable:
         return self.ANCHOR_OFFSET[anchor][0:2]
 
     def draw_text(self, gc, layout, text, x, y, anchor=ANCHOR_N):
-        layout.set_text(text, -1)
+        try:
+            layout.set_text(text)
+        except:
+            layout.set_text(text, -1)
         ir, lr = layout.get_extents()
         w, h = lr[2]/1024., lr[3]/1024.
         xoff, yoff, xamt, yamt = self.ANCHOR_OFFSET[anchor]
         self.drawable.draw_layout(gc, int(x + xamt*w + xoff), int(y + yamt*h + yoff), layout)
 
     def text_size(self, layout, text):
-        layout.set_text(text, -1)
+        try:
+            layout.set_text(text)
+        except:
+            layout.set_text(text, -1)
         ir, lr = layout.get_extents()
         return (lr[2]/1024., lr[3]/1024., 0)
     
@@ -2426,6 +2491,15 @@ class PlotCanvas:
                 drawable.fill_rectangle(gc_bg, x0, top_margin, x1 - x0 + 1, plot_height)
                 drawable.fill_rectangle(gc_fg, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
                 drawable.draw_rectangle(gc, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+
+            # links
+            gc = drawable.gc('link')
+            for l in self.conn.links(self.dir, t0, t1):
+                x0 = l.t0 * tscale + toff
+                x1 = l.t1 * tscale + toff
+                y0 = l.s0 * sscale + soff
+                y1 = l.s1 * sscale + soff
+                drawable.draw_line(gc, x0, y0, x1, y1)
             
             # border box
             border_gc = drawable.gc("border")
