@@ -104,11 +104,11 @@ class CalculateFlows : public Element, public AggregateListener {
 	class LossInfo {
 
 	private:	
-		unsigned  _last_seq[2];
-		unsigned  _upper_wind_seq[2];
-		unsigned  _max_wind_seq[2];
-		unsigned  _last_ack[2];
-		unsigned  _max_seq[2];
+	    tcp_seq_t  _last_seq[2];
+	    tcp_seq_t  _upper_wind_seq[2];
+	    tcp_seq_t  _max_wind_seq[2];
+	    tcp_seq_t  _last_ack[2];
+	    tcp_seq_t  _max_seq[2];
 		unsigned  _total_bytes[2];
 		unsigned  _bytes_lost[2];
 		unsigned  _packets_lost[2];
@@ -134,7 +134,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		MapInterval inter_by_time[2];
 		MapS acks[2];
 		MapS rexmt[2];
-		unsigned  init_seq[2];
+		tcp_seq_t  init_seq[2];
 		timeval init_time;
 		double prev_diff[2];
 		short int doubling[2];
@@ -373,359 +373,87 @@ class CalculateFlows : public Element, public AggregateListener {
 			
 		};
 		
-		double timesub (timeval end_time , timeval start_time){
-			return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
-		}
-		double timeadd (timeval end_time , timeval start_time){
-			return ((end_time.tv_sec+start_time.tv_sec) + 0.000001 *(end_time.tv_usec+start_time.tv_usec));
-		}
+	    double timesub (timeval end_time , timeval start_time){
+		return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
+	    }
+	    double timeadd (timeval end_time , timeval start_time){
+		return ((end_time.tv_sec+start_time.tv_sec) + 0.000001 *(end_time.tv_usec+start_time.tv_usec));
+	    }
 						
-		void calculate_loss_events(unsigned seq, unsigned seqlen, timeval time, unsigned paint){
-			double curr_diff;
-	   	    short int num_of_acks = acks[paint].find(seq);
-			if ( seq < _max_seq[paint]){ // then we may have a new event.
-				if ( seq < _last_seq[paint]){  //We have a new event ...
-					timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
-						if (prev_diff[paint] == 0){ //first time
-				            prev_diff[paint] = timesub(time, time_last_sent);
-							curr_diff = prev_diff[paint];
-						}
-						else{
-							prev_diff[paint] = prev_diff[paint] < 0.000001 ? 0.000001 : prev_diff[paint];															
-							curr_diff = timesub(time,time_last_sent);
-							if (( doubling[paint] == 32) && (fabs(1-curr_diff/prev_diff[paint]) < 0.1)){
-								printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
-							}
-							else{
-								if ((fabs(2.-curr_diff/prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))){
-									if (doubling[paint] < 1){
-										doubling[paint] = prev_doubling[paint];
-									}
-									doubling[paint] = 2*doubling[paint];
-								}
-								if ((fabs(2.-curr_diff/prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))){
-									prev_doubling[paint] = doubling[paint];
-									doubling[paint] = 0;
-								}
-							}
-						}					
-						
-						if (num_of_acks > 3){ //triple dup.
-							printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks);
-								_loss_events[paint]++;
-								acks[paint].insert(seq, -10000);
-						}
-						else{ 					
-							acks[paint].insert(seq, -10000);
-							doubling[paint] = doubling[paint] < 1 ? 1 : doubling[paint] ;
-							printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-								(log(doubling[paint])/log(2)), 
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks); 
-							_loss_events[paint]++;
-							prev_diff[paint] = curr_diff;
-						}
-				}
-			}
-			else{ // this is a first time send event
-				
-				if (_max_seq[paint] < _last_seq[paint]){
-					_max_seq[paint] = _last_seq[paint];
-				}
-			}	
-			
-		};
+	    void calculate_loss_events(tcp_seq_t seq, unsigned seqlen, const timeval &time, unsigned paint);
 
-		void calculate_loss_events2(unsigned seq, unsigned seqlen, timeval time, unsigned paint, ToIPFlowDumps *tipfdp){
-			double curr_diff;
-	   	    short int num_of_acks = acks[paint].find(seq);
-			short int  num_of_rexmt = rexmt[paint].find(seq);
-			short int possible_loss_event=0; //0 for loss event 1 for possible loss event
-			//printf("seq:%u ,rexmt: %d\n",seq , num_of_rexmt);
-			if ( ((seq+1) < _max_seq[paint]) && ((seq+seqlen) > max_ack[paint]) &&  // Change to +1 for keep alives
- 				(seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we have a new event.
-					//printf("last_seq[%d]=%u \n",paint,seq );
-				timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
-				if (!outoforder_pckt){
-					rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
-				    StringAccum sa;
-					String direction = paint ? " < " : " > ";
-			 		if (_max_wind_seq[paint] > (seq+seqlen)){
-						  sa << "loss" << direction << time_last_sent << " " <<
-						  (seq+seqlen) << " " << time <<
-						   " " << _max_wind_seq[paint] << " " << num_of_acks;
-						  tipfdp->add_note(agganno, sa.cc());
-						  if (gnuplot){
-							outfileg[paint+4] = fopen(outfilenameg[paint+4].cc(), "a");
-							fprintf(outfileg[paint+4],"%f %.1f %f %.1f\n",
-									timeadd(time,time_last_sent)/2.,
-									(_max_wind_seq[paint]+seq+seqlen)/2.,
-									timesub(time,time_last_sent)/2.,
-									(_max_wind_seq[paint]-seq-seqlen)/2.); 
-							if (fclose(outfileg[paint+4])){ 
-								click_chatter("error closing file!");
-							}	
-						  }
-					}
-					else{
-						  possible_loss_event = 1; // possible loss event
-						  sa << "ploss" << direction << time_last_sent << " " << seq << " " << time <<
-								" " << seqlen << " " << num_of_acks  ;
-						  tipfdp->add_note(agganno, sa.cc());
-						  
-						  if (gnuplot){
-							outfileg[paint+6] = fopen(outfilenameg[paint+6].cc(), "a");
-							fprintf(outfileg[paint+6],"%f %.1f %f %.1f\n",
-									timeadd(time,time_last_sent)/2.,
-									(double)(seq+seqlen/2.),
-									timesub(time,time_last_sent)/2.,
-									seqlen/2.); 
-							if (fclose(outfileg[paint+6])){ 
-				   				click_chatter("error closing file!");
-							}
-						  }	
-					}						
-					if (prev_diff[paint] == 0){ //first time
-				        prev_diff[paint] = timesub(time, time_last_sent);
-						curr_diff = prev_diff[paint];
-					}
-					else{
-						prev_diff[paint] = prev_diff[paint] < 0.000001 ? 0.000001 : prev_diff[paint];															
-						curr_diff = timesub(time,time_last_sent);
-						if (( doubling[paint] == 32) && (fabs(1-curr_diff/prev_diff[paint]) < 0.1)){
-							printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
-						}
-						else{
-							if ((fabs(2.-curr_diff/prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))){
-								if (doubling[paint] < 1){
-									doubling[paint] = prev_doubling[paint];
-								}
-								doubling[paint] = 2*doubling[paint];
-							}
-							if ((fabs(2.-curr_diff/prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))){
-								prev_doubling[paint] = doubling[paint];
-								doubling[paint] = 0;
-							}
-						}
-					}					
-					
-					if (num_of_acks > 3){ //triple dup.
-						if (!possible_loss_event){
-							printf("We have a loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-								agganno,
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks);
-								_loss_events[paint]++;
-						}
-						else {
-							printf("We have a POSSIBLE loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-								agganno,
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks);
-								_p_loss_events[paint]++;
-						}
-					//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",
-					//			time.tv_sec,time.tv_usec,_max_seq[paint]); 
-						acks[paint].insert(seq, -10000);
-					}
-					else{ 					
-						acks[paint].insert(seq, -10000);
-						doubling[paint] = doubling[paint] < 1 ? 1 : doubling[paint] ;
-						if (!possible_loss_event){
-							printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-								(log(doubling[paint])/log(2)), 
-								agganno,
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks); 
-							    _loss_events[paint]++;
-						}
-						else{
-							printf ("We have a POSSIBLE loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-								(log(doubling[paint])/log(2)), 
-								agganno,
-								time.tv_sec, 
-								time.tv_usec, 
-								seq,
-								num_of_acks); 
-							    _p_loss_events[paint]++;
-						}
-					//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",time.tv_sec,time.tv_usec,seq); 	
-					//	prev_diff[paint] = curr_diff;
-					}
-					_max_wind_seq[paint] = seq; //reset the maximum sequence transmitted in this window
-					if (_max_seq[paint] > _upper_wind_seq[paint]){
-						//printf("%u:%u",_last_wind_mseq[paint],_max_seq[paint]);
-						_upper_wind_seq[paint] = _max_seq[paint]; // the window for this event loss
-					}
-				}
-			}
-					
-		};
+	    void calculate_loss_events2(tcp_seq_t seq, unsigned seqlen, const timeval &time, unsigned paint, ToIPFlowDumps *tipfdp);
 
-		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
-			
-			if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)){
-				printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n",agganno,paint,_max_seq[paint],seq);
-			}
-			if ((seq+1) < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
-				MapS &m_rexmt = rexmt[paint];
-			//	printf("ok:%u:%u",seq,_max_seq[paint]);
-				m_rexmt.insert(seq, m_rexmt.find(seq)+1 );					
-				if (seq + block_size < _max_seq[paint]){ // are we transmiting totally new bytes also?
-					_bytes_lost[paint] = _bytes_lost[paint] + block_size;
-					
-				}
-				else{ // we retransmit something old but partial
-					_bytes_lost[paint] = _bytes_lost[paint] + (_max_seq[paint]-seq);
-					_last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
-							
-					if (_max_seq[paint] < _last_seq[paint]){
-						_max_seq[paint] = _last_seq[paint];
-					}
-					if (_max_wind_seq[paint] < _last_seq[paint]){
-						_max_wind_seq[paint] = _last_seq[paint];
-					}
-				}
-				_packets_lost[paint]++;
-			}
-			else{ // this is a first time send event
-				 // no loss normal data transfer
-				outoforder_pckt = 0; //reset the indicator
-				_last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
-							
-				if (_max_seq[paint] < _last_seq[paint]){
-					_max_seq[paint] = _last_seq[paint];
-				}
-				if (_max_wind_seq[paint] < _last_seq[paint]){
-					_max_wind_seq[paint] = _last_seq[paint];
-				}
-				
-			}	
-			
-		}; 
+	    void calculate_loss(tcp_seq_t seq, unsigned block_size, unsigned paint);
+	    
+	    void set_last_seq(tcp_seq_t seq, unsigned paint) {
+		assert(paint < 2);
+		_last_seq[paint] = seq;
+	    }
 		
-		
-		void set_last_seq(unsigned seq, unsigned paint){
-		
-			_last_seq[paint] = seq;
-		
-		};
-		
-		void set_last_ack(unsigned ack, unsigned paint){
-		
-			_last_ack[paint] = ack;
-		
-		};
+	    void set_last_ack(tcp_seq_t ack, unsigned paint) {
+		assert(paint < 2);
+		_last_ack[paint] = ack;
+	    }
 	
-		void set_total_bytes(unsigned bytes, unsigned paint){
+	    void set_total_bytes(unsigned bytes, unsigned paint){
+		assert(paint < 2);
+		_total_bytes[paint] = bytes;
+	    }
 	
-			_total_bytes[paint] = bytes;
-	
-		};
-	
-		void set_packets(unsigned packets, unsigned paint){
-	
-			_packets[paint] = packets;
-	
-		};
+	    void set_packets(unsigned packets, unsigned paint) {
+		assert(paint < 2);
+		_packets[paint] = packets;
+	    }
 
-		void inc_packets(unsigned paint){
-	
-			_packets[paint]++;
-	
-		};
+	    void inc_packets(unsigned paint) {
+		assert(paint < 2);
+		_packets[paint]++;
+	    }
 
-		unsigned last_seq(unsigned paint){
-		
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
+	    tcp_seq_t last_seq(unsigned paint) {
+		assert(paint < 2);
+		return _last_seq[paint];
+	    }
+	    
+	    tcp_seq_t last_ack(unsigned paint) {
+		assert(paint < 2);
+		return _last_seq[paint];
+	    }
+	
+	    unsigned total_bytes(unsigned paint) {
+		assert(paint < 2);
+		return  _total_bytes[paint];
+	    }
+	
+	    unsigned packets(unsigned paint) {
+		assert(paint < 2);
+		return _packets[paint];
+	    }
+	    
+	    unsigned bytes_lost(unsigned paint) {
+		assert(paint < 2);
+		return _bytes_lost[paint];
+	    }
+	    
+	    unsigned loss_events(unsigned paint) {
+		assert(paint < 2);
+		return _loss_events[paint];
+	    }
+	    
+	    unsigned ploss_events(unsigned paint) {
+		assert(paint < 2);
+		return _p_loss_events[paint];
+	    }
 
-			return _last_seq[paint];
-		};
+	    unsigned packets_lost(unsigned paint) {
+		assert(paint < 2);
+		return _packets_lost[paint];
+	    }
 		
-		unsigned last_ack(unsigned paint){
-		
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-		
-			return _last_ack[paint];
-		};
-	
-		unsigned total_bytes(unsigned paint){
-	
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _total_bytes[paint];
-		};
-	
-	
-		unsigned packets(unsigned paint){
-			
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _packets[paint];
-		};
-		
-		unsigned bytes_lost(unsigned paint){
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _bytes_lost[paint];
-		};
-		
-		unsigned loss_events(unsigned paint){
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _loss_events[paint];
-		};		
-		
-		unsigned ploss_events(unsigned paint){
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _p_loss_events[paint];
-		};		
-
-		unsigned packets_lost(unsigned paint){
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _packets_lost[paint];
-		};
-		
-		
+	    
 	};
+    
 	MapLoss loss_map;
 };
 
