@@ -1381,10 +1381,10 @@ class PlotCanvas:
         if t == PlotCanvas.TOOL_HAND:
             if state & gtk.gdk.BUTTON1_MASK:
                 state = self.press_state
-            if state & gtk.gdk.CONTROL_MASK:
-                t = PlotCanvas.TOOL_ZOOM_IN
-            elif state & gtk.gdk.MOD1_MASK:
+            if state & gtk.gdk.MOD1_MASK:
                 t = PlotCanvas.TOOL_ZOOM_OUT
+            elif state & gtk.gdk.CONTROL_MASK:
+                t = PlotCanvas.TOOL_ZOOM_IN
             elif state & gtk.gdk.BUTTON1_MASK:
                 t = PlotCanvas.TOOL_GRABHAND
         if t != self.show_tool:
