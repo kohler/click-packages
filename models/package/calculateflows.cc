@@ -411,7 +411,7 @@ bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const
 {
     // move k_time forward
-    while (k_time && ackk->timestamp - k_time->timestamp > 0.8 * min_ack_latency)
+    while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * min_ack_latency)
 	k_time = k_time->next;
 
     // go over previous packets, marking them as delivered
@@ -666,12 +666,13 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *conn, FILE *f) con
     tcp_seq_t max_ack = 0;
     for (Pkt *ack = acks->pkt_head; ack; ack = ack->next)
 	if (ack->seq == ack->end_seq) {
-	    Pkt *old_hint = hint;
-	    tcp_seq_t max_ack2 = max_ack;
+	    //Pkt *old_hint = hint;
+	    //tcp_seq_t max_ack2 = max_ack;
 	    if (Pkt *k = find_ack_cause2(ack, hint, max_ack)) {
 		k->flags |= Pkt::F_ACK_CAUSE;
 		struct timeval latency = ack->timestamp - k->timestamp;
-		fprintf(f, "%ld.%06ld %u %ld.%06ld %ld.%06ld %u %x\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec, old_hint->timestamp.tv_sec, old_hint->timestamp.tv_usec, max_ack2, ack->flags);
+		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec);
+		//fprintf(f, "%ld.%06ld %u %ld.%06ld %ld.%06ld %u %x\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec, old_hint->timestamp.tv_sec, old_hint->timestamp.tv_usec, max_ack2, ack->flags);
 	    }
 	}
     
@@ -713,6 +714,15 @@ CalculateFlows::StreamInfo::write_undelivered_xml(FILE *f) const
 }
 
 void
+CalculateFlows::StreamInfo::write_packets_xml(FILE *f) const
+{
+    fprintf(f, "    <packet>\n");
+    for (Pkt *k = pkt_head; k; k = k->next)
+	fprintf(f, "%ld.%06ld %u %u %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
+    fprintf(f, "    </packet>\n");
+}
+
+void
 CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_flags) const
 {
     fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
@@ -725,7 +735,7 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	|| ((write_flags & (WR_ACKLATENCY | WR_ACKCAUSALITY)) && have_ack_latency)
 	|| ((write_flags & WR_FULLRCVWND) && filled_rcv_window)
 	|| ((write_flags & WR_WINDOWPROBE) && sent_window_probe)
-	|| (write_flags & WR_UNDELIVERED)) {
+	|| (write_flags & (WR_UNDELIVERED | WR_PACKETS))) {
 	fprintf(f, ">\n");
 	if (loss_trail)
 	    loss_trail->write_xml(f);
@@ -739,6 +749,8 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	    write_window_probe_xml(f);
 	if (write_flags & WR_UNDELIVERED)
 	    write_undelivered_xml(f);
+	if (write_flags & WR_PACKETS)
+	    write_packets_xml(f);
 	fprintf(f, "  </stream>\n");
     } else
 	fprintf(f, " />\n");
@@ -931,7 +943,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false, window_probe = false;
+    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false, window_probe = false, packets = false;
     if (cp_va_parse(conf, this, errh,
 		    cpOptional,
 		    cpFilename, "output connection info file", &_traceinfo_filename,
@@ -946,6 +958,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
 		    "WINDOWPROBE", cpBool, "output window probes XML?", &window_probe,
 		    "UNDELIVERED", cpBool, "output undelivered packets XML?", &undelivered,
+		    "PACKET", cpBool, "output packet XML?", &packets,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
         return -1;
@@ -966,7 +979,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 	| (ackcausality ? WR_ACKCAUSALITY : 0)
 	| (full_rcv_window ? WR_FULLRCVWND : 0)
 	| (window_probe ? WR_WINDOWPROBE : 0)
-	| (undelivered ? WR_UNDELIVERED : 0);
+	| (undelivered ? WR_UNDELIVERED : 0)
+	| (packets ? WR_PACKETS : 0);
     return 0;
 }
 

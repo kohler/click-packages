@@ -96,6 +96,10 @@ packet's arrival and its ack's arrival at the trace point. These lines will
 generally be sorted in increasing order of I<timestamp>, but that is not
 guaranteed.
 
+=item PACKET
+
+Boolean.
+
 =item FULLRCVWINDOW
 
 Boolean. If true, then output a list of data packets that fill the receiver's
@@ -158,7 +162,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16 };
+    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
     static double float_timeval(const struct timeval &);
@@ -321,6 +325,7 @@ struct CalculateFlows::StreamInfo {
     void write_full_rcv_window_xml(FILE *) const;
     void write_window_probe_xml(FILE *) const;
     void write_undelivered_xml(FILE *) const;
+    void write_packets_xml(FILE *) const;
 
 };
 
