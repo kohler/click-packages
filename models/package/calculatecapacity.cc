@@ -414,8 +414,10 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 		break;
 	    }
 	    
-	    assert(intervals[j].time > start);
+	    assert(intervals[j].time >= start);
 	}
+	if(j >= pkt_cnt-1)
+	    continue;
 	//printf("j-1: %d\n", j-i);
 	//must be larger than any single flight
 	double timetmp = j - i > 20 ?
