@@ -256,11 +256,9 @@ CalculateFlows::StreamInfo::output_loss(ConnInfo *conn, CalculateFlows *cf)
     }
 
     // store loss
-    if (cf->stat_losses()) {
-	if (!loss_trail || loss_trail->n == LossBlock::CAPACITY)
-	    loss_trail = new LossBlock(loss_trail);
-	loss_trail->loss[loss_trail->n++] = loss;
-    }
+    if (!loss_trail || loss_trail->n == LossBlock::CAPACITY)
+	loss_trail = new LossBlock(loss_trail);
+    loss_trail->loss[loss_trail->n++] = loss;
     
     // clear loss
     loss.type = NO_LOSS;
@@ -341,7 +339,7 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 {
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
-    if (FILE *f = cf->stat_file()) {
+    if (FILE *f = cf->conninfo_file()) {
 	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
@@ -480,7 +478,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1), _tipfd(0), _tipsd(0), _stat_file(0), _filepos_call(0),
+    : Element(1, 1), _tipfd(0), _tipsd(0), _conninfo_file(0), _filepos_call(0),
       _free_pkt(0)
 {
     MOD_INC_USE_COUNT;
@@ -504,16 +502,17 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool stat_losses = false, ack_match = false, ip_id = true;
+    bool ack_match = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
+		    cpOptional,
+		    cpFilename, "output connection info file", &_conninfo_filename,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element for loss annotations", &tipsd_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element for loss annotations", &tipfd_element,
-		    "STATFILE", cpFilename, "filename for XML loss statistics", &_stat_filename,
-		    "STAT_LOSS", cpBool, "output every loss to STATFILE?", &stat_losses,
-		    "STAT_FILEPOS", cpReadHandlerCall, "output file position", &_filepos_call,
-		    "STAT_TRACEFILE", cpFilename, "input dump filename, for recording in STATFILE", &_stat_tracefile,
+		    "CONNINFO", cpFilename, "output connection info file", &_conninfo_filename,
+		    "CONNINFO_FILEPOS", cpReadHandlerCall, "output file position", &_filepos_call,
+		    "CONNINFO_TRACEFILE", cpFilename, "input dump filename, for recording in STATFILE", &_conninfo_tracefile,
 		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
@@ -530,7 +529,6 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
 	return errh->error("SUMMARYDUMP must be a ToIPSummaryDump element");
 
-    _stat_losses = stat_losses;
     _ack_match = (ack_match && _tipfd);
     _ip_id = ip_id;
     return 0;
@@ -539,23 +537,23 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 CalculateFlows::initialize(ErrorHandler *errh)
 {
-    if (!_stat_filename)
+    if (!_conninfo_filename)
 	/* nada */;
-    else if (_stat_filename == "-")
-	_stat_file = stdout;
-    else if (!(_stat_file = fopen(_stat_filename.cc(), "w")))
-	return errh->error("%s: %s", _stat_filename.cc(), strerror(errno));
-    if (_stat_file) {
-	fprintf(_stat_file, "<?xml version='1.0' standalone='yes'?>\n\
+    else if (_conninfo_filename == "-")
+	_conninfo_file = stdout;
+    else if (!(_conninfo_file = fopen(_conninfo_filename.cc(), "w")))
+	return errh->error("%s: %s", _conninfo_filename.cc(), strerror(errno));
+    if (_conninfo_file) {
+	fprintf(_conninfo_file, "<?xml version='1.0' standalone='yes'?>\n\
 <connections");
 	if (_tipfd)
-	    fprintf(_stat_file, " flowfilepattern='%s'",
+	    fprintf(_conninfo_file, " flowfilepattern='%s'",
 		    _tipfd->output_pattern().cc());
-	if (_stat_tracefile)
-	    fprintf(_stat_file, " tracefile='%s'", _stat_tracefile.cc());
+	if (_conninfo_tracefile)
+	    fprintf(_conninfo_file, " tracefile='%s'", _conninfo_tracefile.cc());
 	else if (_tipsd && _tipsd->filename())
-	    fprintf(_stat_file, " tracefile='%s'", _tipsd->filename().cc());
-	fprintf(_stat_file, ">\n");
+	    fprintf(_conninfo_file, " tracefile='%s'", _tipsd->filename().cc());
+	fprintf(_conninfo_file, ">\n");
     }
 
     // check handler call
@@ -573,9 +571,9 @@ CalculateFlows::cleanup(CleanupStage)
 	losstmp->kill(this);
     }
     _conn_map.clear();
-    if (_stat_file) {
-	fprintf(_stat_file, "</connections>\n");
-	fclose(_stat_file);
+    if (_conninfo_file) {
+	fprintf(_conninfo_file, "</connections>\n");
+	fclose(_conninfo_file);
     }
 }
 

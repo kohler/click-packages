@@ -12,7 +12,7 @@ class ToIPSummaryDump;
 /*
 =c
 
-CalculateTCPLossEvents([I<KEYWORDS>])
+CalculateTCPLossEvents([CONNINFO, I<keywords> CONNINFO, CONNINFO_FILEPOS, CONNINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACK_MATCH])
 
 =s
 
@@ -23,11 +23,29 @@ analyzes TCP flows for loss events
 Expects TCP packets with aggregate annotations set as if by AggregateIPFlows.
 Packets must have timestamps in increasing order. Analyzes these TCP flows and
 figures out where the loss events are. Loss events may be reported to a
-ToIPFlowDumps element, and/or to a loss-event or loss-statistics file.
+ToIPFlowDumps element, a ToIPSummaryDump element, and/or to a connection
+information file.
 
 Keywords are:
 
 =over 8
+
+=item CONNINFO
+
+Filename. If given, then output information about each aggregate to that file,
+in an XML format. Information includes the flow identifier, total sequence
+space used on each flow, and loss counts for each flow.
+
+=item CONNINFO_FILEPOS
+
+Read handler, whose value should correspond to the trace file position at
+which the packet currently being processed resides. If given, then CONNINFO
+will record the file position of the first packet in each flow, facilitating
+quicker processing.
+
+=item CONNINFO_TRACEFILE
+
+Filename. If given, this filename will be recorded in CONNINFO.
 
 =item NOTIFIER
 
@@ -51,29 +69,7 @@ A ToIPSummaryDump element. If provided, CalculateTCPLossEvents reports loss
 events to that element; they will show up as comments like "C<#ALOSSTYPE
 AGGREGATE DIRECTION TIME SEQ ENDTIME ENDSEQ>", where ALOSSTYPE is "C<aloss>"
 for loss events, "C<aploss>" for possible loss events, or "C<afloss>" for
-false loss events, and DIRECTION is "C<&gt;>" or "C<&lt>".
-
-=item STATFILE
-
-Filename. If given, then output information about each aggregate to that file,
-in an XML format. Information includes the flow identifier, total sequence
-space used on each flow, and loss counts for each flow.
-
-=item STAT_LOSS
-
-Boolean. If true, then STATFILE will contain information about each loss.
-Default is false.
-
-=item STAT_FILEPOS
-
-Read handler, whose value should correspond to the trace file position at
-which the packet currently being processed resides. If given, then STATFILE
-will record the file position of the first packet in each flow, facilitating
-quicker processing.
-
-=item STAT_TRACEFILE
-
-Filename. If given, this filename will be recorded in STATFILE.
+false loss events, and DIRECTION is "C<&gt;>" or "C<&lt;>".
 
 =item IP_ID
 
@@ -129,8 +125,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
     ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
-    FILE *stat_file() const		{ return _stat_file; }
-    bool stat_losses() const		{ return _stat_losses; }
+    FILE *conninfo_file() const		{ return _conninfo_file; }
     HandlerCall *filepos_call() const	{ return _filepos_call; }
     bool ack_match() const		{ return _ack_match; }
 
@@ -144,18 +139,17 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     ToIPFlowDumps *_tipfd;
     ToIPSummaryDump *_tipsd;
-    FILE *_stat_file;
+    FILE *_conninfo_file;
     HandlerCall *_filepos_call;
 
-    bool _stat_losses : 1;
     bool _ack_match : 1;
     bool _ip_id : 1;
     
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
 
-    String _stat_filename;
-    String _stat_tracefile;
+    String _conninfo_filename;
+    String _conninfo_tracefile;
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
@@ -195,7 +189,7 @@ struct CalculateFlows::LossInfo {
 };
 
 struct CalculateFlows::LossBlock {
-    enum { CAPACITY = 256 };
+    enum { CAPACITY = 32 };
     LossBlock *next;
     int n;
     LossInfo loss[CAPACITY];
