@@ -39,7 +39,7 @@ class TraceInfo: public Element {
 
     unsigned long long int _total_pkts;
     double _total_bytes;
-    typedef BigHashMap<unsigned, unsigned> counter_table;
+    typedef HashMap<unsigned, unsigned> counter_table;
     counter_table _hashed_counters;
 
     String _generaloutfilename;

@@ -87,7 +87,7 @@ class CalculateVariance : public Element {
     unsigned _num_aggregates_bits;
     unsigned long long int _total_pkts;
     bool _use_hash;
-    typedef BigHashMap<unsigned, CounterEntry> counter_table;
+    typedef HashMap<unsigned, CounterEntry> counter_table;
     counter_table _hashed_counters;
 
     Vector<TopAggregate> top_aggregates;

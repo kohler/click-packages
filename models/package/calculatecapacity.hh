@@ -101,7 +101,7 @@ class CalculateCapacity : public Element, public AggregateListener { public:
 
     static double float_timeval(const struct timeval &);
     
-    typedef BigHashMap<unsigned, ConnInfo *> ConnMap;
+    typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
     

@@ -181,5 +181,5 @@ EXPORT_ELEMENT(TraceInfo)
 #include <click/vector.cc>
 #include <click/bighashmap.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class BigHashMap<unsigned, unsigned>
+template class HashMap<unsigned, unsigned>
 #endif

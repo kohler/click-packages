@@ -32,7 +32,7 @@ class SplitInOutBound : public Element { public:
     String _outfilename;
 
 
-    typedef BigHashMap<IPAddress,int> address_table;
+    typedef HashMap<IPAddress,int> address_table;
     address_table _hash_inoutaddresses;
 };
     

@@ -41,7 +41,7 @@ class CollectTCPFlows : public Element { public:
     
   private:
 
-    typedef BigHashMap<IPFlowID, Flow *> Map;
+    typedef HashMap<IPFlowID, Flow *> Map;
     Map _map;
     Flow *_last_flow;
 

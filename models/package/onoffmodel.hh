@@ -53,7 +53,7 @@ class OnOffModel : public Element {
 
     };
 
-    typedef BigHashMap<IPAddress, OnOffConnCounter> onoff_countertable;
+    typedef HashMap<IPAddress, OnOffConnCounter> onoff_countertable;
     onoff_countertable _hashed_counters;
     struct timeval _max_silence_int;
 

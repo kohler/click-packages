@@ -158,12 +158,12 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8 };
+    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
     static double float_timeval(const struct timeval &);
     
-    typedef BigHashMap<unsigned, ConnInfo *> ConnMap;
+    typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
     
@@ -202,8 +202,6 @@ struct CalculateFlows::Pkt {
     tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
     uint16_t ip_id;		// IP ID of this packet
-    uint32_t tcp_stamp;		// TCP send timestamp option
-    uint32_t tcp_ackstamp;	// TCP ack timestamp option
 
     enum Flags {
 	F_NEW = 0x1,		// packet contains some new data
@@ -218,14 +216,16 @@ struct CalculateFlows::Pkt {
 	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
 
 	F_FILLS_RCV_WINDOW = 0x100, // packet filled receive window
-	F_TCP_STAMP = 0x200,	// TCP timestamps available?
-
-	F_DELIVERED = 0x400,	// do we think the packet was delivered?
-	F_ACK_CAUSE = 0x800	// do we think it caused an ack?
+	F_WINDOW_PROBE = 0x200,	// packet was a window probe
+	
+	F_DELIVERED = 0x10000,	// do we think the packet was delivered?
+	F_ACK_CAUSE = 0x20000	// do we think it caused an ack?
     };
     int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
+
+    Pkt *ack_cause;		// packet that caused this ack
 };
 
 struct CalculateFlows::LossInfo {
@@ -256,7 +256,7 @@ struct CalculateFlows::StreamInfo {
     bool have_fin : 1;		// have we seen a FIN?
     bool have_ack_latency : 1;	// have we seen an ACK match?
     bool filled_rcv_window : 1;	// have we ever filled the receive window?
-    bool sent_timestamp : 1;	// did we ever send a timestamp option?
+    bool sent_window_probe : 1;	// have we ever sent a window probe?
     bool sent_sackok : 1;	// did we send SACKOK on the SYN?
     
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
@@ -315,8 +315,9 @@ struct CalculateFlows::StreamInfo {
     void write_ack_latency_xml(ConnInfo *, FILE *) const;
     void write_ack_causality_xml(ConnInfo *, FILE *) const;
     void write_full_rcv_window_xml(FILE *) const;
+    void write_window_probe_xml(FILE *) const;
     void write_undelivered_xml(FILE *) const;
-    
+
 };
 
 class CalculateFlows::ConnInfo {  public:

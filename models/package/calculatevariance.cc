@@ -449,5 +449,5 @@ EXPORT_ELEMENT(CalculateVariance)
 #include <click/vector.cc>
 #include <click/bighashmap.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class BigHashMap<int, CalculateVariance::CounterEntry>
+template class HashMap<int, CalculateVariance::CounterEntry>
 #endif

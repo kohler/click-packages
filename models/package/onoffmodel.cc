@@ -180,5 +180,5 @@ EXPORT_ELEMENT(OnOffModel)
 #include <click/vector.cc>
 #include <click/bighashmap.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class BigHashMap<IPAddress, OnOffModel::OnOffConnCounter>
+template class HashMap<IPAddress, OnOffModel::OnOffConnCounter>
 #endif
