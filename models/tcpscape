@@ -11,6 +11,9 @@ fill_colors = {
     "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond",
     "border": "grey", "lossborder": "yellow"
 }
+gc_dashes = {
+    "lossborder": [4, 4]
+}
 
 def frange(start, stop, step):
     i = 0
@@ -109,7 +112,7 @@ class Connection:
             i = 0
         else:
             i = self.first_index_after(begin, dir)
-        while i < len(self.s[dir]) and (end is None or self.s[dir][i].time < end):
+        while i < len(self.s[dir]) and (end is None or self.s[dir][i].time <= end):
             yield self.s[dir][i]
             i += 1
     def losses(self, dir, begin=None, end=None):
@@ -136,16 +139,19 @@ class Connection:
             return 0
     def _seq_range(self, dir, begin, end):
         s0, s1 = 1e10, None
-        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True) - 1):
-            s0 = min(s0, self.s[dir][i].seq)
-            s1 = max(s1, self.s[dir][i].last_seq)
-        return s0, s1
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
+            s0 = min(s0, self.s[dir][i].seq - 20)
+            s1 = max(s1, self.s[dir][i].last_seq + 20)
+        for l in self.losses(dir, begin, end):
+            s0 = min(s0, l.seq - 50)
+            s1 = max(s1, l.end_seq + 50)
+        return max(s0, 0), s1
     def _ack_range(self, dir, begin, end):
         s0, s1 = 1e10, None
-        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True) - 1):
-            s0 = min(s0, self.s[dir][i].ack)
-            s1 = max(s1, self.s[dir][i].ack)
-        return s0, s1
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
+            s0 = min(s0, self.s[dir][i].ack - 20)
+            s1 = max(s1, self.s[dir][i].ack + 20)
+        return max(s0, 0), s1
     def seq_range(self, dir=None, begin=None, end=None):
         if not self.available:
             self.load()
@@ -200,7 +206,9 @@ def fix_range(a, b, min_step_frac):
     b_try = ceil(b / step) * step
     if b_try - b < 0.1*d:
         b = b_try
-
+    else:
+        b += 0.01*d
+    
     # return a dictionary
     return { "low": a, "high": b, "step": step }
 
@@ -209,18 +217,25 @@ class PlotCanvas:
     def __init__(self, master, width=600, height=500):
         self.canvas = gtk.DrawingArea()
         self.canvas.set_size_request(width, height)
-        master.pack_start(self.canvas, expand=1, fill=1)
-        self.canvas.show()
 
         self.canvas.connect("configure_event", self.cmd_configure)
         self.canvas.connect("expose_event", self.cmd_expose)
+        self.canvas.connect("button_press_event", self.cmd_press)
+        self.canvas.connect("button_release_event", self.cmd_release)
+        self.canvas.connect("enter_notify_event", self.cmd_enter)
+        self.canvas.connect("leave_notify_event", self.cmd_leave)
+        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK)
         
+        master.pack_start(self.canvas, expand=1, fill=1)
+        self.canvas.show()
+
         self.left_margin = 40
         self.right_margin = 20
         self.top_margin = 10
         self.bottom_margin = 20
         self.gc = {}
         self.plotted = False
+        self.press_x = None
     def set_connection(self, conn, dir, begin=None, end=None, duration=None):
         if begin is not None and duration is not None and end is None:
             end = begin + duration
@@ -239,12 +254,56 @@ class PlotCanvas:
         if not self.gc.has_key("data"):
             cmap = self.canvas.get_colormap()
             for k in fill_colors.keys():
-                self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(fill_colors[k]))
+                self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(fill_colors[k]), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
+            for k in gc_dashes.keys():
+                self.gc[k].line_style = gtk.gdk.LINE_ON_OFF_DASH
+                self.gc[k].set_dashes(0, gc_dashes[k])
         
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
     def cmd_expose(self, widget, event):
         self.plot()
+
+    def _itransform(self, x, y):
+        if self.plotted and x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height:
+            return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
+        else:
+            raise ValueError
+    def _trange(self):
+        if self.plotted:
+            return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
+        else:
+            raise ValueError
+    def cmd_press(self, widget, event):
+        try:
+            if event.button == 1:
+                self.press_x, press_y = self._itransform(event.x, event.y)
+        except ValueError:
+            pass
+        return 1
+    def cmd_release(self, widget, event):
+        try:
+            if event.button == 1 and self.press_x is not None:
+                press_x, y = self._itransform(event.x, event.y)
+                if abs(press_x - self.press_x) > 5 / self.tscale:
+                    self.begin = min(press_x, self.press_x)
+                    self.end = max(press_x, self.press_x)
+                    self.plot()
+                else:
+                    t0, t1 = self._trange()
+                    new_dt = (t1 - t0) / 5
+                    self.begin = press_x - new_dt * ((press_x - t0) / (t1 - t0))
+                    if self.begin < 0: self.begin = 0
+                    self.end = self.begin + new_dt
+                    self.plot()
+        except ValueError:
+            pass
+        self.press_x = None
+        return 1
+    def cmd_enter(self, widget, event):
+        return 1
+    def cmd_leave(self, widget, event):
+        return 1
 
     # drawing helpers
     def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, playout):
@@ -270,19 +329,21 @@ class PlotCanvas:
             mstep = step / 10
         else:
             mstep = step / 4
-        for pos in frange(pos1, pos2, step):
+        for pos in frange(floor(pos1 / step) * step, pos2, step):
             pix = pos * scale + off
-            ticer(pix, edge1, edge2, 5, drawable, gc)
-            labeller("%.4g" % pos, pix, edge1, edge2, drawable, gc, playout)
+            if pos >= pos1:
+                ticer(pix, edge1, edge2, 5, drawable, gc)
+                labeller("%g" % pos, pix, edge1, edge2, drawable, gc, playout)
             for mpos in frange(pos + mstep, min(pos + step, pos2), mstep):
                 mpix = mpos * scale + off
-                ticer(mpix, edge1, edge2, 2, drawable, gc)
+                if mpos >= pos1:
+                    ticer(mpix, edge1, edge2, 2, drawable, gc)
 
-    def plot(self):
-        global cross_bitmap
-        self.plotted = True
+    def plot(self, drawable=None):
+        if drawable is None: drawable = self.canvas.window
+        drawable.clear()
         if self.conn is not None:
-            
+
             # analyze time and sequence ranges
             t0, t1 = self.begin, self.end
             if t0 is None:
@@ -290,6 +351,8 @@ class PlotCanvas:
             if t1 is None:
                 t1 = self.conn.time_range(self.dir)[1]
             s0, s1 = self.conn.seq_range(self.dir, t0, t1)
+            if s0 is None or s1 is None:
+                s0 = 0; s1 = 1
 
             # fix ranges
             ranges = fix_range(t0, t1, 30.0 / self.plot_width)
@@ -302,13 +365,12 @@ class PlotCanvas:
             sscale = self.plot_height / float(s0 - s1)
             toff = self.left_margin - (t0 * tscale)
             soff = self.top_margin - (s1 * sscale)
+            self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
 
             # variables
-            drawable = self.canvas.window
             playout = self.canvas.create_pango_layout("")
 
             # clear background
-            drawable.clear()
             drawable.draw_rectangle(self.canvas.get_style().white_gc, gtk.TRUE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
 
             # losses
@@ -340,13 +402,16 @@ class PlotCanvas:
             # ack packets
             gc1 = self.gc["ack"]; gc2 = self.gc["dataack"]
             for p in self.conn.packets(1 - self.dir, t0, t1):
-                x, y = int(p.time * tscale + toff), int(p.ack * sscale + soff)
+                x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
                 if p.pure_ack(): gc = gc1
                 else: gc = gc2
                 drawable.draw_line(gc, x - 2, y - 2, x + 2, y + 2)
-                drawable.draw_line(gc, x + 2, y - 2, x - 2, y + 2)
-    def pack(self, *args, **keys):
-        self.canvas.pack(*args, **keys)
+                drawable.draw_line(gc, x - 2, y + 2, x + 2, y - 2)
+
+            self.plotted = True
+
+        else:
+            self.plotted = False
 
 
 class PlotBox:
