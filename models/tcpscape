@@ -81,8 +81,22 @@ def stock_image(stock_id):
     image.set_from_stock(stock_id, gtk.ICON_SIZE_SMALL_TOOLBAR)
     return image
 
+def file_image(filename):
+    image = gtk.Image()
+    image.set_from_file(filename)
+    return image
+
+def bisect_with_cmp(list, cmp, lo=0, hi=None):
+    if hi is None: hi = len(list) - 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if cmp(list[mid]) < 0: hi = mid
+        else: lo = mid + 1
+    return lo
+
 
 class Packet:
+    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks']
     def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0):
         self.time = float(time)
         self.seq = float(seq)
@@ -151,6 +165,8 @@ def unparse_tcp_flags(flags):
            "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
 
 class Connection:
+
+    __slots__ = ['s', 'loss', 'available', 'flowid', 'aggregate', 'loss_count', 'filename']
     
     def __init__(self, f=None, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
@@ -396,8 +412,10 @@ class Connection:
 
 class FlowRef:
 
+    __slots__ = ['conn', 'dir']
+
     def __init__(self, conn, dir):
-        self.conn, self.dir, self.plotboxes = conn, dir, []
+        self.conn, self.dir = conn, dir
 
     def loss_count(self):
         return self.conn.loss_count[self.dir]
@@ -420,15 +438,6 @@ class FlowRef:
     def unload(self):
         self.conn.unload()
 
-    def add_plotbox(self, plotbox):
-        self.plotboxes.append(plotbox)
-
-    def del_plotbox(self, plotbox):
-        self.plotboxes.remove(plotbox)
-
-    def shown(self):
-        return len(self.plotboxes) > 0
-
     def __cmp__(self, other):
         if self.conn is other.conn:
             return self.dir - other.dir
@@ -443,10 +452,14 @@ class FlowRef:
 
 
 class FlowSet:
-    
+
+    SORT_NONE = 0
+    SORT_LOSS = 1
+
     def __init__(self, f=None):
         self.conns = []
         self.flows = []
+        self.sorted = FlowSet.SORT_NONE
         if type(f) == types.StringType:
             slash = f.rfind('/')
             if slash >= 0: dir = f[:slash+1]
@@ -539,6 +552,7 @@ class FlowSet:
 
     def sort_by_loss_count(self):
         self.flows.sort(lambda a, b: b.loss_count().__cmp__(a.loss_count()) or a.aggregate().__cmp__(b.aggregate()))
+        self.sorted = FlowSet.SORT_LOSS
 
     def __getitem__(self, k):
         if type(k) == types.SliceType:
@@ -554,6 +568,13 @@ class FlowSet:
         self.conns.append(conn)
         self.flows.append(FlowRef(conn, 0))
         self.flows.append(FlowRef(conn, 1))
+
+    def index(self, flowref):
+        if self.sorted == FlowSet.SORT_LOSS:
+            l, a = flowref.loss_count(), flowref.aggregate()
+            return bisect_with_cmp(self.flows, lambda f: (f.loss_count() - l) or (a - f.aggregate())) - 1
+        else:
+            return self.flows.index(flowref)
 
 
 _by_loss_groups = [ (50, "50 or more losses"),
@@ -645,10 +666,8 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
             else:
                 return ''
         elif column == 0:
-            if self.path2flowref(n).shown():
-                return 'X'
-            else:
-                return ''
+            # XXX shown()
+            return ''
         elif column == 1:
             l = self.path2flowref(n).loss_count()
             if l == 1:
@@ -1334,40 +1353,30 @@ class PlotBox:
         self.frame = gtk.VBox()
         self.frame.show()
         
-        self.lframe = gtk.HBox()
-        self.frame.pack_start(self.lframe, expand=0, fill=0)
-        self.lframe.show()
-        self.l0 = gtk.Label("")
-        self.dirbutton = gtk.Button(">")
-        self.dirbutton.connect("clicked", self.cmd_dirbutton)
-        self.dirbutton.unset_flags(gtk.CAN_FOCUS)
-        self.l1 = gtk.Label("foo")
-        self.lframe.pack_start(self.l0, expand=0, fill=0); self.l0.show()
-        self.lframe.pack_start(self.dirbutton, expand=0, fill=0); self.dirbutton.show()
-        self.lframe.pack_start(self.l1, expand=0, fill=0); self.l1.show()
-
         self.canvas = PlotCanvas(self.frame)
 
         self.scale = gtk.HScrollbar(adjustment=self.canvas.get_time_adjustment())
         self.frame.pack_start(self.scale, 0, 0)
         self.scale.show()
-    def cmd_dirbutton(self, *args):
-        self.set_flowref(self.canvas.get_flowref().opposite())
+
+        self.statusbar = gtk.Label("")
+        self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
+        self.statusbar.set_alignment(0, 0.5)
+        self.statusbar.set_padding(5, 3)
+        self.frame.pack_start(self.statusbar, 0, 0)
+        self.statusbar.show()
     def set_flowref(self, fref):
         self.canvas.set_flowref(fref)
-        desc = fref.conn.get_description()
-        mid = desc.find(' > ')
-        s = desc[:mid + 1]
-        s = re.sub("(^\\#[0-9]+)", "  <b>\\1</b>", s)
-        self.l0.set_markup(s)
-        self.l1.set_label(desc[mid + 2:])
-        self.dirbutton.set_label("><"[fref.dir])
+        desc = fref.get_description()
+        desc = re.sub("<", "&lt;", desc)
+        desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
+        self.statusbar.set_markup(desc)
     def view_all(self):
         self.canvas.view_all()
     def zoom_in(self):
         self.canvas.zoom(factor=0.75)
     def zoom_out(self):
-        self.canvas.zoom(factor=1.5)
+        self.canvas.zoom(factor=1.25)
     def pack(self, *args, **keys):
         self.frame.pack(*args, **keys)
     def get_widget(self):
@@ -1443,6 +1452,7 @@ class PlotFlowWindow:
         if len(fset):
             self.plotbox.set_flowref(fset[0])
             self.flowtree.select_flowref(fset[0])
+        self._activate_flow_items()
 
         win.show()
 
@@ -1460,23 +1470,28 @@ class PlotFlowWindow:
    	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, None ),
             ( "/_View",		None,		None, 0, "<Branch>" ),
+            ( "/View/View _All", None, self.cmd_zoom_fit, 0, None ),
             ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
             ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
-            ( "/View/View _All", None, self.cmd_zoom_fit, 0, None ),
    	    ( "/View/sep1",     None,         None, 0, "<Separator>" ),
             ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, None ),
             ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, None ),
+            ( "/View/_Swap Direction", None, self.cmd_swap_dir, 0, None )
    	    ))
-        self._activate_flow_items()
         menubar = self.item_factory.get_widget("<main>")
         vbox.pack_start(menubar, 0, 0)
         menubar.show()
 
     def _init_toolbar(self, win, vbox):
         toolbar = gtk.Toolbar()
+        toolbar.set_style(gtk.TOOLBAR_BOTH)
         toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
         toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
         toolbar.append_item("All", "Show whole connection", "", stock_image(gtk.STOCK_ZOOM_FIT), self.cmd_zoom_fit, 0)
+        toolbar.append_space()
+        self.prev_flow_button = toolbar.append_item("Prev", "Switch to previous flow", "", stock_image(gtk.STOCK_GO_BACK), self.cmd_prev_flow, 0)
+        self.next_flow_button = toolbar.append_item("Next", "Switch to next flow", "", stock_image(gtk.STOCK_GO_FORWARD), self.cmd_next_flow, 0)
+        toolbar.append_item("Swap", "Show the other flow of this connection", "", file_image("double_arrow_small.png"), self.cmd_swap_dir, 0)
         vbox.pack_start(toolbar, 0, 0)
         toolbar.show()
 
@@ -1499,8 +1514,13 @@ class PlotFlowWindow:
 
     def _activate_flow_items(self):
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
+        self.next_flow_button.set_sensitive(self.flowid < len(self.flowset) - 1)
         self.item_factory.get_item("/View/Previous Flow").set_sensitive(self.flowid > 0)
+        self.prev_flow_button.set_sensitive(self.flowid > 0)
 
+    def flowref(self):
+        return self.flowset[self.flowid]
+    
     def _change_flowid(self, new_flowid):
         of, nf = self.flowset[self.flowid], self.flowset[new_flowid]
         if of.conn is not nf.conn:
@@ -1515,6 +1535,9 @@ class PlotFlowWindow:
 
     def cmd_prev_flow(self, widget, event):
         self._change_flowid(self.flowid - 1)
+
+    def cmd_swap_dir(self, widget, event):
+        self._change_flowid(self.flowset.index(self.flowref().opposite()))
 
 
 if __name__ == "__main__":
