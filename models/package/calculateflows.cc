@@ -510,13 +510,6 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
 	    timeval min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
 	    fprintf(f, "  <rtt source='minacklatency' value='%ld.%06ld' />\n", min_rtt.tv_sec, min_rtt.tv_usec);
-	} else if (_stream[0].have_ack_latency ||
-		   _stream[1].have_ack_latency) {
-	    timeval min_rtt;
-	    min_rtt = _stream[0].have_ack_latency ?
-		_stream[0].min_ack_latency : _stream[1].min_ack_latency;
-	    fprintf(f, "  <rtt source='onewayacklatency' value='%ld.%06ld' />\n", min_rtt.tv_sec, min_rtt.tv_usec);
-
 	}
 	
 	_stream[0].write_xml(this, f, cf->write_ack_latency(), cf->write_full_rcv_window());
