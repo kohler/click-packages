@@ -37,17 +37,7 @@ Keywords are:
 =item TRACEINFO
 
 Filename.  If given, then output information about each aggregate to that
-file, in an XML format.  The XML format looks like this:
-
-   <trace file='/Users/kohler/click-pkg/models/examples/sample.dump'>
-   <flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909' duration='131.647561' filepos='24'>
-     <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' sentsackok='yes'>
-     </stream>
-     <stream dir='1' ndata='2487' nack='0' beginseq='2831743689' seqlen='3548305'>
-     </stream>
-   </flow>
-   ...
-   </trace>
+file, in an XML format.  See below for an example.
 
 =item SOURCE
 
@@ -109,11 +99,27 @@ Default is false.
 
 =e
 
-   FromDump(-, STOP true, FORCE_IP true)
+This configuration collects information from a tcpdump(1) file specified on
+standard input, and writes an XML summary to F<tcpinfo.xml>.
+
+   require(models);
+   d :: FromDump(-, STOP true, FORCE_IP true)
       -> IPClassifier(tcp)
-      -> af :: AggregateIPFlows
-      -> TCPCollector(tcpinfo.xml, NOTIFIER af)
+      -> a :: AggregateIPFlows
+      -> TCPCollector(tcpinfo.xml, SOURCE d, NOTIFIER a)
       -> Discard;
+
+After it runs, F<tcpinfo.xml> might look like this:
+
+   <?xml version='1.0' standalone='yes'?>
+   <trace file='<stdin>'>
+   <flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909' duration='131.647561' filepos='24'>
+     <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' sentsackok='yes'>
+     </stream>
+     <stream dir='1' ndata='2487' nack='0' beginseq='2831743689' seqlen='3548305'>
+     </stream>
+   </flow>
+   </trace>
 
 =a
 

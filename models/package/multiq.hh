@@ -24,7 +24,9 @@ in two ways.  First, it calculates interarrival times of any packets fed to
 its input; capacity information about these packets is available via the
 "capacities" handler.  Second, if you supply the name of a TCPCollector
 element via the TCPCOLLECTOR keyword, MultiQ will write capacity information
-for each significant TCP flow into the TCPCollector's output XML file.
+for each significant TCP flow into the TCPCollector's output XML file.  (A
+flow is significant if it had a 1500-byte MTU, it contained at least 50 data
+packets, and its rate was greater than 9.5 packets per second.)
 
 MultiQ has either zero or one inputs, and the same number of outputs.
 
@@ -61,15 +63,92 @@ has an input.
 
 =e
 
-   FromDump(-, STOP true, FORCE_IP true)
+This configuration reads a tcpdump(1) file on the standard input, calculates
+capacities for every TCP flow it contains, and writes an XML file to
+F<tcpinfo.xml> containing MultiQ capacity information for every significant
+flow in the trace.
+
+   require(models);
+   d :: FromDump(-, STOP true, FORCE_IP true)
       -> IPClassifier(tcp)
-      -> af :: AggregateIPFlows
-      -> TCPCollector(tcpinfo.xml, NOTIFIER af)
+      -> a :: AggregateIPFlows
+      -> tcpc :: TCPCollector(tcpinfo.xml, SOURCE d, NOTIFIER a)
       -> Discard;
+   MultiQ(TCPCOLLECTOR tcpc);
+
+After running Click on this configuration, F<tcpinfo.xml> might look like
+this:
+
+   <?xml version='1.0' standalone='yes'?>
+   <trace file='<stdin>'>
+   
+   <flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909' duration='131.647561' filepos='24'>
+     <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' mtu='430' sentsackok='yes'>
+       <multiq_capacity type='ack' scale='25.3' time='1313.299' bandwidth='9.454' commonbandwidth='10.000' commontype='10bT' bandwidth52='0.317' commonbandwidth52='0.317' commontype52='?' />
+       <multiq_capacity type='ack' scale='10.0' time='23.031' bandwidth='539.103' commonbandwidth='622.080' commontype='OC12' bandwidth52='18.063' commonbandwidth52='18.063' commontype52='?' />
+     </stream>
+     <stream dir='1' ndata='2487' nack='0' beginseq='2831743689' seqlen='3548305' mtu='1500'>
+       <multiq_capacity type='data' scale='760.2' time='1286.668' bandwidth='9.326' commonbandwidth='10.000' commontype='10bT' bandwidth52='0.323' commonbandwidth52='0.323' commontype52='?' />
+       <multiq_capacity type='data' scale='74.0' time='691.101' bandwidth='17.364' commonbandwidth='17.364' commontype='?' bandwidth52='0.602' commonbandwidth52='0.602' commontype52='?' />
+     </stream>
+   </flow>
+   
+   <flow aggregate='2' src='203.167.213.81' sport='23568' dst='192.150.187.11' dport='80' begin='1028686953.640701' duration='45.544054' filepos='346485'>
+     <stream dir='0' ndata='3' nack='63' beginseq='3453338283' seqlen='486' mtu='524' sentsackok='yes'>
+     </stream>
+     <stream dir='1' ndata='110' nack='1' beginseq='3034663568' seqlen='159102' mtu='1500'>
+     </stream>
+   </flow>
+   
+   </trace>
+
+The second flow has no C<E<lt>multiq_capacityE<gt>> annotations because it was
+not significant.
+
+The following configuration assumes that the input tcpdump(1) file contains
+information about one direction of a significant flow.  The MultiQ element
+reads interarrival times from passing packets.
+
+   require(models);
+   FromDump(-, FORCE_IP true, STOP true)
+     -> m::MultiQ
+     -> Discard;
+   DriverManager(wait_stop, save m.capacities -);
+
+This configuration wil print capacity information to standard output, in the
+following format:
+
+       w     NTT (us)  1500-BW    40-BW (1500-BW) (40-BW)
+    163.2   955.744    12.556    0.435   12.556    0.435
+     13.3   148.382    80.872    2.804  100.000    2.804
+
+If your dump file has more than one flow in it, use IPFilter,
+AggregateIPFlows, AggregateFilter, and/or CheckPaint to select one flow from
+the background.
+
+Finally, you can use MultiQ and FromIPSummaryDump to figure out capacity
+information from flat files of interarrival times.  Create a file of
+interarrival times, where there's one interarrival time, measured in
+microseconds, per line.  For example:
+
+   209878
+   38718
+   492618
+   73
+
+Then feed that file into this configuration.
+
+   require(models);
+   FromIPSummaryDump(-, CONTENTS usec1, STOP true)
+     -> m::MultiQ(RAW_TIMESTAMP true)
+     -> Discard;
+   DriverManager(wait_stop, save m.capacities -);
+
+The output format is the same as above.
 
 =a
 
-TCPCollector */
+TCPCollector, FromIPSummaryDump, FromDump, DriverManager */
 
 class MultiQ : public Element { public:
 
