@@ -1,6 +1,6 @@
 require(aggregates);
 
-FromTUSummaryLog("-",STOP true)
+FromDump("-",STOP true,FORCE_IP true)
     -> allpktcount::Counter()
     -> classifier::IPClassifier(tcp port 80,-);
 
@@ -15,6 +15,6 @@ classifier[1]
 DriverManager(wait_pause,
 	        print allpktcount.count,
 		print webpktcount.count,
-		write onoff.write_ascii_file master-onoff-har,
+		write onoff.write_ascii_file master-onoff-att01,
 		stop);
 	
