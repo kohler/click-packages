@@ -31,6 +31,7 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    cpTimeval, "interval in struct timeval", &_interval,
 		    cpUnsigned, "number of aggregates expected", &naggregates,
 		    cpFilename, "filename for output",&_outfilename,
+		    cpFilename, "filename for output of topagg",&_topaggoutfilename,
 		    cpKeywords,
 		    "BITS", cpBool, "number of aggregates is in bits?", &bits,
 		    "USEHASH",cpBool,"use hash table for classifying aggregates?",&_use_hash,
@@ -49,6 +50,9 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 
     if (!_use_hash) 
 	_counters.resize(_num_aggregates);
+
+    top_aggregates.resize(1024);
+    top_agg_index = 0;
 
     return 0;
 }
@@ -72,12 +76,6 @@ CalculateVariance::initialize(ErrorHandler *)
 Packet *
 CalculateVariance::simple_action(Packet *p)
 {
-    /*
-    const click_ip *iph = p->ip_header();
-    IPAddress dstaddr = IPAddress(iph->ip_dst);
-    IPAddress srcaddr = IPAddress(iph->ip_src);
-    printf("src addr %s dst addr %s\n",srcaddr.unparse().cc(),dstaddr.unparse().cc());
-    */
 
     uint32_t row = AGGREGATE_ANNO(p);
 
@@ -96,11 +94,34 @@ CalculateVariance::simple_action(Packet *p)
 	}
 
 	if(timercmp(&p->timestamp_anno(),&_end_time,>)) {
+	    int total_pkts_in_interval = 0;
+	    int max_pkts_in_interval = 0;
+	    int top_agg = 0;
+
 	    for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+
 		CalculateVariance::CounterEntry e = iter.value();
+
+		//keep track of the top aggregate in this interval
+		total_pkts_in_interval += e.pkt_sum_interval;
+		if (max_pkts_in_interval < e.pkt_sum_interval) {
+		    max_pkts_in_interval = e.pkt_sum_interval;
+		    top_agg = iter.key();
+		}
+
 		e.pkt_sum += e.pkt_sum_interval;
 		e.pkt_sum_sq += (double)e.pkt_sum_interval * e.pkt_sum_interval;
 		e.pkt_sum_interval = 0;
+	    }
+
+	    //store the top aggregate for this interval
+	    top_aggregates[top_agg_index]._which_interval = _end_time;
+	    top_aggregates[top_agg_index]._which_agg = top_agg;
+	    top_aggregates[top_agg_index]._num_pkts = max_pkts_in_interval;
+	    top_aggregates[top_agg_index]._percentage = (double)max_pkts_in_interval/total_pkts_in_interval;
+	    top_agg_index++;
+	    if (top_agg_index >= top_aggregates.size()) {
+		top_aggregates.resize(top_agg_index * 2);
 	    }
 
 	    timeradd(&p->timestamp_anno(), &_interval, &_end_time);
@@ -286,6 +307,26 @@ CalculateVariance::print_edf_function()
 
 }
 
+void
+CalculateVariance::print_top_aggregates()
+{
+
+    FILE *outfile = fopen(_topaggoutfilename.cc(), "w");
+    if (!outfile) {
+        click_chatter("%s: %s", _topaggoutfilename.cc(), strerror(errno));
+	return;
+    }
+
+    for (int i=0;i<top_agg_index;i++) {
+	fprintf(outfile,"%d.%d\t%.3f\t%d\t%d\n", top_aggregates[i]._which_interval.tv_sec, top_aggregates[i]._which_interval.tv_usec, top_aggregates[i]._percentage, top_aggregates[i]._which_agg, top_aggregates[i]._num_pkts);
+    }
+
+    if (fclose(outfile)) {
+	click_chatter("error closing file!");
+    }
+   
+}
+
 static String
 calculatevariance_read_variance_handler(Element *e, void *thunk)
 {
@@ -300,7 +341,7 @@ calculatevariance_print_all_variance_handler(Element *e, void *)
 {
     CalculateVariance *cv = (CalculateVariance *)e;
     cv->print_all_variance();
-    return String("\n");
+    return String("");
 }
 
 static String
@@ -308,7 +349,15 @@ calculatevariance_print_edf_function_handler(Element *e, void *)
 {
     CalculateVariance *cv = (CalculateVariance *)e;
     cv->print_edf_function();
-    return String("\n");
+    return String("");
+}
+
+static String
+calculatevariance_print_top_aggregates_handler(Element *e, void *)
+{
+    CalculateVariance *cv = (CalculateVariance *)e;
+    cv->print_top_aggregates();
+    return String("");
 }
 
 static int
@@ -325,6 +374,7 @@ CalculateVariance::add_handlers()
     add_read_handler("variance",calculatevariance_read_variance_handler,0);
     add_read_handler("printallvariance",calculatevariance_print_all_variance_handler,0);
     add_read_handler("printEDFfunction",calculatevariance_print_edf_function_handler,0);
+    add_read_handler("printtopaggregates",calculatevariance_print_top_aggregates_handler,0);
     add_write_handler("reset",calculatevariance_reset_write_handler,0);
 }
 

@@ -49,6 +49,7 @@ class CalculateVariance : public Element {
     void reset();
     void print_all_variance(); 
     void print_edf_function();
+    void print_top_aggregates();
 
     class CounterEntry {
 	public:
@@ -73,6 +74,13 @@ class CalculateVariance : public Element {
 	*/
     };
 
+    struct TopAggregate {
+	struct timeval _which_interval;
+	int _which_agg;
+	long _num_pkts;
+	double _percentage;
+    };
+
     Vector<CounterEntry> _counters;
     unsigned _num_aggregates;
     unsigned _num_aggregates_bits;
@@ -81,7 +89,11 @@ class CalculateVariance : public Element {
     typedef BigHashMap<int, CounterEntry> counter_table;
     counter_table _hashed_counters;
 
+    Vector<TopAggregate> top_aggregates;
+    unsigned top_agg_index;
+
     String _outfilename;
+    String _topaggoutfilename;
 
 };
 
