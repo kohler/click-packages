@@ -14,8 +14,135 @@
 #include "tcpscoreboard.hh"
 CLICK_DECLS
 
+
+// Element setup     //
+//                   //
+
+TCPMystery::TCPMystery()
+{
+    MOD_INC_USE_COUNT;
+}
+
+TCPMystery::~TCPMystery()
+{
+    MOD_DEC_USE_COUNT;
+}
+
+int
+TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
+{
+    Element *e;
+    if (cp_va_parse(conf, this, errh,
+		    cpElement, "TCPCollector", &e,
+		    cpEnd) < 0)
+	return -1;
+    TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");
+    if (!tcpc)
+	return errh->error("'%s' not a TCPCollector element", e->declaration().c_str());
+    tcpc->add_stream_xmltag("multiq_capacity", multiqcapacity_xmltag, this);
+    _myconn_offset = tcpc->add_conn_attachment(this, sizeof(MyConn));
+    _mypkt_offset = tcpc->add_pkt_attachment(sizeof(MyPkt));
+    return 0;
+}
+
+
 void
-TCPMystery::MStreamInfo::categorize(Pkt *np, ConnInfo *conn, TCPMystery *parent)
+TCPMystery::find_min_ack_latency(Stream* s, Conn* c)
+{
+    MyStream* ms = mystream(s);
+    Pkt* ackk = c->ack_stream(s)->pkt_head;
+    ms->have_ack_latency = false;
+    for (Pkt* k = s->pkt_head; k && ackk; k = k->next)
+	if (k->seq != k->end_seq && !(k->flags & Pkt::F_NONORDERED)) {
+	    while (ackk && SEQ_LT(ackk->ack, k->end_seq))
+		ackk = ackk->next;
+	    if (ackk) {
+		timeval diff = ackk->timestamp - k->timestamp;
+		if (!ms->have_ack_latency || diff < ms->min_ack_latency) {
+		    ms->min_ack_latency = diff;
+		    ms->have_ack_latency = true;
+		}
+	    }
+	}
+}
+
+void
+TCPMystery::find_loss_events(Stream* s, Conn* c)
+{
+    for (Pkt* k = s->pkt_head; k; k = k->next) {
+	
+	MyPkt* mk = mypkt(k);
+	mk->flags = 0;
+	mk->caused_ack = 0;
+	mk->rexmit = 0;
+	
+	// skip pure acks, packets with new data, and network duplicates
+	if (k->seq == k->end_seq
+	    || (k->flags & (Pkt::F_NEW | Pkt::F_DUPLICATE)))
+	    continue;
+
+	// Find the retransmission.
+	if (k->flags & Pkt::F_DUPDATA) {
+	    for (Pkt* x = k->prev; x; x = x->prev) {
+		if (x->seq == x->end_seq)
+		    continue;
+		if ((x->flags & Pkt::F_NEW) && SEQ_LEQ(x->end_seq, k->seq))
+		    break;
+		if (x->seq == k->seq && x->end_seq == k->end_seq) {
+		    mk->flags |= MyPkt::F_REXMIT | MyPkt::F_FULL_REXMIT;
+		    mk->rexmit = x;
+		    break;
+		} else if ((SEQ_LEQ(x->seq, k->seq) && SEQ_LT(k->seq, x->end_seq))
+			   || (SEQ_LT(x->seq, k->end_seq) && SEQ_LEQ(k->end_seq, x->end_seq))) {
+		    // partial retransmission. There might be a more relevant
+		    // preceding retransmission, so keep searching for one.
+		    mk->flags |= MyPkt::F_REXMIT;
+		    mk->rexmit = x;
+		}
+	    }
+	    
+	} else {
+	    // If !F_DUPDATA, then the data in this packet was not seen
+	    // earlier in the connection.  But it's not F_NEW, so newer data
+	    // was seen previously.  Perhaps we have a retransmission where
+	    // the earlier transmission didn't reach the trace point.  Check
+	    // that here based on a timing heuristic.
+	    int sequence = 1;
+	    for (Pkt* x = k->prev; x; x = x->prev, sequence++) {
+		if (x->seq == x->end_seq)
+		    continue;
+		if ((x->flags & Pkt::F_NEW) && SEQ_LEQ(x->end_seq, k->seq)) {
+		    // x is the first packet containing new data that is older
+		    // than our oldest data.  Assume we have a retransmission
+		    // if k->ts >= x->ts + FAC * rtt.  FAC depends on how many
+		    // packets have passed.
+		    double rtt = timeval2double(c->rtt());
+		    double factor = timeval2double(k->timestamp - x->timestamp) / rtt;
+		    if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
+			mk->flags |= MyPkt::F_REXMIT;
+			for (mk->rexmit = x; mk->rexmit->next != k && SEQ_LEQ(mk->rexmit->end_seq, k->seq); mk->rexmit = mk->rexmit->next)
+			    /* nada */;
+		    }
+		}
+	    }
+	}
+	
+	// we have identified retransmissions already.
+	if (mk->flags & MyPkt::F_REXMIT) {
+	    // ignore retransmission of something from an old loss event
+	    if (mypkt(mk->rexmit)->event_id == mk->event_id) {
+		// new loss event
+		mk->flags |= MyPkt::F_EVENT_REXMIT;
+		register_loss_event(mk->rexmit, k, conn, parent);
+	    }
+	} else
+	    // if not a retransmission, then a reordering
+	    mk->flags |= MyPkt::F_REORDER;
+    }
+}
+
+void
+TCPMystery::MStreamInfo::categorize(Pkt *np, MConnInfo *conn, TCPMystery *parent)
 {
     assert(np->flags == 0);
     assert(!np->prev || np->timestamp >= np->prev->timestamp);
@@ -118,6 +245,221 @@ TCPMystery::MStreamInfo::categorize(Pkt *np, ConnInfo *conn, TCPMystery *parent)
     for (x = (x ? x->next : pkt_head); x; x = x->next)
 	x->flags |= Pkt::F_NONORDERED;
 }
+
+void
+TCPMystery::MStreamInfo::categorize(Pkt *np, MConnInfo *conn, TCPMystery *parent)
+{
+    assert(np->flags == 0);
+    assert(!np->prev || np->timestamp >= np->prev->timestamp);
+
+    // exit if this is a pure ack
+    if (np->seq == np->end_seq)
+	// NB pure acks will not include IP ID check for network duplicates
+	return;
+    
+    // exit if there is any new data
+    if (SEQ_GT(np->end_seq, max_seq)) {
+	np->flags |= Pkt::F_NEW;
+	if (SEQ_LT(np->seq, max_seq))
+	    np->flags |= Pkt::F_REXMIT;
+	return;
+    }
+
+    // Otherwise, it is a reordering, or possibly a retransmission.
+    // Find the most relevant previous transmission of overlapping data.
+    Pkt *rexmit = 0;
+    Pkt *x;
+    int sequence = 0;
+    for (x = np->prev; x; x = x->prev) {
+
+	sequence++;
+	
+	if ((x->flags & Pkt::F_NEW)
+	    && SEQ_LEQ(x->end_seq, np->seq)) {
+	    // 'x' is the first packet whose newest data is as old or older
+	    // than our oldest data. Nothing relevant can precede it.
+	    // Either we have a retransmission or a reordering.
+
+	    // If the trace point is close to the receiver, we may have a
+	    // retransmission where we did not see the earlier transmission.
+	    // Assume we have a retransmission if np->ts >= x->ts + FAC * rtt.
+	    // FAC depends on how many packets have passed.
+	    if (!rexmit) {
+		double rtt = timeval2double(conn->rtt());
+		double factor = timeval2double(np->timestamp - x->timestamp) / (rtt ? rtt : 0.1);
+		if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
+		    for (rexmit = x; rexmit->next != np && SEQ_LEQ(rexmit->end_seq, np->seq); rexmit = rexmit->next)
+			/* nada */;
+		    np->flags |= Pkt::F_REXMIT;
+		}
+	    }
+	    
+	    break;
+
+	} else if (np->seq == np->end_seq) {
+	    // ignore pure acks
+	
+	} else if (np->seq == x->seq) {
+	    // this packet overlaps with our data
+	    np->flags |= Pkt::F_REXMIT;
+	    
+	    if (np->ip_id
+		&& np->ip_id == x->ip_id
+		&& np->end_seq == x->end_seq) {
+		// network duplicate
+		np->flags |= Pkt::F_DUPLICATE;
+		return;
+	    } else if (np->end_seq == max_seq
+		       && np->seq + 1 == np->end_seq) {
+		// keepalive XXX
+		np->flags |= Pkt::F_KEEPALIVE;
+		return;
+	    }
+
+	    if (np->end_seq == x->end_seq) {
+		// it has the same data as we do; call off the search
+		np->flags |= Pkt::F_FULL_REXMIT;
+		rexmit = x;
+		break;
+	    }
+	    if (!rexmit)
+		rexmit = x;
+	    
+	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->end_seq))
+		   || (SEQ_LT(x->seq, np->end_seq) && SEQ_LEQ(np->end_seq, x->end_seq))) {
+	    // partial retransmission. There might be a more relevant
+	    // preceding retransmission, so keep searching for one.
+	    np->flags |= Pkt::F_REXMIT;
+	    rexmit = x;
+	}
+    }
+    
+    // we have identified retransmissions already.
+    if (np->flags & Pkt::F_REXMIT) {
+	// ignore retransmission of something from an old loss event
+	if (rexmit->event_id == np->event_id) {
+	    // new loss event
+	    np->flags |= Pkt::F_EVENT_REXMIT;
+	    register_loss_event(rexmit, np, conn, parent);
+	}
+    } else
+	// if not a retransmission, then a reordering
+	np->flags |= Pkt::F_REORDER;
+
+    // either way, intervening packets are in a non-ordered event
+    for (x = (x ? x->next : pkt_head); x; x = x->next)
+	x->flags |= Pkt::F_NONORDERED;
+}
+
+
+#if 0
+
+#if 0
+void
+TCPMystery::MStreamInfo::categorize(Pkt *np, MConnInfo *conn, TCPMystery *parent)
+{
+    assert(np->flags == 0);
+    assert(!np->prev || np->timestamp >= np->prev->timestamp);
+
+    // exit if this is a pure ack
+    if (np->seq == np->end_seq)
+	// NB pure acks will not include IP ID check for network duplicates
+	return;
+    
+    // exit if there is any new data
+    if (SEQ_GT(np->end_seq, max_seq)) {
+	np->flags |= Pkt::F_NEW;
+	if (SEQ_LT(np->seq, max_seq))
+	    np->flags |= Pkt::F_REXMIT;
+	return;
+    }
+
+    // Otherwise, it is a reordering, or possibly a retransmission.
+    // Find the most relevant previous transmission of overlapping data.
+    Pkt *rexmit = 0;
+    Pkt *x;
+    int sequence = 0;
+    for (x = np->prev; x; x = x->prev) {
+
+	sequence++;
+	
+	if ((x->flags & Pkt::F_NEW)
+	    && SEQ_LEQ(x->end_seq, np->seq)) {
+	    // 'x' is the first packet whose newest data is as old or older
+	    // than our oldest data. Nothing relevant can precede it.
+	    // Either we have a retransmission or a reordering.
+
+	    // If the trace point is close to the receiver, we may have a
+	    // retransmission where we did not see the earlier transmission.
+	    // Assume we have a retransmission if np->ts >= x->ts + FAC * rtt.
+	    // FAC depends on how many packets have passed.
+	    if (!rexmit) {
+		double rtt = timeval2double(conn->rtt());
+		double factor = timeval2double(np->timestamp - x->timestamp) / (rtt ? rtt : 0.1);
+		if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
+		    for (rexmit = x; rexmit->next != np && SEQ_LEQ(rexmit->end_seq, np->seq); rexmit = rexmit->next)
+			/* nada */;
+		    np->flags |= Pkt::F_REXMIT;
+		}
+	    }
+	    
+	    break;
+
+	} else if (np->seq == np->end_seq) {
+	    // ignore pure acks
+	
+	} else if (np->seq == x->seq) {
+	    // this packet overlaps with our data
+	    np->flags |= Pkt::F_REXMIT;
+	    
+	    if (np->ip_id
+		&& np->ip_id == x->ip_id
+		&& np->end_seq == x->end_seq) {
+		// network duplicate
+		np->flags |= Pkt::F_DUPLICATE;
+		return;
+	    } else if (np->end_seq == max_seq
+		       && np->seq + 1 == np->end_seq) {
+		// keepalive XXX
+		np->flags |= Pkt::F_KEEPALIVE;
+		return;
+	    }
+
+	    if (np->end_seq == x->end_seq) {
+		// it has the same data as we do; call off the search
+		np->flags |= Pkt::F_FULL_REXMIT;
+		rexmit = x;
+		break;
+	    }
+	    if (!rexmit)
+		rexmit = x;
+	    
+	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->end_seq))
+		   || (SEQ_LT(x->seq, np->end_seq) && SEQ_LEQ(np->end_seq, x->end_seq))) {
+	    // partial retransmission. There might be a more relevant
+	    // preceding retransmission, so keep searching for one.
+	    np->flags |= Pkt::F_REXMIT;
+	    rexmit = x;
+	}
+    }
+    
+    // we have identified retransmissions already.
+    if (np->flags & Pkt::F_REXMIT) {
+	// ignore retransmission of something from an old loss event
+	if (rexmit->event_id == np->event_id) {
+	    // new loss event
+	    np->flags |= Pkt::F_EVENT_REXMIT;
+	    register_loss_event(rexmit, np, conn, parent);
+	}
+    } else
+	// if not a retransmission, then a reordering
+	np->flags |= Pkt::F_REORDER;
+
+    // either way, intervening packets are in a non-ordered event
+    for (x = (x ? x->next : pkt_head); x; x = x->next)
+	x->flags |= Pkt::F_NONORDERED;
+}
+#endif
 
 
 //////////////////////////////////////
@@ -1231,6 +1573,7 @@ TCPMystery::add_handlers()
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
     add_write_handler("save", write_handler, (void *)H_SAVE);
 }
+#endif
 
 
 ELEMENT_REQUIRES(userlevel TCPScoreboard false)

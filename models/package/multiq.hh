@@ -216,10 +216,10 @@ class MultiQ : public Element { public:
     void create_capacities(MultiQType, const double *begin, const double *end, Vector<Capacity> &) const;
     void filter_capacities(Vector<Capacity> &) const;
     
-    bool significant_flow(const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn) const;
+    bool significant_flow(const TCPCollector::Stream* stream, const TCPCollector::Conn* conn) const;
 
     static String read_capacities(Element *, void *);
-    static void multiqcapacity_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    static void multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
     
 };
 

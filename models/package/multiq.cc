@@ -359,27 +359,27 @@ MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 bool
-MultiQ::significant_flow(const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn) const
+MultiQ::significant_flow(const TCPCollector::Stream* stream, const TCPCollector::Conn* conn) const
 {
-    double duration = timeval2double(conn.duration());
-    uint32_t data_packets = stream.total_packets - stream.ack_packets;
+    double duration = timeval2double(conn->duration());
+    uint32_t data_packets = stream->total_packets - stream->ack_packets;
     return (data_packets >= 50
 	    && data_packets / duration >= 9.5
-	    && stream.mtu == 1500);
+	    && stream->mtu == 1500);
 }
 
 void
-MultiQ::multiqcapacity_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk)
+MultiQ::multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk)
 {
     MultiQ *mq = static_cast<MultiQ *>(thunk);
     
     bool significant = mq->significant_flow(stream, conn);
-    bool ack_significant = (!significant && mq->significant_flow(conn.stream(1 - stream.direction), conn));
+    bool ack_significant = (!significant && mq->significant_flow(conn->ack_stream(stream), conn));
     
     if (significant || ack_significant) {
 	// collect interarrivals
 	Vector<double> interarrivals;
-	for (const TCPCollector::Pkt *k = stream.pkt_head->next; k; k = k->next)
+	for (const TCPCollector::Pkt *k = stream->pkt_head->next; k; k = k->next)
 	    interarrivals.push_back(timeval2double(k->timestamp - k->prev->timestamp) * 1000000);
 
 	// run MultiQ
