@@ -50,6 +50,6 @@ CalculateFlowLifetime::simple_action(Packet *p)
     CalculateFlowLifetime::CounterEntry *ent = _hashed_counters.findp(dst_ip);
    
     //there is a packet for this flow, update its timeout value
-
+    timeradd(&ent->timeout,&_timeout,&p->timestamp_anno());
 
 }
