@@ -205,14 +205,6 @@ CalculateCapacity::free_pkt_list(Pkt *head, Pkt *tail)
     }
 }
 
-inline struct timeval
-operator*(double frac, const struct timeval &tv)
-{
-    double what = frac * (tv.tv_sec + tv.tv_usec / 1e6);
-    int32_t sec = (int32_t)what;
-    return make_timeval(sec, (int32_t)((what - sec) * 1e6));
-}
-
 inline double
 CalculateCapacity::float_timeval(const struct timeval &tv)
 {
