@@ -74,9 +74,10 @@ Histogram::add_sorted(const double *cur, const double *end)
 
 
 static inline double
-kde_kernel(double x)		// epanechikov
+kde_kernel(double x)		// biweight
 {
-    return 0.75 * (1 - x*x);
+    return 0.9375*(1 - x*x)*(1 - x*x);
+    // return 0.75 * (1 - x*x); // epanechikov
 }
 
 void
@@ -90,12 +91,12 @@ Histogram::make_kde_sorted(const double *cur_lo, const double *end, const double
 	dx = width / -dx;
 
     _left = cur_lo[0] - width - dx;
-    _width = dx;
-    // k->wmin = _width;
-    int nbins = (int)((end[-1] - cur_lo[0])/dx) + 3;
+    int nbins = (int)((end[-1] + width + dx - _left) / dx) + 3;
+    _width = dx;		// k->dx
+    _kde_width = width;		// k->wmin
     _count.assign(nbins, 0);
-    _nitems = end - cur_lo;
     
+    _nitems = end - cur_lo;
     const double *cur_hi = cur_lo;
     
     for (int i = 1; i < nbins; i++) {
@@ -125,37 +126,34 @@ Histogram::make_kde_sorted(const double *cur_lo, const double *end, const double
 
 struct Histogram::Mode {
     int a, i, b;
-    inline Mode(int aa, int ii, int bb) : a(aa), i(ii), b(bb) { }
+    inline Mode(int ii) : a(ii), i(ii), b(ii) { }
 };
 
 inline bool
 operator<(const Histogram::Mode &a, const Histogram::Mode &b)
 {
     if (a.i < 0 || b.i < 0)
-	return b.i - a.i;
+	return b.i < a.i;
     else if (a.a != b.a)
-	return a.a - b.a;
+	return a.a < b.a;
     else if (a.i != b.i)
-	return a.i - b.i;
+	return a.i < b.i;
     else
-	return a.b - b.b;
+	return a.b < b.b;
 }
 
 void
 Histogram::modes(double sd, double min_points, Vector<double> &mode_x, Vector<double> &mode_prob) const
 {
     assert(min_points > 0);
-    Vector<double> p;
-    Vector<double> sigp;
-
     Vector<Mode> modes;
 
     // collect local maxima in 'modes' array
     double last_delta = -1;
     for (int bin = 1; bin < _count.size(); bin++) {
 	double delta = _count[bin] - _count[bin - 1];
-	if (delta < 0 && last_delta >= 0 && delta >= min_points)
-	    modes.push_back(Mode(0, bin - 1, 0));
+	if (delta < 0 && last_delta >= 0 && _count[bin] >= min_points)
+	    modes.push_back(Mode(bin - 1));
 	last_delta = delta;
     }
 
@@ -166,15 +164,12 @@ Histogram::modes(double sd, double min_points, Vector<double> &mode_x, Vector<do
 	if (p_thresh < 0)
 	    p_thresh = 0;
 
-	int b;
-	for (b = m->i - 1; b >= 0 && prob(b) > p_thresh; b--)
-	    if (prob(b) > p0)	// earlier max with no dip
+	for (m->a = m->i - 1; m->a >= 0 && prob(m->a) > p_thresh; m->a--)
+	    if (prob(m->a) > p0) // earlier max with no dip
 		goto kill_this_mode;
-	m->a = b;
-	for (b = m->i + 1; b < _count.size() && prob(b) > p_thresh; b++)
-	    if (prob(b) > p0)	// later max with no dip
+	for (m->b = m->i + 1; m->b < _count.size() && prob(m->b) > p_thresh; m->b++)
+	    if (prob(m->b) > p0) // later max with no dip
 		goto kill_this_mode;
-	m->b = b;
 	continue;
 
       kill_this_mode:
@@ -182,25 +177,29 @@ Histogram::modes(double sd, double min_points, Vector<double> &mode_x, Vector<do
     }
 
     /* coalesce overlapping modes into "mode of modes" (i.e. tallest) */
-    std::sort(modes.begin(), modes.end());
-    Mode *next_m = modes.begin() + 1;
-    for (Mode *m = modes.begin(); next_m < modes.end(); next_m++) {
-	if (next_m->i < 0)
-	    /* do nothing */;
-	else if (m->i >= 0 && next_m->i < m->b) { // next mode inside
-	    if (prob(next_m->i) > prob(m->i))
-		m->i = next_m->i;
-	    if (next_m->b > m->b)
-		m->b = next_m->b;
-	    next_m->i = -1;
-	} else
-	    m = next_m;
-    }
+    {
+	std::sort(modes.begin(), modes.end());
+	Mode *m = modes.begin();
+	// We sorted dead modes to the end of the list, so exit when we
+	// encounter one.  (We kill some modes ourselves, but we skip them
+	// right away.)
+	for (Mode *next_m = m + 1; next_m < modes.end() && next_m->i >= 0; next_m++) {
 
+	    if (next_m->i < m->b) { // next mode inside
+		if (prob(next_m->i) > prob(m->i))
+		    m->i = next_m->i;
+		if (next_m->b > m->b)
+		    m->b = next_m->b;
+		next_m->i = -1;
+	    } else
+		m = next_m;
+	}
+    }
+    
     // density normalization
     for (Mode *m = modes.begin(); m < modes.end(); m++)
 	if (m->i >= 0) {
-	    mode_x.push_back(_left + (m->i + 0.5)*_width);
+	    mode_x.push_back(bin_left(m->i));
 	    mode_prob.push_back(prob(m->i));
 	}
 }
@@ -210,6 +209,18 @@ CLICK_ENDDECLS
 #include <iostream>
 using namespace std;
 
+static void
+print_pdf(const Histogram &h, std::ostream &stream)
+{
+    double correction = 1 / (h.width() * h.nitems());
+    stream << h.bin_left(-0.1) << " 0\n";
+    for (int i = 0; i < h.size(); i++)
+	stream << h.bin_left(i) << " " << (h.count(i) * correction) << '\n';
+    // NB: This gives results that are off by one relative to 'lade', since
+    // 'lade' prints, for bin "i", the number of elements that were stored
+    // in bin "i+1".
+}
+
 int
 main(int c, char **v)
 {
@@ -218,13 +229,32 @@ main(int c, char **v)
     while (cin >> num)
 	nums.push_back(num);
     std::sort(nums.begin(), nums.end());
+    
+    // -b 35000: censor points past 35000  (b)
+    // -Y4: insist on at least 4 points to count as a mode  (Y)
+    // -ekb: KRN, kde_biweight
+    // -em2: modes, sds==2
+    // -N2: nrm_mode==2
+    // -w100: w==100
 
+    while (nums.size() && nums.back() >= 35000)
+	nums.pop_back();
+    
     Histogram h;
-    h.make_kde_sorted(nums.begin(), nums.end(), .1, -18);
+    h.make_kde_sorted(nums.begin(), nums.end(), 100, -18);
+    // w, g are the args
+
+    cout.precision(17);
+
+#if 1
     Vector<double> mx, mprob;
-    h.modes(2, 10, mx, mprob);
+    h.modes(2, 4, mx, mprob);
     for (int i = 0; i < mx.size(); i++)
 	cout << mx[i] << ' ' << mprob[i] << '\n';
+#else
+    print_pdf(h, cout);
+#endif
+
     return 0;
 }
 
