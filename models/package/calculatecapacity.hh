@@ -167,7 +167,7 @@ struct CalculateCapacity::StreamInfo {
     //void categorize(Pkt *insertion, ConnInfo *, CalculateCapacity *);
     //void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateCapacity *);
     //void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
-    void findpeaks(uint32_t npeaks);
+    void findpeaks();
     void fill_intervals();
     void histogram();
     void write_xml(FILE *) const;
@@ -188,8 +188,6 @@ struct CalculateCapacity::StreamInfo::Peak {
     uint32_t left;
     uint32_t right;
     uint32_t area;
-    
-    
 };
 
 

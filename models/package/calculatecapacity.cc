@@ -11,6 +11,7 @@
 #include <click/packet_anno.hh>
 #include "elements/analysis/aggregateipflows.hh"
 #include "elements/analysis/toipsumdump.hh"
+#include <math.h>
 CLICK_DECLS
 
 static inline struct timeval
@@ -33,10 +34,10 @@ CalculateCapacity::StreamInfo::StreamInfo()
 
 CalculateCapacity::StreamInfo::~StreamInfo()
 {
-    if(intervals) delete intervals;
-    if(hist) delete hist;
-    if(cutoff) delete cutoff;
-    if(valid) delete valid;
+    if(intervals) delete[] intervals;
+    if(hist) delete[] hist;
+    if(cutoff) delete[] cutoff;
+    if(valid) delete[] valid;
 }
 
 
@@ -117,95 +118,88 @@ static int compare(const void *a, const void *b){
 }
 
 void
-CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
+CalculateCapacity::StreamInfo::findpeaks()
 {
-    uint32_t max;
-    uint32_t maxi;
     struct Peak *peak;
+    double *logs;
+    double *slopes;
+    uint32_t j;
+    uint32_t n = pkt_cnt;
+    uint32_t slopelen;
 
-    while(npeaks > 0){
-	
-	uint32_t i, prev, area;
-	max = 0;
-	maxi = histpoints+1;
-	uint32_t rightedge, leftedge;
-	bool combined = false;
-
-	for(i=1; i < histpoints; i++){
-	    if(valid[i] && hist[i] > max && hist[i] > 2){
-		max = hist[i];
-		maxi = i;
-	    }
-	}
-	
-	if(maxi > histpoints){
-	    //no new ones
-	    break;
-	}
-
-	//remove surrounding areas
-	valid[maxi] = 0;
-	prev = area = max;
-	
-	rightedge = leftedge = maxi;
-
-	i = maxi + 1;
-	while(i < histpoints && valid[i] && hist[i] > 0 && hist[i]-1 < prev){
-	    area += hist[i];
-	    valid[i]=0;
-	    prev = hist[i];
-	    i++;
-	    rightedge++;
-	}
-
-	i = maxi - 1;
-	prev = max;
-	while(i > 0 && valid[i] && hist[i] > 0 && hist[i]-1 < prev){
-	    area += hist[i];
-	    valid[i]=0;
-	    prev = hist[i];
-	    i--;
-	    leftedge--;
-	}
-
-	//should this be combined with an existing peak or be a new one?
-	//should pick the bigger of possible neighbors
-	for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
-	    iter!=peaks.end(); iter++){
-	    struct Peak *p = *iter;
-	    if(leftedge - 1 == p->right || leftedge - 2 == p->right){
-		p->right = rightedge;
-		p->area += area;
-		combined = true;
-		break;
-	    }
-	    if(rightedge + 1 == p->left || rightedge + 2 == p->left){
-		p->area += area;
-		combined = true;
-		break;
-	    }
-	}
-	
-	if(combined){
-	    //printf("combined\n");
+    logs = new double[pkt_cnt];
+    slopes = new double[pkt_cnt];
+    
+    //printf("pktcnt %d\n", pkt_cnt);
+    for(j = 0; j < pkt_cnt; j++){
+	struct timeval *t = &(intervals[j].interval);
+	if(t->tv_sec == 0 && t->tv_usec == 0){
+	    n--;
 	    continue;
 	}
-
-	//append to list of peaks
-	peak = new Peak;
-	peak->area = area;
-	peak->center = (cutoff[i] + cutoff[i-1]) / 2;
-	peak->index = maxi;
-	peak->left = leftedge;
-	peak->right = rightedge;
-	peaks.push_back(peak);
-	
-	npeaks--;
+	logs[j - pkt_cnt + n] = log(float_timeval(*t));
+	//printf("%d %f\n", j - pkt_cnt + n, logs[j - pkt_cnt + n]);
     }
 
-    //printf("done adding peaks\n");
-    fflush(stdout);
+    slopelen = (uint32_t) 0.01 * n;
+    if(slopelen < 1) {
+	slopelen = 1;
+    }
+    for(j = 0 ; j < n ; j++){
+	uint32_t imin, imax;
+	imin = j < slopelen ? 0 : j - slopelen;
+	imax = j + slopelen >= n-1 ? n-1 : j + slopelen;
+	slopes[j] = (logs[imax] - logs[imin]) / (imax - imin) ;
+    }
 
+    double expectedslope = (logs[n-1] - logs[0]) / n;
+    //printf("expected islope: %f\n", expectedslope);
+    double peakstart = 0.2 * expectedslope;
+    double peakend = 0.5 * expectedslope;
+    bool inpeak = false;
+    
+    peak = new Peak;
+
+    for(j = 0; j < n; j++){
+	if(inpeak){
+	    if(slopes[j] < peakend){
+		peak->area++;
+	    } else {
+		//end of peak here
+		peak->right = j-1;
+		peak->center =
+		    float_timeval(intervals[j + pkt_cnt - n].interval);
+		peaks.push_back(peak);
+		inpeak = false;
+		peak = new Peak;
+	    }
+	} else {
+	    if(slopes[j] < peakstart){
+		uint32_t k=j;		
+		//new peak here
+		inpeak = true;
+		peak->area = 1;
+		while(k > 0 && slopes[k-1] < peakend)
+		    k--;
+		peak->left = k;
+	    } else {
+		//nothing
+	    }
+	    
+	}
+    }
+    if(inpeak){
+	//end peak here
+	peak->center =
+	    float_timeval(intervals[j + pkt_cnt - n].interval);
+	peak->right = n-1;
+	peaks.push_back(peak);
+    } else {
+	delete peak;
+    }
+
+    delete[] logs;
+    delete[] slopes;
 }
 
 void
@@ -269,7 +263,7 @@ CalculateCapacity::StreamInfo::fill_intervals()
 {
     uint32_t i=0;
     Pkt *cp;
-    intervals = new IntervalStream[sizeof(struct IntervalStream) * pkt_cnt];
+    intervals = new IntervalStream[pkt_cnt];
     
     for(cp = pkt_head, i=0; cp != NULL && i < pkt_cnt; i++, cp=cp->next){
 	intervals[i].size = cp->last_seq - cp->seq + cp->hsize;
@@ -301,6 +295,7 @@ CalculateCapacity::StreamInfo::fill_intervals()
 
 	intervals[i].interval = cp->timestamp -
 	    (cp->prev ? cp->prev->timestamp : cp->timestamp);
+	
     }
 
     if(i < pkt_cnt){
@@ -339,11 +334,11 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	
 	_stream[0].fill_intervals();
 	_stream[0].histogram();
-	_stream[0].findpeaks(12);
+	_stream[0].findpeaks();
 	_stream[0].write_xml(f);
 	_stream[1].fill_intervals();
 	_stream[1].histogram();
-	_stream[1].findpeaks(12);
+	_stream[1].findpeaks();
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }
