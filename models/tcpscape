@@ -2524,14 +2524,7 @@ class PlotCanvas:
         bounds = None
 
         h = self.highlight
-        if h is None:
-            self.highlight = [None]
-        elif h[0] == 'lit_packet':
-            if self.lit_main[0] is not None:
-                self.highlight = ['packet', self.lit_main[0][0], self.lit_main[0][1]]
-            else:
-                self.highlight = [None]
-        elif h[0] == 'bandwidth':
+        if h[0] == 'bandwidth':
             t0, s0, t1, s1 = h[2:6]
             x0, y0 = self._transform(t0, s0)
             x1, y1 = self._transform(t1, s1)
@@ -2574,8 +2567,19 @@ class PlotCanvas:
         if self.highlight_bounds is not None:
             self.expose_rectangle(self.highlight_bounds)
             self.highlight_bounds = None
-    
+
+    def normalize_highlight(self):
+        h = self.highlight
+        if h is None:
+            self.highlight = [None]
+        elif h[0] == 'lit_packet':
+            if self.lit_main[0] is not None:
+                self.highlight = ['packet', self.lit_main[0][0], self.lit_main[0][1]]
+            else:
+                self.highlight = [None]
+
     def highlight_changed(self):
+        self.normalize_highlight()
         new_lit = self._draw_lit_main != self.lit_main
         new_sublit = self._draw_lit != self.lit
         new_high = self._draw_highlight != self.highlight
