@@ -968,14 +968,16 @@ class PlotCanvas_ScreenDrawable:
             raise RuntimeError("bad layout name " + name)
 
     def prepare(self):
-        self.drawable = self.plotcanvas.canvas.window
+        self.drawable = self.plotcanvas.backing_store
 
     def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
         p = self.plotcanvas
         return (p.left_margin, p.top_margin, p.plot_width, p.plot_height)
 
     def complete(self):
-        pass
+        gc = self.plotcanvas.canvas.get_style().black_gc
+        self.plotcanvas.canvas.window.draw_drawable(gc, self.drawable, 0, 0, 0, 0, -1, -1)
+        self.plotcanvas.backing_store_updated = True
     
     def clip(self, gc, rectangle):
         gc.set_clip_rectangle(rectangle)
@@ -984,7 +986,8 @@ class PlotCanvas_ScreenDrawable:
         pass
 
     def clear(self):
-        self.drawable.clear()
+        gc = self.plotcanvas.canvas.get_style().bg_gc[gtk.STATE_NORMAL]
+        self.drawable.draw_rectangle(gc, True, 0, 0, -1, -1)
     
     def draw_line(self, gc, x1, y1, x2, y2):
         self.drawable.draw_line(gc, x1, y1, x2, y2)
@@ -1192,6 +1195,7 @@ class PlotCanvas:
     def __init__(self, master, width=600, height=500):
         self.canvas = gtk.DrawingArea()
         self.canvas.set_size_request(width, height)
+        self.canvas.set_double_buffered(False) # we do our own
         self.canvas.set_flags(gtk.CAN_FOCUS)
 
         self.canvas.connect("configure_event", self.cmd_configure)
@@ -1218,6 +1222,8 @@ class PlotCanvas:
         self.begin = 0
         self.end = 1000000000.0
         self.show_window = True
+        self.backing_store = None
+        self.backing_store_updated = False
 
         self.adjustment = gtk.Adjustment()
         self.adjustment.connect("value_changed", self.adj_value_changed)
@@ -1287,6 +1293,8 @@ class PlotCanvas:
 
     def cmd_configure(self, widget, event):
         x, y, self.wwidth, self.wheight = widget.get_allocation()
+        self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
+        self.backing_store_updated = False
 
         # xxx
         self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
@@ -1294,7 +1302,12 @@ class PlotCanvas:
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
     def cmd_expose(self, widget, event):
-        self.plot(area=event.area)
+        if not self.backing_store_updated:
+            self.plot()
+        else:
+            gc = self.canvas.get_style().black_gc
+            x, y, w, h = event.area
+            self.canvas.window.draw_drawable(gc, self.backing_store, x, y, x, y, w, h)
 
     def _itransform(self, x, y, constrain=True):
         if self.plotted and (not constrain or (x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height)):
@@ -1401,7 +1414,7 @@ class PlotCanvas:
                 if mpos >= pos1:
                     ticer(mpix, edge1, edge2, 2, drawable, gc_tic)
 
-    def plot(self, drawable=None, area=None):
+    def plot(self, drawable=None):
         if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
         drawable.prepare()
         drawable.clear()
@@ -1456,11 +1469,6 @@ class PlotCanvas:
             self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, label_gc, playout)
             self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
 
-            # recalculate t0 and t1 if we're given a limited area
-            if area is not None:
-                t0 = max(t0, self._itransform(area.x, area.y, constrain=False)[0])
-                t1 = min(t1, self._itransform(area.x + area.width, area.y, constrain=False)[0])
-            
             # ack packets
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
             last_dupack, last_dupack_x = -1, None
