@@ -2,6 +2,6 @@
 #ifndef CLICKMODULE_IIAS_CONFIG_H
 #define CLICKMODULE_IIAS_CONFIG_H
 
-/* `iias' doesn't need any extra configuration. */
+/* 'iias' doesn't need any extra configuration. */
 
 #endif /* CLICKMODULE_IIAS_CONFIG_H */

@@ -4,7 +4,7 @@
 #include <click/element.hh>
 #include <click/bighashmap.hh>
 #include <click/handlercall.hh>
-#include <click/dequeue.hh>
+#include "tcpcollector.hh"
 #include "elements/analysis/aggregatenotifier.hh"
 #include "elements/analysis/toipflowdumps.hh"
 CLICK_DECLS
@@ -147,33 +147,24 @@ class TCPMystery : public Element { public:
     void cleanup(CleanupStage);
     void add_handlers();
     
-    void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
-    
     Packet *simple_action(Packet *);
-    
+
+    typedef TCPCollector::Pkt Pkt;
     struct MPkt;
     struct MStreamInfo;
     class MConnInfo;
     struct LossInfo;
     struct LossBlock;
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
+    
     inline MPkt *mpkt(TCPCollector::Pkt *) const;
     inline MConnInfo *mconn(TCPCollector::ConnInfo *) const;
     
-
-    static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
-    ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
-    ToIPSummaryDump *summary_dump() const { return _tipsd; }
-    FILE *traceinfo_file() const	{ return _traceinfo_file; }
-    HandlerCall *filepos_h() const	{ return _filepos_h; }
-
-    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32, WR_REORDERED = 64 };
-    WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
+    //ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
+    //ToIPSummaryDump *summary_dump() const { return _tipsd; }
 
     enum { SAVE_UNDELIVERED_PACKETNO };
     int save(int what, uint32_t aggregate, int direction, const String &filename, ErrorHandler *);
-    
-    typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
 
@@ -184,6 +175,11 @@ class TCPMystery : public Element { public:
     //ToIPFlowDumps *_tipfd;
     //ToIPSummaryDump *_tipsd;
 
+    static void mystery_loss_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    static void mystery_ackcausality_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    static void mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    static void mystery_undelivered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
     
     friend class ConnInfo;
@@ -201,7 +197,7 @@ struct TCPMystery::MPkt {
     };
     int flags;			// packet flags
     tcp_seq_t event_id;		// ID of loss event
-    Pkt *caused_ack;		// ack that this data packet caused
+    TCPCollector::Pkt *caused_ack; // ack that this data packet caused
 };
 
 struct TCPMystery::LossInfo {
@@ -214,7 +210,7 @@ struct TCPMystery::LossInfo {
     struct timeval end_time;
 
     bool unparse(StringAccum &, const MStreamInfo *, const MConnInfo *, bool include_aggregate, bool absolute_time = true, bool absolute_seq = true) const;
-    void unparse_xml(StringAccum &) const;
+    void unparse_xml(StringAccum &, const String &tagname) const;
 };
 
 struct TCPMystery::LossBlock {
@@ -223,7 +219,7 @@ struct TCPMystery::LossBlock {
     int n;
     LossInfo loss[CAPACITY];
     LossBlock(LossBlock *the_next)	: next(the_next), n(0) { }
-    void write_xml(FILE *) const;
+    void write_xml(FILE *, const String &tagname) const;
 };
 
 struct TCPMystery::MStreamInfo {
@@ -240,8 +236,11 @@ struct TCPMystery::MStreamInfo {
 
     struct timeval min_ack_latency; // minimum time between packet and ACK
 
-    Pkt *acked_pkt_hint;	// hint to find_acked_pkt
+    TCPCollector::Pkt *acked_pkt_hint;	// hint to find_acked_pkt
 
+    uint32_t nreordered;
+    uint32_t nundelivered;
+    
     // information about the most recent loss event
     LossInfo loss;		// most recent loss event
     LossBlock *loss_trail;	// previous loss events
@@ -249,44 +248,41 @@ struct TCPMystery::MStreamInfo {
     MStreamInfo();
     ~MStreamInfo();
 
-    void categorize(Pkt *insertion, ConnInfo *, TCPMystery *);
-    void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, TCPMystery *);
-    void update_counters(const Pkt *np, const click_tcp *);
-    void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
+    void categorize(TCPCollector::Pkt *insertion, TCPCollector::ConnInfo *, TCPMystery *);
+    void register_loss_event(TCPCollector::Pkt *startk, TCPCollector::Pkt *endk, TCPCollector::ConnInfo *, TCPMystery *);
+    void update_counters(const TCPCollector::Pkt *np, const click_tcp *);
+    void options(TCPCollector::Pkt *np, const click_tcp *, int transport_length, const TCPCollector::ConnInfo *);
     
-    Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
+    TCPCollector::Pkt *find_acked_pkt(const TCPCollector::Pkt *ackk, TCPCollector::Pkt *search_hint = 0) const;
 #if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
 #endif
-    Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
+    TCPCollector::Pkt *find_ack_cause2(const TCPCollector::Pkt *ackk, TCPCollector::Pkt *&k, tcp_seq_t &) const;
 
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const;
+    bool mark_delivered(const TCPCollector::Pkt *ackk, TCPCollector::Pkt *&k_cumack, TCPCollector::Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const;
 
-    void finish(ConnInfo*, TCPMystery*);
+    void finish(TCPCollector::ConnInfo*, TCPMystery*);
     void unfinish();
 
-    void output_loss(ConnInfo *, TCPMystery *);
-    void write_xml(ConnInfo *, FILE *, WriteFlags) const;
-    void write_ack_latency_xml(ConnInfo *, FILE *) const;
-    void write_ack_causality_xml(ConnInfo *, FILE *) const;
-    void write_reordered_xml(FILE *, WriteFlags, int n) const;
-    void write_undelivered_xml(FILE *, WriteFlags, int n) const;
+    void output_loss(TCPCollector::ConnInfo *, TCPMystery *);
+    void write_xml(TCPCollector::ConnInfo *, FILE *) const;
 
 };
 
 class TCPMystery::MConnInfo {  public:
     
-    ConnInfo(const Packet *, const HandlerCall *);
+    MConnInfo();
     void kill(TCPMystery *);
 
     struct timeval rtt() const;
-    const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
+    MStreamInfo &stream(int i)	{ assert(i==0||i==1); return _stream[i]; }
+    const MStreamInfo &stream(int i) const { assert(i==0||i==1); return _stream[i]; }
 
     void handle_packet(const Packet *, TCPMystery *);
     
-    Pkt *create_pkt(const Packet *, TCPMystery *);
-    void calculate_loss_events(Pkt *, unsigned dir, TCPMystery *);
-    void post_update_state(const Packet *, Pkt *, TCPMystery *);
+    MPkt *create_pkt(const Packet *, TCPMystery *);
+    void calculate_loss_events(MPkt *, unsigned dir, TCPMystery *);
+    void post_update_state(const Packet *, MPkt *, TCPMystery *);
 
     void finish(TCPMystery *);
     
