@@ -396,7 +396,8 @@ class Connection(object):
             if len(self.s[0]):
                 t0 = min(self.s[0][0].time, t0)
                 s0 = min(self.s[0][0].seq, s0)
-                s1 = min(self.s[0][0].ack, s1)
+                if self.s[0][0].flags & TH_ACK:
+                    s1 = min(self.s[0][0].ack, s1)
             if len(self.s[1]):
                 t0 = min(self.s[1][0].time, t0)
                 s0 = min(self.s[1][0].ack, s0)
