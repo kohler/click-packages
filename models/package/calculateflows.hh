@@ -3,6 +3,7 @@
 #define CLICK_CALCULATEFLOWS_HH
 #include <click/element.hh>
 #include <click/bighashmap.hh>
+#include <click/handlercall.hh>
 #include "aggregatenotifier.hh"
 #include "toipflowdumps.hh"
 CLICK_DECLS
@@ -58,20 +59,21 @@ Filename. If given, then output information about each aggregate to that file,
 in an XML format. Information includes the flow identifier, total sequence
 space used on each flow, and loss counts for each flow.
 
-=item STATLOSS
+=item STAT_LOSS
 
 Boolean. If true, then STATFILE will contain information about each loss.
 Default is false.
 
-=item ABSOLUTE_TIME
+=item STAT_FILEPOS
 
-Boolean. If true, then output absolute timestamps instead of relative ones.
-Default is false.
+Read handler, whose value should correspond to the trace file position at
+which the packet currently being processed resides. If given, then STATFILE
+will record the file position of the first packet in each flow, facilitating
+quicker processing.
 
-=item ABSOLUTE_SEQ
+=item STAT_TRACEFILE
 
-Boolean. If true, then output absolute sequence numbers instead of relative
-ones (where each flow starts at sequence number 0). Default is false.
+Filename. If given, this filename will be recorded in STATFILE.
 
 =item IP_ID
 
@@ -129,8 +131,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
     FILE *stat_file() const		{ return _stat_file; }
     bool stat_losses() const		{ return _stat_losses; }
-    bool absolute_time() const		{ return _absolute_time; }
-    bool absolute_seq() const		{ return _absolute_seq; }
+    HandlerCall *filepos_call() const	{ return _filepos_call; }
     bool ack_match() const		{ return _ack_match; }
 
     static double float_timeval(const struct timeval &);
@@ -144,9 +145,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPFlowDumps *_tipfd;
     ToIPSummaryDump *_tipsd;
     FILE *_stat_file;
+    HandlerCall *_filepos_call;
 
-    bool _absolute_time : 1;
-    bool _absolute_seq : 1;
     bool _stat_losses : 1;
     bool _ack_match : 1;
     bool _ip_id : 1;
@@ -155,6 +155,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     Vector<Pkt *> _pkt_bank;
 
     String _stat_filename;
+    String _stat_tracefile;
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
@@ -257,7 +258,7 @@ struct CalculateFlows::StreamInfo {
 
 class CalculateFlows::ConnInfo {  public:
     
-    ConnInfo(const Packet *);
+    ConnInfo(const Packet *, const HandlerCall *, Router *);
     void kill(CalculateFlows *);
 
     uint32_t aggregate() const		{ return _aggregate; }
@@ -271,9 +272,10 @@ class CalculateFlows::ConnInfo {  public:
     
   private:
 
-    uint32_t _aggregate;
-    IPFlowID _flowid;
-    struct timeval _init_time;
+    uint32_t _aggregate;	// aggregate number
+    IPFlowID _flowid;		// flow identifier for _stream[0]
+    struct timeval _init_time;	// first time seen in stream
+    String _filepos;		// file position of first packet
     StreamInfo _stream[2];
     
 };
