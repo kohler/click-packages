@@ -125,7 +125,6 @@ SplitInOutBound::handle_packet(Packet *p)
 
     in = (int *)_hash_inoutaddresses.findp(dstaddr);
 
-
     if (in) {
 	in_compl = (*in+1) % 2;
 	if (*in == 1) {

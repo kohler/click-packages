@@ -4,7 +4,7 @@
 #include <click/config.h>
 
 #include "fromtusummarylog.hh"
-#include "elements/standard/scheduleinfo.hh"
+#include <click/standard/scheduleinfo.hh>
 #include <click/error.hh>
 #include <click/router.hh>
 #include <click/click_ip.h>
