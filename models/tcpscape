@@ -3,19 +3,23 @@
 from __future__ import generators
 from bisect import bisect
 import sys, re, types
-from Tkinter import *
 from math import *
+import gtk, pango
 
-cross_bitmap_text = """
-#define cross_width 5
-#define cross_height 5
-#define cross_x_hot 2
-#define cross_y_hot 2
-static unsigned char cross_bits[] = {
-   0x04, 0x04, 0x1f, 0x04, 0x04 };
-"""
+fill_colors = {
+    "data": "red", "ack": "green", "dataack": "blue",
+    "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond",
+    "border": "grey", "lossborder": "yellow"
+}
 
-loss_fill_colors = { "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond" }
+def frange(start, stop, step):
+    i = 0
+    while True:
+        pos = start + i * step
+        if pos > stop:
+            break
+        yield pos
+        i += 1
 
 class Packet:
     def __init__(self, time, seq, seqlen, ack):
@@ -44,7 +48,7 @@ class LossEvent:
     def time_overlaps(self, begin, end):
         return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
     def fillcolor(self):
-        return loss_fill_colors[self.type]
+        return fill_colors[self.type]
 
 
 def direction(dir):
@@ -84,7 +88,7 @@ class Connection:
             elif re.match('!flowid', line):
                 self.flow_id = line.split()[1:]
             elif re.match('!aggregate', line):
-                self.aggregate = line.split()[1]
+                self.aggregate = int(line.split()[1])
             elif re.match('!eof$', line):
                 break
         self.available = True
@@ -148,6 +152,13 @@ class Connection:
         dir = direction(dir)
         r0, r1 = self._seq_range(dir, begin, end), self._ack_range(1 - dir, begin, end)
         return min(r0[0], r1[0]), max(r0[1], r1[1])
+    def get_description(self):
+        if not self.available:
+            self.load()
+        s = ""
+        if self.aggregate >= 0:
+            s += "Aggregate " + `self.aggregate` + ": "
+        return s + self.flow_id[0] + ":" + self.flow_id[1] + " > " + self.flow_id[2] + ":" + self.flow_id[3]
     def load(self):
         if type(self.filename) != types.StringType:
             raise RuntimeError, "cannot load this Connection"
@@ -163,6 +174,13 @@ def fix_range(a, b, min_step_frac):
     step = 10 ** floor(log10(d))
 
     # make step bigger if required
+    if step / d > 0.5 and step / d >= min_step_frac:
+        if step/5 / d >= min_step_frac:
+            step /= 5
+        elif step/2.5 / d >= min_step_frac:
+            step /= 2.5
+        elif step/2 / d >= min_step_frac:
+            step /= 2
     while step < d and step / d < min_step_frac:
         if 2*step / d >= min_step_frac:
             step *= 2
@@ -189,29 +207,80 @@ def fix_range(a, b, min_step_frac):
 
 class PlotCanvas:
     def __init__(self, master, width=600, height=500):
-        self.canvas = Canvas(master, width = width, height = height, bg = "white")
+        self.canvas = gtk.DrawingArea()
+        self.canvas.set_size_request(width, height)
+        master.pack_start(self.canvas, expand=1, fill=1)
+        self.canvas.show()
+
+        self.canvas.connect("configure_event", self.cmd_configure)
+        self.canvas.connect("expose_event", self.cmd_expose)
+        
         self.left_margin = 40
         self.right_margin = 20
         self.top_margin = 10
         self.bottom_margin = 20
-        self.plot_width = width - self.left_margin - self.right_margin
-        self.plot_height = height - self.top_margin - self.bottom_margin
-        self.wwidth = width
-        self.wheight = height
-        self.canvas.bind("<Configure>", self.cmd_configure)
-    def set_conn(self, conn, dir, begin=None, end=None, duration=None):
+        self.gc = {}
+        self.plotted = False
+    def set_connection(self, conn, dir, begin=None, end=None, duration=None):
         if begin is not None and duration is not None and end is None:
             end = begin + duration
         self.conn, self.dir, self.begin, self.end = conn, direction(dir), begin, end
-    def cmd_configure(self, event):
-        self.wwidth = event.width
-        self.plot_width = event.width - self.left_margin - self.right_margin
-        self.wheight = event.height
-        self.plot_height = event.height - self.top_margin - self.bottom_margin
+        if self.plotted: self.plot()
+    def set_direction(self, dir):
+        self.dir = direction(dir)
+        if self.plotted: self.plot()
+    def get_connection(self):
+        return self.conn
+    def get_direction(self):
+        return self.dir
+    def cmd_configure(self, widget, event):
+        x, y, self.wwidth, self.wheight = widget.get_allocation()
+
+        if not self.gc.has_key("data"):
+            cmap = self.canvas.get_colormap()
+            for k in fill_colors.keys():
+                self.gc[k] = self.canvas.window.new_gc(foreground=cmap.alloc_color(fill_colors[k]))
+        
+        self.plot_width = self.wwidth - self.left_margin - self.right_margin
+        self.plot_height = self.wheight - self.top_margin - self.bottom_margin
+    def cmd_expose(self, widget, event):
         self.plot()
+
+    # drawing helpers
+    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, playout):
+        if re.match(".*e\\+0[4-7]$", text):
+            text = str(float(text))[:-2]
+        if re.match("...*000$", text):
+            text = text[:-3] + "K"
+        playout.set_text(text, -1)
+        ir, lr = playout.get_extents()
+        drawable.draw_layout(gc, edge1 - 4 - lr[2]/1024.0, pos - lr[3]/2048.0, playout)
+    def _draw_label_x(self, text, pos, edge1, edge2, drawable, gc, playout):
+        playout.set_text(text, -1)
+        ir, lr = playout.get_extents()
+        drawable.draw_layout(gc, pos - lr[2]/2048.0, edge2 + 2, playout)
+    def _draw_tic_x(self, pos, edge1, edge2, len, drawable, gc):
+        drawable.draw_line(gc, pos, edge1, pos, edge1 + len)
+        drawable.draw_line(gc, pos, edge2, pos, edge2 - len)
+    def _draw_tic_y(self, pos, edge1, edge2, len, drawable, gc):
+        drawable.draw_line(gc, edge1, pos, edge1 + len, pos)
+        drawable.draw_line(gc, edge2, pos, edge2 - len, pos)
+    def _draw_axis(self, scale, off, pos1, pos2, step, edge1, edge2, ticer, labeller, drawable, gc, playout):
+        if abs(step * scale) >= 50:
+            mstep = step / 10
+        else:
+            mstep = step / 4
+        for pos in frange(pos1, pos2, step):
+            pix = pos * scale + off
+            ticer(pix, edge1, edge2, 5, drawable, gc)
+            labeller("%.4g" % pos, pix, edge1, edge2, drawable, gc, playout)
+            for mpos in frange(pos + mstep, min(pos + step, pos2), mstep):
+                mpix = mpos * scale + off
+                ticer(mpix, edge1, edge2, 2, drawable, gc)
+
     def plot(self):
         global cross_bitmap
-        self.canvas.delete("all")
+        self.plotted = True
         if self.conn is not None:
             
             # analyze time and sequence ranges
@@ -234,108 +303,105 @@ class PlotCanvas:
             toff = self.left_margin - (t0 * tscale)
             soff = self.top_margin - (s1 * sscale)
 
+            # variables
+            drawable = self.canvas.window
+            playout = self.canvas.create_pango_layout("")
+
+            # clear background
+            drawable.clear()
+            drawable.draw_rectangle(self.canvas.get_style().white_gc, gtk.TRUE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
+
             # losses
+            gc = self.gc["lossborder"]
             for l in self.conn.losses(self.dir, t0, t1):
                 x0 = max(t0, l.begin) * tscale + toff
                 x1 = min(t1, l.end) * tscale + toff
                 y0 = max(s0, l.seq) * sscale + soff
                 y1 = min(s1, l.end_seq) * sscale + soff
-                self.canvas.create_rectangle(x0, y1, x1, y0, outline='yellow', fill=l.fillcolor())
+                drawable.draw_rectangle(self.gc[l.type], gtk.TRUE, x0, y1, x1 - x0, y0 - y1)
+                drawable.draw_rectangle(gc, gtk.FALSE, x0, y1, x1 - x0, y0 - y1)
             
             # border box
-            self.canvas.create_rectangle(self.left_margin, self.top_margin, self.wwidth - self.right_margin, self.wheight - self.bottom_margin, outline='grey')
+            gc = self.gc["border"]
+            drawable.draw_rectangle(gc, gtk.FALSE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
 
-            # time axis major tics
-            y1 = self.top_margin
-            y2 = self.wheight - self.bottom_margin
-            if tstep * tscale >= 50:
-                mtstep = tstep / 10
-            else:
-                mtstep = tstep / 4
-            for t in range(t0, t1 + tstep/2, tstep):
-                x = t * tscale + toff
-                self.canvas.create_line(x, y1, x, y1 + 6, fill='grey')
-                self.canvas.create_line(x, y2, x, y2 - 5, fill='grey')
-                self.canvas.create_text(x, y2 + 2, text=`t`, anchor='n', fill='grey')
-                for tt in range(t + mtstep, min(t + tstep, t1), mtstep):
-                    x = tt * tscale + toff
-                    self.canvas.create_line(x, y1, x, y1 + 3, fill='grey')
-                    self.canvas.create_line(x, y2, x, y2 - 2, fill='grey')
-            
-            # sequence axis major tics
-            x1 = self.left_margin
-            x2 = self.wwidth - self.right_margin
-            if sstep * sscale <= -50:
-                msstep = sstep / 10
-            else:
-                msstep = sstep / 4
-            for s in range(s0, s1 + sstep/2, sstep):
-                y = s * sscale + soff
-                self.canvas.create_line(x1, y, x1 + 6, y, fill='grey')
-                self.canvas.create_line(x2, y, x2 - 5, y, fill='grey')
-                self.canvas.create_text(x1 - 4, y, text=`s`, anchor='e', fill='grey')
-                for ss in range(s + msstep, min(s + sstep, s1), msstep):
-                    y = ss * sscale + soff
-                    self.canvas.create_line(x1, y, x1 + 3, y, fill='grey')
-                    self.canvas.create_line(x2, y, x2 - 2, y, fill='grey')
+            # axes major tics
+            self._draw_axis(tscale, toff, t0, t1, tstep, self.top_margin, self.wheight - self.bottom_margin, self._draw_tic_x, self._draw_label_x, drawable, gc, playout)
+            self._draw_axis(sscale, soff, s0, s1, sstep, self.left_margin, self.wwidth - self.right_margin, self._draw_tic_y, self._draw_label_y, drawable, gc, playout)
             
             # data packets
+            gc = self.gc["data"]
             for p in self.conn.packets(self.dir, t0, t1):
                 x, y, yy = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
-                self.canvas.create_line(x - 2, y, x + 3, y, fill='red')
-                self.canvas.create_line(x - 2, yy, x + 3, yy, fill='red')
-                self.canvas.create_line(x, y, x, yy, fill='red')
+                drawable.draw_line(gc, x - 2, y, x + 3, y)
+                drawable.draw_line(gc, x - 2, yy, x + 3, yy)
+                drawable.draw_line(gc, x, y, x, yy)
             
             # ack packets
+            gc1 = self.gc["ack"]; gc2 = self.gc["dataack"]
             for p in self.conn.packets(1 - self.dir, t0, t1):
                 x, y = int(p.time * tscale + toff), int(p.ack * sscale + soff)
-                if p.pure_ack(): color = "green"
-                else: color = "blue"
-                self.canvas.create_line(x - 2, y - 1, x + 3, y + 4, fill=color)
-                self.canvas.create_line(x + 3, y - 2, x - 2, y + 3, fill=color)
+                if p.pure_ack(): gc = gc1
+                else: gc = gc2
+                drawable.draw_line(gc, x - 2, y - 2, x + 2, y + 2)
+                drawable.draw_line(gc, x + 2, y - 2, x - 2, y + 2)
+    def pack(self, *args, **keys):
+        self.canvas.pack(*args, **keys)
+
+
+class PlotBox:
+    def __init__(self, master):
+        self.frame = gtk.VBox()
+        master.pack_start(self.frame, expand=1, fill=1)
+        self.frame.show()
+        
+        self.lframe = gtk.HBox()
+        self.frame.pack_start(self.lframe, expand=0, fill=0)
+        self.lframe.show()
+        self.l0 = gtk.Label("")
+        self.dirbutton = gtk.Button(">")
+        self.dirbutton.connect("clicked", self.cmd_dirbutton)
+        self.l1 = gtk.Label("foo")
+        self.lframe.pack_start(self.l0, expand=0, fill=0); self.l0.show()
+        self.lframe.pack_start(self.dirbutton, expand=0, fill=0); self.dirbutton.show()
+        self.lframe.pack_start(self.l1, expand=0, fill=0); self.l1.show()
+        
+        self.canvas = PlotCanvas(self.frame)
+    def cmd_dirbutton(self, *args):
+        self.set_connection(self.canvas.get_connection(), 1 - self.canvas.get_direction())
+    def set_connection(self, conn, dir=0):
+        self.canvas.set_connection(conn, dir)
+        desc = conn.get_description()
+        mid = desc.find(' > ')
+        self.l0.set_label(desc[:mid + 1])
+        self.l1.set_label(desc[mid + 2:])
+        self.dirbutton.set_label("><"[self.canvas.get_direction()])
+    def pack(self, *args, **keys):
+        self.frame.pack(*args, **keys)
 
 
 class PlotFlowWindow:
-    def __init__(self, master):
-        self.master = master
-        
-        self.master.title("PlotFlow")
+    def __init__(self):
+        win = gtk.Window()
+        win.connect('destroy', self.exit_command)
+        win.set_title("PlotFlow")
 
-        # menu bar
-        menubar = Menu(self.master)
-        self.master.config(menu=menubar)
+        vbox = gtk.VBox()
+        win.add(vbox)
+        vbox.show()
 
-        filemenu = Menu(menubar)
-        menubar.add_cascade(label="File", menu=filemenu)
-        filemenu.add_command(label="Quit", command=self.exit_command, accelerator="Ctrl+Q", underline=0)
-
-        # main canvas
-        self.canvas = PlotCanvas(self.master)
-
-        # surrounding widgets
-        bframe = Frame(self.master)
-        self.linfovar = StringVar()
-        linfo = Label(bframe, textvariable=self.linfovar)
-        linfo.grid(column=0, row=0, sticky=W)
-        
-        # event bindings
-        self.canvas.canvas.bind("<Button-1>", self.exit_command)
-        self.master.protocol("WM_DELETE_WINDOW", self.exit_command)
-
-        # layout
-        bframe.pack(side=TOP)
-        self.canvas.canvas.pack(expand=1, side=BOTTOM, fill=BOTH)
+        # the plotbox
+        self.plotbox = PlotBox(vbox)
 
         c = Connection(sys.stdin)
-        self.canvas.set_conn(c, '>')
-        self.canvas.plot()
+        self.plotbox.set_connection(c, '>')
 
+        win.show()
+        
     def exit_command(self, event=None):
-        self.master.destroy()
+        gtk.main_quit()
 
 
 if __name__ == "__main__":
-    root = Tk()
-    cross_bitmap = BitmapImage(data=cross_bitmap_text, maskdata=cross_bitmap_text, foreground="red")
-    window = PlotFlowWindow(root)
-    root.mainloop()
+    window = PlotFlowWindow()
+    gtk.main()
