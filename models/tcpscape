@@ -38,9 +38,9 @@ def uncompressed_file(filename):
 class Packet:
     def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0):
         self.time = float(time)
-        self.seq = int(seq)
+        self.seq = float(seq)
         self.last_seq = self.seq + int(payloadlen)
-        self.ack = int(ack)
+        self.ack = float(ack)
         if flags != "A" and flags != "PA":
             if flags.find("S") >= 0:
                 self.last_seq += 1
@@ -64,7 +64,7 @@ class Packet:
 class LossEvent:
     def __init__(self, type, begin, seq, end, end_seq):
         self.type, self.begin, self.seq, self.end, self.end_seq = \
-                   type, float(begin), int(seq), float(end), int(end_seq)
+                   type, float(begin), float(seq), float(end), float(end_seq)
     def time_overlaps(self, begin, end):
         return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
     def fillcolor(self):
@@ -108,10 +108,10 @@ class Connection:
     def __init__(self, f=None, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
         self.loss = ([], [])
-        self.flow_id = [src, sport, dst, dport]
-        self.aggregate = aggregate
         self.available = False
-        self.all_loss_count = 0
+        self.flow_id = (src, sport, dst, dport)
+        self.aggregate = aggregate
+        self.loss_count = [0, 0]
         if type(f) == types.FileType:
             self.read(f)
         else:
@@ -125,22 +125,24 @@ class Connection:
         def __iter__(self):
             return self
         def next(self):
-            try:
+            while True:
                 eol = self.str.find("\n", self.pos)
-                while eol < 0:
-                    if self.pos > 0:
-                        self.str = self.str[self.pos:]
-                        self.pos = 0
-                    p = len(self.str)
-                    self.str += self.f.read(32768)
-                    eol = self.str.find("\n", p)
-                p = self.pos
-                self.pos = eol + 1
-                return self.str[p:eol + 1]
-            except EOFError:
-                raise StopIteration
+                if eol >= 0:
+                    p, self.pos = self.pos, eol + 1
+                    return self.str[p:self.pos]
+                if self.pos > 0:
+                    self.str = self.str[self.pos:]
+                    self.pos = 0
+                p = len(self.str)
+                self.str += self.f.read(32768)
+                if len(self.str) == 0:
+                    raise StopIteration
+                elif len(self.str) == p:
+                    self.pos = p
+                    return self.str
         def read(self):
-            return self.str[self.pos:] + self.f.read()
+            p, self.pos = self.pos, len(self.str)
+            return self.str[p:] + self.f.read()
     
     def _check_data(self):
         if self.read_state == "a":      # ASCII
@@ -157,7 +159,7 @@ class Connection:
             type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
             self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
         elif re.match('!flowid', line):
-            self.flow_id = line.split()[1:]
+            self.flow_id = tuple(line.split()[1:5])
         elif re.match('!aggregate', line):
             self.aggregate = int(line.split()[1])
         elif re.match('!data ', line):
@@ -175,24 +177,25 @@ class Connection:
 
         last_ack = [-1, -1]; dup_acks = [0, 0]
         data = f.read()
-        while len(data) > 4:
-            l, = struct.unpack("!l", data[:4])
+        pos, leng = 0, len(data)
+        while pos + 4 < leng:
+            l, = struct.unpack("!l", data[pos:pos+4])
             i = l & 0x7FFFFFFF
-            line, data = data[4:i], data[i:]
-            if len(line) < i - 4:
+            if pos + i > leng:
                 raise ConnectionFormatError, "corrupted file"
             elif l & 0x80000000:
-                if self._read_nonpacket(line):
+                if self._read_nonpacket(data[pos+4:pos+i]):
                     break
             elif i >= 26:
                 ts_sec, ts_usec, seq, payloadlen, ack, flags, dir = \
-                   struct.unpack("!lllllBB", line[:26])
+                   struct.unpack("!LLLLLBB", data[pos+4:pos+26])
                 time = ts_sec + ts_usec / 1000000.
                 if flags == 16: flags = "A"
                 else: flags = unparse_tcp_flags(flags)
                 if ack == last_ack[dir]: dup_acks[dir] += 1
                 else: dup_acks[dir] = 0; last_ack[dir] = ack
                 self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
+            pos += i
 
     def read(self, f):
         last_ack = [-1, -1]; dup_acks = [0, 0]
@@ -265,7 +268,11 @@ class Connection:
         if not self.available:
             self.load()
         if dir is None:
-            return min(self.s[0][0].time, self.s[1][0].time), max(self.s[0][-1].time, self.s[1][-1].time)
+            m0, M0 = self.get_time_range(0)
+            m1, M1 = self.get_time_range(1)
+            return min(m0, m1), max(M0, M1)
+        elif len(self.s[dir]) == 0:
+            return 0, 1
         else:
             dir = direction(dir)
             return self.s[dir][0].time, self.s[dir][-1].time
@@ -279,23 +286,23 @@ class Connection:
             return 0
     
     def _seq_range(self, dir, begin, end):
-        s0, s1 = 1e10, None
+        s0, s1 = 1e10, 0.
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
             s0 = min(s0, self.s[dir][i].seq - 10)
             s1 = max(s1, self.s[dir][i].last_seq + 10)
         for l in self.losses(dir, begin, end):
             s0 = min(s0, l.seq - 10)
             s1 = max(s1, l.end_seq + 10)
-        return max(s0, 0), s1
+        return max(s0, 0.), s1
     
     def _ack_range(self, dir, begin, end):
-        s0, s1 = 1e10, None
+        s0, s1 = 1e10, 0.
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
             s0 = min(s0, self.s[dir][i].ack - 10)
             s1 = max(s1, self.s[dir][i].ack + 10)
-        return max(s0, 0), s1
+        return max(s0, 0.), s1
     
-    def seq_range(self, dir=None, begin=None, end=None):
+    def get_seq_range(self, dir=None, begin=None, end=None):
         if not self.available:
             self.load()
         dir = direction(dir)
@@ -324,13 +331,35 @@ class Connection:
     
     def unload(self):
         if type(self.filename) == types.StringType:
-            self.__init__(self.filename)
+            self.s = ([], [])
+            self.loss = ([], [])
+            self.available = False
 
 
-class ConnectionGroup:
+class FlowRef:
+
+    def __init__(self, conn, dir):
+        self.conn, self.dir = conn, dir
+
+    def loss_count(self):
+        return self.conn.loss_count[self.dir]
+
+    def aggregate(self):
+        return self.conn.aggregate
+
+    def unload(self):
+        self.conn.unload()
+
+    def __str__(self):
+        fid = self.conn.flow_id
+        return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
+
+
+class FlowSet:
     
     def __init__(self, f=None):
         self.conns = []
+        self.flows = []
         if type(f) == types.StringType:
             slash = f.rfind('/')
             if slash >= 0: dir = f[:slash+1]
@@ -348,13 +377,6 @@ class ConnectionGroup:
         self.reading_state = 0
         self.reading_connection = None
         p.ParseFile(f)
-
-    def _read_number_from_string(self, s, pos):
-        n = 0
-        while s[pos:pos+1] >= '0' and s[pos:pos+1] <= '9':
-            n = 10*n + ord(s[pos:pos+1]) - ord('0')
-            pos += 1
-        return n, pos
 
     def _handle_number(self, x, format, precision):
         if precision >= 0 and precision <= 3:
@@ -413,9 +435,11 @@ class ConnectionGroup:
             agg, src, sport, dst, dport = int(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
             self.reading_connection = Connection(self._expand_filename(agg, src, sport, dst, dport), aggregate=agg, src=src, sport=sport, dst=dst, dport=dport)
             self.conns.append(self.reading_connection)
+            self.flows.append(FlowRef(self.reading_connection, 0))
+            self.flows.append(FlowRef(self.reading_connection, 1))
         elif name == 'flow' and self.reading_connection is not None:
-            l, pl, fl = int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
-            self.reading_connection.all_loss_count += l + pl + fl
+            d, l, pl, fl = int(attrs["dir"]), int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
+            self.reading_connection.loss_count[d] += l + pl + fl
 
     def _end_element(self, name):
         if name == 'connections':
@@ -424,13 +448,18 @@ class ConnectionGroup:
             self.reading_connection = None
 
     def sort_by_loss_count(self):
-        self.conns.sort(lambda a, b: b.all_loss_count.__cmp__(a.all_loss_count))
+        self.flows.sort(lambda a, b: b.loss_count().__cmp__(a.loss_count()) or a.aggregate().__cmp__(b.aggregate()))
 
     def __getitem__(self, key):
-        return self.conns[key]
+        return self.flows[key]
+
+    def __len__(self):
+        return len(self.flows)
 
     def append(self, conn):
         self.conns.append(conn)
+        self.flows.append(FlowRef(conn, 0))
+        self.flows.append(FlowRef(conn, 1))
 
 
 def fix_range(a, b, min_step_frac):
@@ -578,6 +607,9 @@ class PlotCanvas:
     # setting properties
     def set_connection(self, conn, dir, begin=None, end=None):
         self.conn, self.dir = conn, direction(dir)
+        self.set_time_range(begin, end)
+    def set_flowref(self, fref, begin=None, end=None):
+        self.conn, self.dir = fref.conn, fref.dir
         self.set_time_range(begin, end)
     def set_direction(self, dir):
         self.dir = direction(dir)
@@ -730,12 +762,11 @@ class PlotCanvas:
             t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
 
             # analyze sequence ranges
-            s0, s1 = self.conn.seq_range(self.dir, t0, t1)
-            if s0 is None or s1 is None:
-                s0 = 0; s1 = 1
+            s0, s1 = self.conn.get_seq_range(self.dir, t0, t1)
+            if s1 <= s0: s0 = 0; s1 = 1
             ranges = fix_range(s0, s1, 30.0 / self.plot_height)
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
-            
+
             # get transformation
             tscale = self.plot_width / float(t1 - t0)
             sscale = self.plot_height / float(s0 - s1)
@@ -837,6 +868,8 @@ class PlotBox:
         self.l0.set_markup(s)
         self.l1.set_label(desc[mid + 2:])
         self.dirbutton.set_label("><"[self.canvas.get_direction()])
+    def set_flowref(self, fref):
+        self.set_connection(fref.conn, fref.dir)
     def set_time_range(self, begin, end):
         self.canvas.set_time_range(begin, end)
     def zoom_in(self):
@@ -847,7 +880,10 @@ class PlotBox:
 
 
 class PlotFlowWindow:
-    def __init__(self, conn):
+    def __init__(self, fset):
+        self.flowset = fset
+        self.flowid = 0
+        
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
         win.set_title("PlotFlow")
@@ -859,7 +895,8 @@ class PlotFlowWindow:
         self._init_menus(win, vbox)
         self.plotbox = PlotBox(vbox)
 
-        self.plotbox.set_connection(conn, '<')
+        if len(fset):
+            self.plotbox.set_flowref(fset[0])
 
         win.show()
 
@@ -871,7 +908,6 @@ class PlotFlowWindow:
         win.add_accel_group(accel_group)
         self.item_factory.create_items((
             ( "/_File",         None,         None, 0, "<Branch>" ),
-   	    ( "/File/_New",     "<control>N", None, 0, None ),
    	    ( "/File/_Open",    "<control>O", None, 0, None ),
    	    ( "/File/_Save",    "<control>S", None, 0, None ),
    	    ( "/File/Save _As", None,         None, 0, None ),
@@ -880,7 +916,11 @@ class PlotFlowWindow:
             ( "/_View",		None,		None, 0, "<Branch>" ),
             ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
             ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
+   	    ( "/View/sep1",     None,         None, 0, "<Separator>" ),
+            ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, None ),
+            ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, None ),
    	    ))
+        self._activate_flow_items()
         menubar = self.item_factory.get_widget("<main>")
         vbox.add(menubar)
         menubar.show()
@@ -894,9 +934,25 @@ class PlotFlowWindow:
     def cmd_zoom_out(self, widget, event):
         self.plotbox.set_time_range(None, None)
 
+    def _activate_flow_items(self):
+        self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
+        self.item_factory.get_item("/View/Previous Flow").set_sensitive(self.flowid > 0)
+
+    def cmd_next_flow(self, widget, event):
+        self.flowset[self.flowid].unload()
+        self.flowid += 1
+        self.plotbox.set_flowref(self.flowset[self.flowid])
+        self._activate_flow_items()
+
+    def cmd_prev_flow(self, widget, event):
+        self.flowset[self.flowid].unload()
+        self.flowid -= 1
+        self.plotbox.set_flowref(self.flowset[self.flowid])
+        self._activate_flow_items()
+
 
 if __name__ == "__main__":
-    all_connections = ConnectionGroup()
+    all_connections = FlowSet()
     try:
         if len(sys.argv) >= 2:
             f = uncompressed_file(sys.argv[1])
@@ -909,7 +965,10 @@ if __name__ == "__main__":
         else:
             all_connections.append(Connection(sys.stdin))
         all_connections.sort_by_loss_count()
-        window = PlotFlowWindow(all_connections[0])
+        window = PlotFlowWindow(all_connections)
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
+
+# 1752 >
+# 1
