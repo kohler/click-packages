@@ -938,17 +938,19 @@ class PlotFlowWindow:
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
         self.item_factory.get_item("/View/Previous Flow").set_sensitive(self.flowid > 0)
 
-    def cmd_next_flow(self, widget, event):
-        self.flowset[self.flowid].unload()
-        self.flowid += 1
-        self.plotbox.set_flowref(self.flowset[self.flowid])
+    def _change_flowid(self, new_flowid):
+        of, nf = self.flowset[self.flowid], self.flowset[new_flowid]
+        if of.conn is not nf.conn:
+            of.unload()
+        self.plotbox.set_flowref(nf)
+        self.flowid = new_flowid
         self._activate_flow_items()
+    
+    def cmd_next_flow(self, widget, event):
+        self._change_flowid(self.flowid + 1)
 
     def cmd_prev_flow(self, widget, event):
-        self.flowset[self.flowid].unload()
-        self.flowid -= 1
-        self.plotbox.set_flowref(self.flowset[self.flowid])
-        self._activate_flow_items()
+        self._change_flowid(self.flowid - 1)
 
 
 if __name__ == "__main__":
