@@ -542,7 +542,7 @@ TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream,
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream.pkt_head->next; k; k = k->next) {
 	    timeval diff = k->timestamp - k->prev->timestamp;
-	    fprintf(f, "%g\n", diff.tv_sec*1.0e6 + diff.tv_usec);
+	    fprintf(f, "%.0f\n", diff.tv_sec*1.0e6 + diff.tv_usec);
 	}
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
