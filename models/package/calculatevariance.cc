@@ -21,14 +21,21 @@ CalculateVariance::~CalculateVariance()
 int
 CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
+    bool _bits = false;
+
     _interval.tv_sec = 0;
     _interval.tv_usec = 0;
     _num_aggregates = 1024;
+
     if (cp_va_parse(conf, this, errh,
 		    cpTimeval, "interval in struct timeval", &_interval,
-		    cpUnsigned, "number of aggregates expected", &_num_aggregates,
-		    0) < 0) return -1;
+		    cpUnsigned, "number of aggregates (in bits) expected", &_num_aggregates_bits,
+		    0) < 0) 
+	return -1;
+
+    _num_aggregates = 1 << _num_aggregates_bits;
     _counters.resize(_num_aggregates);
+
     return 0;
 }
 
@@ -42,14 +49,13 @@ CalculateVariance::reset()
    num_intervals = 0;
 
    for (int i=0;i<_counters.size();i++) {
-       _counters[i].init();
+       _counters[i].init(i);
    }
 }
 
 int
 CalculateVariance::initialize(ErrorHandler *)
 {
-
     reset();
     return 0;
 }
@@ -58,6 +64,8 @@ Packet *
 CalculateVariance::simple_action(Packet *p)
 {
     int row = AGGREGATE_ANNO(p);
+
+    if (_num_aggregates == 1) row = 0;
 
     if ((end_time.tv_sec == 0) && (end_time.tv_usec == 0)) {
 	timeradd(&p->timestamp_anno(),&_interval,&end_time);
@@ -69,7 +77,9 @@ CalculateVariance::simple_action(Packet *p)
 	_counters.resize(row+1);
 	_num_aggregates = row+1;
 
-    }else if(timercmp(&p->timestamp_anno(),&end_time,>)) {
+    }
+    
+    if(timercmp(&p->timestamp_anno(),&end_time,>)) {
 	for (int i=0;i<_counters.size();i++) {
 	    _counters[i].pkt_sum += _counters[i].pkt_sum_interval;
 	    _counters[i].pkt_sum_sq += _counters[i].pkt_sum_interval * _counters[i].pkt_sum_interval;
@@ -81,6 +91,8 @@ CalculateVariance::simple_action(Packet *p)
     }
 
     _counters[row].pkt_sum_interval++;
+    _counters[row].pkt_count++;
+    _counters[row].byte_count += p->length();
 
     return p;
 }
@@ -104,10 +116,61 @@ void
 CalculateVariance::print_all_variance()
 {
     for (int i=0;i<_counters.size();i++) {
-       printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d\n",i,get_variance(i),num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq);
+       printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",i,get_variance(i),num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq,_counters[i].pkt_count);
     }
 }
 
+static int pktsorter(const void *av, const void *bv) {
+    const CalculateVariance::CounterEntry *a = (const CalculateVariance::CounterEntry *)av, *b = (const CalculateVariance::CounterEntry *)bv;
+    return a->pkt_count - b->pkt_count;
+}
+
+void
+CalculateVariance::print_edf_function()
+{
+    String _filename;
+
+    _filename = String(_num_aggregates_bits) + "-bit-agg";
+    FILE *outfile = fopen(_filename.cc(), "w");
+    if (!outfile) {
+        click_chatter("%s: %s", _filename.cc(), strerror(errno));
+	return;
+    }
+
+    //to get edf i need to first sort the data
+    qsort(&_counters[0],_counters.size(),sizeof(CounterEntry),&pktsorter);
+
+    double step = (double) 1/_num_aggregates;
+    unsigned prev_edf_x_size = _counters[0].pkt_count;
+    unsigned prev_count = 0;
+    double edf_y_val = step;
+
+    assert(_num_aggregates == _counters.size());
+    int i=1;
+
+    do {
+	if ((i==_counters.size()) || ((_counters[i].pkt_count!=prev_edf_x_size))) {
+	    fprintf(outfile,"%d\t %0.10f",prev_edf_x_size,edf_y_val);
+	    if ((i-prev_count)>10) {
+		fprintf(outfile,"\n");
+	    }else{
+		for (int j=prev_count;j<i;j++) {
+		    fprintf(outfile,"\t%d",_counters[j].aggregate_no);
+		}
+		fprintf(outfile,"\n");
+	    }
+	    if (i<_counters.size()) prev_edf_x_size = _counters[i].pkt_count;
+	    prev_count = i;
+	}
+	edf_y_val += step;
+	i++;
+
+    }while (i<=_counters.size());
+
+    if (fclose(outfile)) {
+	click_chatter("error closing file!");
+    }
+}
 
 static String
 calculatevariance_read_variance_handler(Element *e, void *thunk)
@@ -115,14 +178,6 @@ calculatevariance_read_variance_handler(Element *e, void *thunk)
     CalculateVariance *cv = (CalculateVariance *)e;
     int row = (int)thunk;
     return String(cv->get_variance(row)) + "\n";
-}
-
-static int
-calculatevariance_reset_write_handler (const String &, Element *e, void *, ErrorHandler *)
-{
-    CalculateVariance *cv = (CalculateVariance *)e;
-    cv->reset();
-    return 0;
 }
 
 static String
@@ -133,11 +188,28 @@ calculatevariance_print_all_variance_handler(Element *e, void *)
     return String("\n");
 }
 
+static String
+calculatevariance_print_edf_function_handler(Element *e, void *)
+{
+    CalculateVariance *cv = (CalculateVariance *)e;
+    cv->print_edf_function();
+    return String("\n");
+}
+
+static int
+calculatevariance_reset_write_handler (const String &, Element *e, void *, ErrorHandler *)
+{
+    CalculateVariance *cv = (CalculateVariance *)e;
+    cv->reset();
+    return 0;
+}
+
 void
 CalculateVariance::add_handlers()
 {
     add_read_handler("variance",calculatevariance_read_variance_handler,0);
     add_read_handler("printallvariance",calculatevariance_print_all_variance_handler,0);
+    add_read_handler("printEDFfunction",calculatevariance_print_edf_function_handler,0);
     add_write_handler("reset",calculatevariance_reset_write_handler,0);
 }
 
