@@ -2,9 +2,11 @@
 #ifndef CLICK_CALCULATEFLOWS_HH
 #define CLICK_CALCULATEFLOWS_HH
 #include <click/element.hh>
-#include <click/integerid.hh>
 #include <click/bighashmap.hh>
 #include <math.h>
+#include "aggregatenotifier.hh"
+#include "aggregateflows.hh"
+
 /*
 =c
 
@@ -59,10 +61,11 @@ The garbage collection interval. Default is 10 minutes of packet time.
 
 AggregateIP, AggregateCounter */
 
-class CalculateFlows : public Element { public:
+class CalculateFlows : public Element, public AggregateListener { 
+	
+	public:
 
     CalculateFlows();
-	
     ~CalculateFlows();
 
     const char *class_name() const	{ return "CalculateFlows"; }
@@ -76,6 +79,9 @@ class CalculateFlows : public Element { public:
 	void print_send_event(unsigned, timeval, unsigned , unsigned);
 	void gplotp_ack_event(unsigned, timeval, unsigned);
 	void gplotp_send_event(unsigned, timeval, unsigned);
+	void aggregate_notify(uint32_t aggregate_ID,
+                  AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
+                  const Packet *packet /* null for DELETE_AGG */);
 	
 	Packet *simple_action(Packet *);
 	struct TimeInterval {
@@ -90,6 +96,7 @@ class CalculateFlows : public Element { public:
 	class LossInfo;
 		LossInfo *loss;
 	String outfilename[2];	
+	class AggregateFlows *af;
 	
 	class LossInfo {
 
@@ -109,6 +116,7 @@ class CalculateFlows : public Element { public:
 	public:	
 		FILE *outfile[2];
 		FILE *outfileg[8];
+		String outfilenamel[2];
 		int  gnuplot;
 		MapT time_by_firstseq[2];
 		MapT time_by_lastseq[2];
@@ -154,12 +162,11 @@ class CalculateFlows : public Element { public:
 		};
 			
 		LossInfo(String *outfilename, int gnuplotprm) { 
+			String outfilenametmp;
 			init();
 			gnuplot = gnuplotprm;
-			String outfilenametmp;
 			for (int i = 0 ; i < 2 ; i++){
-				//outfilename[i].append("test",4);
-				//printf("%s\n",outfilename[i].cc());
+				outfilenamel[i].append(outfilename[i],sizeof(outfilename[i]));
 				outfile[i] = fopen(outfilename[i].cc(), "w");
 	    		if (!outfile[i]){
     	    		click_chatter("%s: %s", outfilename[i].cc(), strerror(errno));
@@ -223,6 +230,11 @@ class CalculateFlows : public Element { public:
     		    		click_chatter("error closing file!");
 					}
 				}			
+				char tempstr[32];
+				for (int i = 0 ; i < 2 ; i++){
+					sprintf(tempstr,"./crplots.sh %s",outfilenamel[i].cc());
+					system(tempstr);
+				}
 			}
 		}
 		 

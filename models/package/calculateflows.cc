@@ -34,11 +34,13 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 	if (cp_va_parse(conf, this, errh,
-                    cpFilename, "filename for output flow1",&outfilename[0],
+                    cpElement,  "AggregateFlows element pointer", &af,
+					cpFilename, "filename for output flow1",&outfilename[0],
 					cpFilename, "filename for output flow2",&outfilename[1]
 					
 					,0) < 0)
         return -1;
+		af->add_listener(this); // this is a handler to AggregateFlows Element
 		loss = new LossInfo(outfilename , 1);
 	return 0;
 
@@ -205,9 +207,17 @@ CalculateFlows::
 gplotp_send_event(unsigned paint, timeval tstamp, unsigned endseq)
 {
 
-		fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
+	fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
 
 }
+
+void 
+CalculateFlows::
+aggregate_notify(uint32_t aggregate_ID,
+                 AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
+                 const Packet *packet /* null for DELETE_AGG */){
+	printf("ok ---->%d %d\n", aggregate_ID, event);
+}	
 
 
 ELEMENT_REQUIRES(userlevel)
