@@ -71,7 +71,7 @@ IPAddrColorPaint::push(int, Packet *p)
 {
     color_t c = color(ntohl(p->dst_ip_anno().addr())), d = c ^ 1;
     if (_careful)
-	d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src)) : c + 2);
+	d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src.s_addr)) : c + 2);
     if (c <= 255 && c == (d ^ 1)) {
 	SET_PAINT_ANNO(p, c);
 	output(0).push(p);
@@ -86,7 +86,7 @@ IPAddrColorPaint::pull(int)
     if (p) {
 	color_t c = color(ntohl(p->dst_ip_anno().addr())), d = c ^ 1;
 	if (_careful)
-	    d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src)): c + 2);
+	    d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src.s_addr)) : c + 2);
 	if (c <= 255 && c == (d ^ 1))
 	    SET_PAINT_ANNO(p, c);
 	else {

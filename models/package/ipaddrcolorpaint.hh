@@ -7,7 +7,7 @@
 /*
 =c
 
-IPAddrColorPaint(FILENAME)
+IPAddrColorPaint(FILENAME [, I<KEYWORDS>])
 
 =s analysis
 
@@ -20,6 +20,18 @@ color for each packet's destination address annotation, and assigns the paint
 annotation to the corresponding color. Packets whose addresses have unknown
 colors, or colors greater than 255, are dropped (or emitted on output 1, if
 present). The file FILENAME contains the relevant IP address coloring.
+
+Keyword arguments are:
+
+=over 8
+
+=item CAREFUL
+
+Boolean. If true, then check that the packet's source and destination
+addresses have compatible colors; if not, emit the packet on output 1. Default
+is false.
+
+=back
 
 =a
 
@@ -45,6 +57,7 @@ class IPAddrColorPaint : public Element, public IPAddrColors { public:
   private:
 
     String _filename;
+    bool _careful;
 
 };
 
