@@ -467,7 +467,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
 {
-    click_chatter("mark_delivered at %{timeval}: %u", &ackk->timestamp, ackk->ack);
+    //click_chatter("mark_delivered at %{timeval}: %u", &ackk->timestamp, ackk->ack);
     
     // update current RTT
     struct timeval cur_min_ack_latency = min_ack_latency;
