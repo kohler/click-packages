@@ -44,7 +44,7 @@ _postscript_style = {
     "data": LineDescriptor(1, 0, 0, linewidth=0.5),
     "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
     "dataack": LineDescriptor(0, 0, 1, linewidth=0.5),
-    "window": LineDescriptor(0.8, 0.8, 1),
+    "window": LineDescriptor(0.8, 0.8, 1, linewidth=1.5),
     
     "loss": LineDescriptor(1, 0.84, 0),
     "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
@@ -948,9 +948,6 @@ class PlotCanvas_ScreenDrawable:
         _screen_gcs[orig_name] = gc
         return gc
 
-    def clip_gc(self, gc, rectangle):
-        gc.set_clip_rectangle(rectangle)
-
     def layout(self, name=""):
         if name == "small":
             if self.small_playout is None:
@@ -977,6 +974,12 @@ class PlotCanvas_ScreenDrawable:
     def complete(self):
         pass
     
+    def clip(self, gc, rectangle):
+        gc.set_clip_rectangle(rectangle)
+
+    def unclip(self, gc):
+        pass
+
     def clear(self):
         self.drawable.clear()
     
@@ -1070,6 +1073,7 @@ class PlotCanvas_PostScriptDrawable:
         self.plotcanvas = plotcanvas
         self.f = f
         self.cur_font = None
+        self.cur_gc = None
 
     def gc(self, name):
         return name
@@ -1085,7 +1089,7 @@ class PlotCanvas_PostScriptDrawable:
     def prepare(self):
         self.f.write("%!PS-Adobe-3.0\n")
         self.FONT.write_define(self.f)
-        self.f.write("/m/moveto load def/l{lineto stroke}bind def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
+        self.f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
         for key in _postscript_style:
             s = _postscript_style[key]
             self.f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
@@ -1107,6 +1111,13 @@ class PlotCanvas_PostScriptDrawable:
     def complete(self):
         self.f.write("showpage\n")
         
+    def clip(self, gc, rectangle):
+        x, y, w, h = rectangle
+        self.f.write("gsave " + str(x) + ' ' + str(self.top - y - h) + ' ' + str(w) + ' ' + str(h) + " rectclip\n")
+
+    def unclip(self, gc):
+        self.f.write("grestore\n")
+
     def clear(self):
         pass
 
@@ -1121,6 +1132,15 @@ class PlotCanvas_PostScriptDrawable:
     def draw_line(self, gc, x1, y1, x2, y2):
         if self.cur_gc is not gc: self.select_gc(gc)
         self.f.write(str(x1) + " " + str(self.top - y1) + " m " + str(x2) + " " + str(self.top - y2) + " l\n")
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1:
+            if self.cur_gc is not gc: self.select_gc(gc)
+            s = " m\n"
+            for p in l:
+                self.f.write(str(p[0]) + " " + str(self.top - p[1]) + s)
+                s = " L\n"
+            self.f.write("stroke\n")
 
     def fill_rectangle(self, gc, x1, y1, w, h):
         if self.cur_gc is not gc: self.select_gc(gc)
@@ -1458,11 +1478,12 @@ class PlotCanvas:
             # window line, if enabled
             if self.show_window and self.conn.has_window:
                 windows = []; gc = drawable.gc("window")
-                drawable.clip_gc(gc, drawable.plot_bounds())
                 for p in self.conn.packets(1 - self.dir, t0, t1, fuzz=1):
                     x, y = int(p.time * tscale + toff), int((p.ack + p.window) * sscale + soff)
                     windows.append((x, y))
+                drawable.clip(gc, drawable.plot_bounds())
                 drawable.draw_lines(gc, windows)
+                drawable.unclip(gc)
 
             # data packets
             gc = drawable.gc("data")
