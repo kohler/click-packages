@@ -5,7 +5,6 @@
 #include <click/bighashmap.hh>
 #include <math.h>
 #include "aggregatenotifier.hh"
-#include "aggregateflows.hh"
 #include "toipflowdumps.hh"
 
 /*
@@ -62,9 +61,7 @@ The garbage collection interval. Default is 10 minutes of packet time.
 
 AggregateIP, AggregateCounter */
 
-class CalculateFlows : public Element, public AggregateListener { 
-	
-	public:
+class CalculateFlows : public Element, public AggregateListener { public:
 
     CalculateFlows();
     ~CalculateFlows();
@@ -76,36 +73,36 @@ class CalculateFlows : public Element, public AggregateListener {
     const char *processing() const	{ return "a/ah"; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
-	void print_ack_event(unsigned, int,  timeval, unsigned);
-	void print_send_event(unsigned, timeval, unsigned , unsigned);
-	void gplotp_ack_event(unsigned, int ,timeval, unsigned);
-	void gplotp_send_event(unsigned, timeval, unsigned);
-	void aggregate_notify(uint32_t aggregate_ID,
-                  AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
-                  const Packet *packet /* null for DELETE_AGG */);
+    
+    void print_ack_event(unsigned, int,  timeval, unsigned);
+    void print_send_event(unsigned, timeval, unsigned , unsigned);
+    void gplotp_ack_event(unsigned, int ,timeval, unsigned);
+    void gplotp_send_event(unsigned, timeval, unsigned);
+    void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
 	
-	Packet *simple_action(Packet *);
-	struct TimeInterval {
-		timeval	time;
-		uint32_t start_byte;
-		uint32_t end_byte;
-		TimeInterval():start_byte(0), end_byte(0){ };
-	};
-	class LossInfo;
+    Packet *simple_action(Packet *);
+    
+    struct TimeInterval {
+	struct timeval time;
+	uint32_t start_byte;
+	uint32_t end_byte;
+	TimeInterval():start_byte(0), end_byte(0){ };
+    };
+    
+    class LossInfo;
 
     typedef BigHashMap<unsigned, short int> MapS;
     typedef BigHashMap<unsigned, timeval> MapT;
-    typedef BigHashMap <unsigned, TimeInterval> MapInterval;
-    typedef BigHashMap <unsigned, LossInfo*> MapLoss;
+    typedef BigHashMap<unsigned, TimeInterval> MapInterval;
+    typedef BigHashMap<unsigned, LossInfo*> MapLoss;
     
   private:
     
-    LossInfo *loss;
-    String outfilename[2];	
-    AggregateFlows *af;
-    ToIPFlowDumps *tipfd;
+    LossInfo *_loss;
+    String _outfilename[2];	
+    ToIPFlowDumps *_tipfd;
     
-    MapLoss loss_map;
+    MapLoss _loss_map;
     
 };
 
