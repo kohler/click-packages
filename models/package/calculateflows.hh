@@ -115,15 +115,15 @@ class CalculateFlows::LossInfo {
     unsigned  _loss_events[2];
     unsigned  _p_loss_events[2];
 		   
-  public:	
-    String outfilename[2];	// Event output files using Jitu format 
-    String outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
+    String _outputdir;
+    String _outfilename[2];	// Event output files using Jitu format 
+    String _outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
     // 6,7 for Possible loss Events, 8,9 for Data Acks
-		
-    String outputdir;
-    unsigned agganno;
-    short int  gnuplot;
-    short int  eventfiles;
+    
+  public:	
+    uint32_t _aggregate;
+    bool _gnuplot;
+    bool _eventfiles;
     short int  has_syn[2];
     short int  has_fin[2];
     MapT time_by_firstseq[2];
@@ -137,13 +137,12 @@ class CalculateFlows::LossInfo {
     short int doubling[2];
     short int prev_doubling[2];
     short int outoforder_pckt;
-    unsigned max_ack[2];
+    tcp_seq_t max_ack[2];
     
     
     void init() { 
-	gnuplot = 0;
-	eventfiles = 0;
-	agganno = 0;
+	_gnuplot = _eventfiles = false;
+	_aggregate = 0;
 	init_time.tv_usec = 0;
 	init_time.tv_sec = 0;
 	outoforder_pckt = 0;
@@ -190,12 +189,12 @@ class CalculateFlows::LossInfo {
 	init();
     }
 
-    LossInfo(String *outfilename, uint32_t aggp, short int gnuplotp, short int eventfilesp) { //regular constructor
+    LossInfo(String outfilename[2], uint32_t aggp, bool gnuplotp, bool eventfilesp) { //regular constructor
 	init();
 	LossInfoInit(outfilename, aggp, gnuplotp, eventfilesp);
     }
 
-    void LossInfoInit(String *outfilenamep, uint32_t aggp, short int gnuplotp, short int eventfilesp);
+    void LossInfoInit(String outfilename[2], uint32_t aggp, bool gnuplot, bool eventfiles);
     
     ~LossInfo() {
 	print_stats();
@@ -209,6 +208,8 @@ class CalculateFlows::LossInfo {
 		}
 		}*/
     }
+
+    String output_directory() const	{ return _outputdir; }
     
     void print_stats();
     
