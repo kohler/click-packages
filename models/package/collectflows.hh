@@ -25,7 +25,7 @@ class CollectTCPFlows : public Element { public:
     void push(int, Packet *);
     Packet *pull(int);
 
-    void write_flow(const Flow *);
+    void write_session(const Flow *);
     
   private:
 
@@ -39,12 +39,14 @@ class CollectTCPFlows : public Element { public:
 
     FILE *_f;
     String _filename;
+    bool _gen_packets;
     
     Packet *bad_packet(Packet *);
     Flow *add_flow(const IPFlowID &, Packet *);
     void pass_over_done(const struct timeval &);
 
     void clear(bool write);
+    void write_flow(const Flow *);
 
     static int clear_handler(const String &, Element*, void*, ErrorHandler*);
     
@@ -62,9 +64,13 @@ class CollectTCPFlows::Flow { public:
     bool is_primary() const	{ return _is_primary; }
     Flow *reverse() const	{ return _reverse; }
 
+    int protocol() const	{ return 6; }
+    
     const struct timeval &first_session_timestamp() const;
     const struct timeval &last_session_timestamp() const;
 
+    uint32_t packet_count() const	{ return _packet_count; }
+    
     void clear(bool is_primary);
     
     bool session_over() const	{ return _flow_over && _reverse->_flow_over; }
@@ -76,7 +82,7 @@ class CollectTCPFlows::Flow { public:
     inline void add_to_free_tracked_tail(Flow *&head, Flow *&tail);
     inline void append_to_free(Flow *&head, Flow *&tail);
     inline Flow *free_from_free(Map &);
-    void clear_free_tracked()	{ _free_tracked = 0; }
+    void clear_free_tracked()	{ _free_tracked = _reverse->_free_tracked = false; _free_next = 0; assert(_reverse->_free_next == 0); }
 
     inline bool used_since(const struct timeval &) const;
     
@@ -131,7 +137,7 @@ CollectTCPFlows::Flow::append_to_free(Flow *&head, Flow *&tail)
 {
     assert((!head && !tail)
 	   || (head && tail && head->_free_tracked && tail->_free_tracked));
-    assert(!_free_next && is_primary());
+    assert(!_free_next && !_reverse->_free_next);
     if (tail)
 	tail = tail->_free_next = this;
     else
@@ -141,7 +147,7 @@ CollectTCPFlows::Flow::append_to_free(Flow *&head, Flow *&tail)
 inline void
 CollectTCPFlows::Flow::add_to_free_tracked_tail(Flow *&head, Flow *&tail)
 {
-    assert(!_free_tracked);
+    assert(!_free_tracked && !_reverse->_free_tracked);
     _free_tracked = _reverse->_free_tracked = true;
     primary()->append_to_free(head, tail);
 }

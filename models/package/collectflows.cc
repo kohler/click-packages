@@ -9,6 +9,7 @@
 #include <click/confparse.hh>
 #include <click/click_ip.h>
 #include <click/click_tcp.h>
+#include <click/click_udp.h>
 #include <click/packet_anno.hh>
 
 // flow
@@ -41,8 +42,8 @@ CollectTCPFlows::Flow::update(const Packet *p, CollectTCPFlows *cf)
 	else if (tcph->th_flags & TH_FIN)
 	    set_flow_over();
 	else if ((tcph->th_flags & TH_SYN) && session_over()) {
-	    // write out flow, clear state
-	    cf->write_flow(this);
+	    // write out session, clear state
+	    cf->write_session(this);
 	    clear(true);
 	    reverse()->clear(false);
 	}
@@ -78,10 +79,15 @@ CollectTCPFlows::notify_noutputs(int n)
 int
 CollectTCPFlows::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
+    _gen_packets = false;
     if (cp_va_parse(conf, this, errh,
 		    cpFilename, "dump filename", &_filename,
+		    cpKeywords,
+		    "SESSION_PACKETS", cpBool, "generate session packets?", &_gen_packets,
 		    0) < 0)
 	return -1;
+    if (_gen_packets && noutputs() == 1)
+	errh->warning("`SESSION_PACKETS', but element has only 1 output");
     return 0;
 }
 
@@ -132,7 +138,7 @@ CollectTCPFlows::clear(bool write_flows)
 	poo.pop_back();
 	Flow *n = to_free->_free_next;
 	if (write_flows)
-	    write_flow(to_free);
+	    write_session(to_free);
 	delete to_free->reverse();
 	delete to_free;
 	to_free = n;
@@ -145,10 +151,7 @@ CollectTCPFlows::clear(bool write_flows)
 Packet *
 CollectTCPFlows::bad_packet(Packet *p)
 {
-    if (noutputs() == 2)
-	output(1).push(p);
-    else
-	p->kill();
+    p->kill();
     return 0;
 }
 
@@ -168,7 +171,6 @@ inline CollectTCPFlows::Flow *
 CollectTCPFlows::Flow::free_from_free(Map &map)
 {
     // see also clear_map below
-    assert(is_primary());
     //click_chatter("kill %s", reverse()->flow_id().rev().s().cc());
     Flow *next = _free_next;
     map.remove(flow_id());
@@ -222,8 +224,7 @@ CollectTCPFlows::pass_over_done(const struct timeval &ts)
 
     // free contents of free_list
     while (free_list) {
-	assert(free_list->is_primary());
-	write_flow(free_list);
+	write_session(free_list);
 	free_list = free_list->free_from_free(_map);
     }
 
@@ -245,7 +246,7 @@ CollectTCPFlows::handle_packet(Packet *p)
     if (!flow)
 	flow = add_flow(flowid, p);
     if (flow) {
-	flow->update(p);
+	flow->update(p, this);
 	if (flow->session_over() && !flow->free_tracked())
 	    flow->add_to_free_tracked_tail(_done_head, _done_tail);
     }
@@ -275,12 +276,70 @@ CollectTCPFlows::pull(int)
 void
 CollectTCPFlows::write_flow(const Flow *flow)
 {
-    StringAccum sa;
-    sa << flow->first_session_timestamp() << ' '
-       << flow->last_session_timestamp() << ' '
-       << flow->_flow << ' ' << flow->_packet_count << ' '
-       << flow->_byte_count << '\n';
-    fwrite(sa.data(), 1, sa.length(), _f);
+    if (_f) {
+	StringAccum sa;
+	sa << flow->first_session_timestamp() << ' '
+	   << flow->last_session_timestamp() << ' '
+	   << flow->_flow << ' ' << flow->_packet_count << ' '
+	   << flow->_byte_count << '\n';
+	fwrite(sa.data(), 1, sa.length(), _f);
+    }
+
+    if (_gen_packets) {
+	int p = flow->protocol();
+	WritablePacket *q = Packet::make(0, 0, sizeof(click_ip), sizeof(click_tcp));
+	if (q) {
+	    q->set_network_header(q->data(), sizeof(click_ip));
+	    
+	    click_ip *iph = q->ip_header();
+	    iph->ip_v = 4;
+	    iph->ip_hl = sizeof(click_ip) >> 2;
+	    iph->ip_len = htons(q->length());
+	    iph->ip_off = 0;
+	    iph->ip_p = p;
+	    iph->ip_src = flow->flow_id().saddr();
+	    iph->ip_dst = flow->flow_id().daddr();
+
+	    switch (p) {
+
+	      case IP_PROTO_TCP: {
+		  click_tcp *tcph = q->tcp_header();
+		  q->put(sizeof(click_tcp));
+		  tcph->th_sport = flow->flow_id().sport();
+		  tcph->th_dport = flow->flow_id().dport();
+		  tcph->th_off = sizeof(click_tcp) >> 2;
+		  tcph->th_flags = TH_SYN | TH_FIN;
+		  break;
+	      }
+
+	      case IP_PROTO_UDP: {
+		  click_udp *udph = q->udp_header();
+		  q->push(sizeof(click_udp));
+		  udph->uh_sport = flow->flow_id().sport();
+		  udph->uh_dport = flow->flow_id().dport();
+		  udph->uh_ulen = ntohs(sizeof(click_udp));
+		  break;
+	      }
+	      
+	    }
+
+	    SET_PACKET_COUNT_ANNO(q, flow->_packet_count);
+	    SET_EXTRA_LENGTH_ANNO(q, flow->_byte_count - q->length());
+	    q->set_timestamp_anno(flow->_first_ts);
+	    checked_output_push(1, q);
+	}
+    }
+}
+
+void
+CollectTCPFlows::write_session(const Flow *flow)
+{
+    flow = flow->primary();
+    if (flow->packet_count())
+	write_flow(flow);
+    flow = flow->reverse();
+    if (flow->packet_count())
+	write_flow(flow);
 }
 
 int
