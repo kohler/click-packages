@@ -44,8 +44,6 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 					,0) < 0)
         return -1;
 		af->add_listener(this); // this is a handler to AggregateFlows Element
-        //loss_map.insert(1, LossInfo());
-		//loss = new LossInfo(outfilename , 1 , 1 , 1);
 	return 0;
 
 }
@@ -100,22 +98,51 @@ CalculateFlows::simple_action(Packet *p)
        unsigned win = ntohs(tcph->th_win); // requested window size
        unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
        int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
+
+	   if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ){ 
+	  	// unsigned short sport = ntohs(tcph->th_sport);
+  	  	// unsigned short dport = ntohs(tcph->th_dport);
+  	  	// printf("%u: %s:%d->%s:%d\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
+	  	loss->init_time = ts;
+		ts.tv_sec = 1;
+	   	ts.tv_usec = 0;
+	   }
+	   else{
+	   	ts.tv_sec++;
+		ts = ts - loss->init_time;
+		//if ((ts.tv_usec == 0) && (ts.tv_sec == 0)){
+		//	ts.tv_usec = 1;
+	   	//}
+	   }			
+	   //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
 	   
-	   if (tcph->th_flags & TH_SYN) // Is this a SYN packet?
-       		return p;
-       if (tcph->th_flags & TH_FIN)	// Is this a FIN packet?
-       		return p;
-	 	  
+	   // converting the Sequences from Absolute to Relative
+	   if ( !loss->init_seq[paint]){ 
+	   	loss->init_seq[paint] = seq;
+	   	seq = 0;
+	   }
+	   else{
+	   	seq = seq - loss->init_seq[paint];
+	   }
+		 
+	   if (tcph->th_flags & TH_SYN){ // Is this a SYN packet?
+       		loss->has_syn[paint] = 1;
+			return p;
+       }
+	   if (tcph->th_flags & TH_FIN){	// Is this a FIN packet?
+       		loss->has_fin[paint] = 1;
+			return p;
+	   }  
 	   if (seqlen > 0) {
 		   type=1;
 	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint); //calculate loss if any
 		   loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
-   	       if (loss->eventfiles)
+   	       if (loss->eventfiles){
 		   	print_send_event(paint, ts, seq, (seq+seqlen));
-		   
-		   if (loss->gnuplot)
+		   }
+		   if (loss->gnuplot){
 		   	gplotp_send_event(paint, ts, (seq+seqlen));
-  		   
+  		   }
 		   m_tbfirst.insert(seq, ts);
 		   m_tblast.insert((seq+seqlen), ts);
 		   TimeInterval ti;
@@ -126,13 +153,25 @@ CalculateFlows::simple_action(Packet *p)
 	   }
 	   
 	   if (ackp){ // check for ACK and update as necessary 
+	   	   // converting the Sequences from Absolute to Relative (we need that
+		   // for acks also!)
+		   if ( !loss->init_seq[cpaint]){
+	   	   	loss->init_seq[cpaint] = ack;
+			ack = 0;
+		   }
+	   	   else{
+		   	ack = ack - loss->init_seq[cpaint];
+		   }	
+			
 			loss->set_last_ack(ack,cpaint);
 			m_acks.insert(ack, m_acks.find(ack)+1 );
-    	    if (loss->eventfiles)
+    	    if (loss->eventfiles){
 				print_ack_event(cpaint, type, ts, ack);	
-			if (loss->gnuplot)
+			}
+			if (loss->gnuplot){
 		    	gplotp_ack_event(cpaint, ts, ack);	
 			//printf("[%u, %u]",ack,m_acks[ack]);
+	   		}
 	   }
 	   
 	/* for (MapS::Iterator iter = m_acks.first(); iter; iter++){
@@ -169,13 +208,14 @@ CalculateFlows::simple_action(Packet *p)
 				
 	 }
 	}
-	 /*printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
+	 /*if (aggp == 905){
+	 printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
 	 printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
 	 printf("ACK Number =[%u,%u]", loss->last_ack(0),loss->last_ack(1));
 	 printf("Total Packets =[%u,%u]", loss->packets(0),loss->packets(1));
 	 printf("Total Bytes =[%u,%u]", loss->total_bytes(0),loss->total_bytes(1));
 	 printf("Total Bytes Lost=[%u,%u]\n\n", loss->bytes_lost(0),loss->bytes_lost(1));
-	*/
+	 }*/
 	 return p;
 }
 
@@ -184,11 +224,16 @@ CalculateFlows::
 print_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
 {
 	
+	loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
 	if (type == 0){	
 		fprintf(loss->outfile[paint],"%ld.%06ld PACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
 	}
 	else {
 		fprintf(loss->outfile[paint],"%ld.%06ld ACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+	}
+	//fflush(loss->outfile[paint]);
+	if (fclose(loss->outfile[paint])){ 
+   		click_chatter("error closing file!");
 	}
 	
 }
@@ -197,8 +242,12 @@ void
 CalculateFlows::
 print_send_event(unsigned paint, timeval tstamp, unsigned startseq, unsigned endseq)
 {
-
-		fprintf(loss->outfile[paint],"%ld.%06ld SEND %u %u\n",tstamp.tv_sec,tstamp.tv_usec,startseq,endseq); 
+	loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
+	fprintf(loss->outfile[paint],"%ld.%06ld SEND %u %u\n",tstamp.tv_sec,tstamp.tv_usec,startseq,endseq); 
+//	fflush(loss->outfile[paint]);
+	if (fclose(loss->outfile[paint])){ 
+   		click_chatter("error closing file!");
+	}
 
 }
 
@@ -206,16 +255,25 @@ void
 CalculateFlows::
 gplotp_ack_event(unsigned paint, timeval tstamp, unsigned ackseq)
 {
+	loss->outfileg[paint] = fopen(loss->outfilenameg[paint].cc(), "a");
 	fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-	
+	//fflush(loss->outfileg[paint]);
+	if (fclose(loss->outfileg[paint])){ 
+   		click_chatter("error closing file!");
+	}
+
 }
 
 void
 CalculateFlows::
 gplotp_send_event(unsigned paint, timeval tstamp, unsigned endseq)
 {
-
+	loss->outfileg[paint+2] = fopen(loss->outfilenameg[paint+2].cc(), "a");
 	fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
+	//fflush(loss->outfileg[paint+2]);
+	if (fclose(loss->outfileg[paint+2])){ 
+   		click_chatter("error closing file!");
+	}
 
 }
 
@@ -226,11 +284,14 @@ aggregate_notify(uint32_t aggregate_ID,
                  const Packet *packet /* null for DELETE_AGG */){
 //	printf("ok1 ---->%d %d\n", aggregate_ID, event);
 	if (event == NEW_AGG){	
-//		printf("ok2 ---->%d %d\n", aggregate_ID, event);
-		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID,1,1);
+		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 1, 1) ;
 		loss_map.insert(aggregate_ID, tmploss);
-		
-		
+	}
+	
+	else if (event == DELETE_AGG){
+		LossInfo *tmploss = loss_map.find(aggregate_ID);	
+		loss_map.remove(aggregate_ID);
+		delete tmploss;
 	}
 }	
 

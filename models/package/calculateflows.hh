@@ -115,31 +115,41 @@ class CalculateFlows : public Element, public AggregateListener {
 		unsigned  _p_loss_events[2];
 		   
 	public:	
-		FILE *outfile[2];
+		FILE *outfile[4];
 		FILE *outfileg[8];
-		String outfilenamel[2];
+		String outfilename[2];
+		String outfilenameg[8];
+		
 		String outputdir;
 		unsigned agganno;
 		short int  gnuplot;
 		short int  eventfiles;
+		short int  has_syn[2];
+		short int  has_fin[2];
 		MapT time_by_firstseq[2];
 		MapT time_by_lastseq[2];
 		MapInterval inter_by_time[2];
 		MapS acks[2];
 		MapS rexmt[2];
-		unsigned  rel_seq[2];
+		unsigned  init_seq[2];
+		timeval init_time;
 		double prev_diff[2];
 		short int doubling[2];
 		short int prev_doubling[2];
+		short int outoforder_pckt;
 		
 		
 		void init() { 
-			outputdir = "data";
 			gnuplot = 0;
 			eventfiles = 0;
 			agganno = 0;
-			
-			outfilenamel[0]="";
+			init_time.tv_usec = 0;
+			init_time.tv_sec = 0;
+			outoforder_pckt = 0;
+		
+			has_syn[0] = 0;
+		    has_fin[0] = 0;
+			init_seq[0] = 0;
 			prev_diff[0] = 0;
 			doubling[0] = -1;
 			prev_doubling[0] = 0;
@@ -155,7 +165,9 @@ class CalculateFlows : public Element, public AggregateListener {
 			_loss_events[0] = 0;
 			_p_loss_events[0] = 0;
 			
-			outfilenamel[1]="";
+			has_syn[1] = 0;
+   		    has_fin[1] = 0;
+			init_seq[1] = 0;
 			prev_diff[1]=0;
 			doubling[1] = -1;
 			prev_doubling[1] = 0;
@@ -179,17 +191,18 @@ class CalculateFlows : public Element, public AggregateListener {
 			init();
 			LossInfoInit(outfilename, aggp, gnuplotp, eventfilesp);
 		}
-		void LossInfoInit(String *outfilename, uint32_t aggp, short int gnuplotp, short int eventfilesp) { 
+		void LossInfoInit(String *outfilenamep, uint32_t aggp, short int gnuplotp, short int eventfilesp) { 
 			String outfilenametmp;
 			String *strtmp = new String (aggp);
 			gnuplot = gnuplotp;
 			eventfiles = eventfilesp;
 			agganno = aggp;
+			outputdir = "./flow"+ *strtmp;
+			system(" mkdir -p ./"+outputdir);
 			if (eventfiles){	
-				system(" mkdir ./"+outputdir);
 				for (int i = 0 ; i < 2 ; i++){
-					outfilenametmp = "./"+outputdir+"/flow["+ *strtmp +"]" + outfilename[i];
-					outfilenamel[i] = outfilenametmp;
+					outfilenametmp = outputdir + "/" + outfilenamep[i];
+					outfilename[i] = outfilenametmp;
 					outfile[i] = fopen(outfilenametmp.cc(), "w");
 	    			//printf ("%s:%d\n",outfilenametmp.cc(),aggp);
 					if (!outfile[i]){
@@ -198,10 +211,17 @@ class CalculateFlows : public Element, public AggregateListener {
 					}
 				}
 			}
+			else{
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outputdir + "/"+ outfilenamep[i];
+					outfilename[i] = outfilenametmp;
+				}
+			}
 			if (gnuplot){  // check if gnuplot output is requested.
 				for (int i = 0 ; i < 2 ; i++){
-					outfilenametmp = "./"+outputdir+"/flow["+ *strtmp +"]" + outfilename[i];
+					outfilenametmp = outputdir + "/" + outfilenamep[i];
 					outfilenametmp.append("_acks.gp",8);
+					outfilenameg[i] = outfilenametmp;
 					outfileg[i] = fopen(outfilenametmp.cc(), "w");
 	    			if (!outfileg[i]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
@@ -209,8 +229,9 @@ class CalculateFlows : public Element, public AggregateListener {
 					}
 				}
 				for (int i = 0 ; i < 2 ; i++){
-					outfilenametmp = "./"+outputdir+"/flow["+ *strtmp +"]" + outfilename[i];
+					outfilenametmp = outputdir + "/" + outfilenamep[i];
 					outfilenametmp.append("_xmts.gp",8);
+					outfilenameg[i+2] = outfilenametmp;
 					outfileg[i+2] = fopen(outfilenametmp.cc(), "w");
 	    			if (!outfileg[i]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
@@ -218,8 +239,9 @@ class CalculateFlows : public Element, public AggregateListener {
 					}
 				}
 				for (int i = 0 ; i < 2 ; i++){
-					outfilenametmp = "./"+outputdir+"/flow["+ *strtmp +"]" + outfilename[i];
+					outfilenametmp = outputdir + "/"+ outfilenamep[i];
 					outfilenametmp.append("_levt.gp",8);
+					outfilenameg[i+4] = outfilenametmp;
 					outfileg[i+4] = fopen(outfilenametmp.cc(), "w");
 	    			if (!outfileg[i]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
@@ -227,63 +249,71 @@ class CalculateFlows : public Element, public AggregateListener {
 					}
 				}
 				for (int i = 0 ; i < 2 ; i++){
-					outfilenametmp = "./"+outputdir+"/flow["+ *strtmp +"]" + outfilename[i];
+					outfilenametmp = outputdir + "/" + outfilenamep[i];
 					outfilenametmp.append("_plevt.gp",9);
+					outfilenameg[i+6] = outfilenametmp;
 					outfileg[i+6] = fopen(outfilenametmp.cc(), "w");
 	    			if (!outfileg[i]){
     	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
 	        			return;
 					}
 				}
-				
+	
 			}
-		  };
-		
-		~LossInfo(){
 			if (eventfiles){
-				print_stats();
 				for (int i = 0 ; i < 2 ; i++){
-				   	fflush(outfile[i]);
 					if (fclose(outfile[i])){ 
     		    		click_chatter("error closing file!");
 					}
-				
-				//delete outfile[i];
 				}
 			}
 			if (gnuplot){  // check if gnuplot output is requested.
 				for (int i = 0 ; i < 8 ; i++){
-					fflush(outfileg[i]);
 					if (fclose(outfileg[i])){ 
     		    		click_chatter("error closing file!");
 					}
-					//delete outfileg[i];
 				}			
+			}		  
+		  };
+		
+		~LossInfo(){
+			print_stats();
+		/*	if (gnuplot){  // check if gnuplot output is requested.
 				char tempstr[32];
 				for (int i = 0 ; i < 2 ; i++){
-					sprintf(tempstr,"./crplots.sh %s",outfilenamel[i].cc());
-//					printf("./crplots.sh %s",outfilenamel[i].cc());
+					sprintf(tempstr,"./crplots.sh %s",outfilename[i].cc());
+		//			printf("./crplots.sh %s",outfilename[i].cc());
 					system(tempstr);
 				}
-			}
+			}*/
 		}
 		 
 		void print_stats(){
-		 	printf("Flow %d direction from A->B \n",agganno);
-		 	printf("Total Bytes = [%u]      ", total_bytes(0));
-		 	printf("Total Bytes Lost = [%u]\n",bytes_lost(0));
-			printf("Total Packets = [%u]  ",packets(0));
-			printf("Total Packets Lost = [%u]\n",packets_lost(0));
-			printf("Total Loss Events = [%u]\n",loss_events(0));
-			printf("Total Possible Loss Events = [%u]\n",ploss_events(0));
-	 	 	
-			printf("Flow %d direction from B->A \n",agganno);
-			printf("Total Bytes = [%u]     ", total_bytes(1));
-			printf("Total Bytes Lost = [%u]\n",bytes_lost(1));
-			printf("Total Packets = [%u]  ",packets(1));
-			printf("Total Packets Lost = [%u]\n",packets_lost(1));
-			printf("Total Loss Events = [%u]\n",loss_events(1));
-			printf("Total Possible Loss Events = [%u]\n",ploss_events(1));
+		 	String outfilenametmp,strtmp;
+			for (int i = 0 ; i < 2 ; i++){
+				outfilenametmp = outfilename[i];
+				outfilenametmp.append(".stats",6);
+				//printf("%s",outfilenametmp.cc());
+				outfile[i+2] = fopen(outfilenametmp.cc(), "w");
+    			if (!outfile[i+2]){
+   	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+        			return;
+				}
+				strtmp = i ? "B->A" : "A->B";
+				fprintf(outfile[i+2], "Flow %d direction from %s \n",agganno,strtmp.cc());
+		 		fprintf(outfile[i+2], "Total Bytes = [%u]      ", total_bytes(i));
+			 	fprintf(outfile[i+2], "Total Bytes Lost = [%u]\n",bytes_lost(i));
+				fprintf(outfile[i+2], "Total Packets = [%u]  ",packets(i));
+				fprintf(outfile[i+2], "Total Packets Lost = [%u]\n",packets_lost(i));
+				fprintf(outfile[i+2], "Total Loss Events = [%u]\n",loss_events(i));
+				fprintf(outfile[i+2], "Total Possible Loss Events = [%u]\n",ploss_events(i));
+				fprintf(outfile[i+2], "I saw the start(SYN):[%d], I saw the end(FIN):[%d]",
+									   has_syn[i],
+									   has_fin[i]);
+				if (fclose(outfile[i+2])){ 
+    		    	click_chatter("error closing file!");
+				}
+			}
 		}
 
 
@@ -303,8 +333,13 @@ class CalculateFlows : public Element, public AggregateListener {
 							}  
 							//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
 	    				}
-						// nothing matches (that cannot be possible, ERROR!)
-						click_chatter("Error cannot find packet in flow history!:[%u:%u]",start_seq,end_seq);
+						// nothing matches (that cannot be possible unless there is reordering)
+						outoforder_pckt = 1; //set the outoforder indicator
+						click_chatter("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?",
+										agganno,
+										paint, 
+										start_seq,
+										end_seq);
 						timeval tv = timeval();
 						return tv;
 					}
@@ -400,24 +435,34 @@ class CalculateFlows : public Element, public AggregateListener {
 			if ( seq < _max_seq[paint] 
 				&& (seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we have a new event.
 					//printf("last_seq[%d]=%u \n",paint,seq );
+				timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
+				if (!outoforder_pckt){
 					rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
-					timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
+
 					if (gnuplot){
 						if (_max_wind_seq[paint] > (seq+seqlen)){
+							outfileg[paint+4] = fopen(outfilenameg[paint+4].cc(), "a");
 							fprintf(outfileg[paint+4],"%f %.1f %f %.1f\n",
 									timeadd(time,time_last_sent)/2.,
 									(_max_wind_seq[paint]+seq+seqlen)/2.,
 									timesub(time,time_last_sent)/2.,
 									(_max_wind_seq[paint]-seq-seqlen)/2.); 
+							if (fclose(outfileg[paint+4])){ 
+								click_chatter("error closing file!");
+							}	
 						}
 						else{
 							possible_loss_event = 1; // possible loss event
+							outfileg[paint+6] = fopen(outfilenameg[paint+6].cc(), "a");
 							fprintf(outfileg[paint+6],"%f %.1f %f %.1f\n",
 									timeadd(time,time_last_sent)/2.,
 									(double)(seq+seqlen+seqlen/4.),
 									timesub(time,time_last_sent)/2.,
 									seqlen/4.); 
-						}	
+							if (fclose(outfileg[paint+6])){ 
+				   				click_chatter("error closing file!");
+							}
+						}
 					}					
 					if (prev_diff[paint] == 0){ //first time
 				        prev_diff[paint] = timesub(time, time_last_sent);
@@ -445,7 +490,8 @@ class CalculateFlows : public Element, public AggregateListener {
 					
 					if (num_of_acks > 3){ //triple dup.
 						if (!possible_loss_event){
-							printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+							printf("We have a loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+								agganno,
 								time.tv_sec, 
 								time.tv_usec, 
 								seq,
@@ -453,7 +499,8 @@ class CalculateFlows : public Element, public AggregateListener {
 								_loss_events[paint]++;
 						}
 						else {
-							printf("We have a POSSIBLE loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+							printf("We have a POSSIBLE loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+								agganno,
 								time.tv_sec, 
 								time.tv_usec, 
 								seq,
@@ -468,8 +515,9 @@ class CalculateFlows : public Element, public AggregateListener {
 						acks[paint].insert(seq, -10000);
 						doubling[paint] = doubling[paint] < 1 ? 1 : doubling[paint] ;
 						if (!possible_loss_event){
-							printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
+							printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
 								(log(doubling[paint])/log(2)), 
+								agganno,
 								time.tv_sec, 
 								time.tv_usec, 
 								seq,
@@ -477,8 +525,9 @@ class CalculateFlows : public Element, public AggregateListener {
 							    _loss_events[paint]++;
 						}
 						else{
-							printf ("We have a POSSIBLE loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
+							printf ("We have a POSSIBLE loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
 								(log(doubling[paint])/log(2)), 
+								agganno,
 								time.tv_sec, 
 								time.tv_usec, 
 								seq,
@@ -493,28 +542,42 @@ class CalculateFlows : public Element, public AggregateListener {
 						//printf("%u:%u",_last_wind_mseq[paint],_max_seq[paint]);
 						_upper_wind_seq[paint] = _max_seq[paint]; // the window for this event loss
 					}
+				}
 			}
 					
 		};
 
 		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
-			MapS &m_rexmt = rexmt[paint];
-			if (seq < _max_seq[paint] ){  // we do a retransmission  (Bytes are lost...)
+			
+			if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)){
+				click_chatter("Possible gap in Byte Sequence flow %d:%d %d < %d",agganno,paint,_max_seq[paint],seq);
+			}
+			if (seq < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
+				MapS &m_rexmt = rexmt[paint];
 			//	printf("ok:%u:%u",seq,_max_seq[paint]);
 				m_rexmt.insert(seq, m_rexmt.find(seq)+1 );					
-				if (seq + block_size < _max_seq[paint]){ // are we transmiting new bytes also?
+				if (seq + block_size < _max_seq[paint]){ // are we transmiting totally new bytes also?
 					_bytes_lost[paint] = _bytes_lost[paint] + block_size;
 					
 				}
-				else{ // we retransmit something old
+				else{ // we retransmit something old but partial
 					_bytes_lost[paint] = _bytes_lost[paint] + (_max_seq[paint]-seq);
+					_last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
+							
+					if (_max_seq[paint] < _last_seq[paint]){
+						_max_seq[paint] = _last_seq[paint];
+					}
+					if (_max_wind_seq[paint] < _last_seq[paint]){
+						_max_wind_seq[paint] = _last_seq[paint];
+					}
 				}
 				_packets_lost[paint]++;
 			}
 			else{ // this is a first time send event
 				 // no loss normal data transfer
+				outoforder_pckt = 0; //reset the indicator
 				_last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
-			
+							
 				if (_max_seq[paint] < _last_seq[paint]){
 					_max_seq[paint] = _last_seq[paint];
 				}
@@ -527,13 +590,6 @@ class CalculateFlows : public Element, public AggregateListener {
 		}; 
 		
 		
-		void set_rel_seq(unsigned seq, unsigned paint){
-		
-			rel_seq[paint] = seq;
-		
-		};
-
-
 		void set_last_seq(unsigned seq, unsigned paint){
 		
 			_last_seq[paint] = seq;
