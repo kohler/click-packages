@@ -21,7 +21,10 @@ CalculateFlows::CalculateFlows()
 CalculateFlows::~CalculateFlows()
 {
     MOD_DEC_USE_COUNT;
-	delete loss;
+	 for (MapLoss::Iterator iter = loss_map.first(); iter; iter++){
+	   	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
+	   	delete losstmp;
+	 }
 }
 
 void
@@ -41,7 +44,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 					,0) < 0)
         return -1;
 		af->add_listener(this); // this is a handler to AggregateFlows Element
-		loss = new LossInfo(outfilename , 1);
+        //loss_map.insert(1, LossInfo());
+		//loss = new LossInfo(outfilename , 1 , 1 , 1);
 	return 0;
 
 }
@@ -83,10 +87,12 @@ CalculateFlows::simple_action(Packet *p)
 	 
 	 case IP_PROTO_TCP: {
 	   int type = 0;// 0 ACK or 1 DACK
+ 	   loss = loss_map.find(aggp);
 	   MapS &m_acks = loss->acks[cpaint];
 	   MapT &m_tbfirst = loss->time_by_firstseq[paint];
 	   MapT &m_tblast = loss->time_by_lastseq[paint];
    	   MapInterval &m_ibtime = loss->inter_by_time[paint];
+	   
 	   
 	   const click_tcp *tcph = p->tcp_header(); 
        unsigned seq = ntohl(tcph->th_seq); // sequence number of the current packet
@@ -104,7 +110,9 @@ CalculateFlows::simple_action(Packet *p)
 		   type=1;
 	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint); //calculate loss if any
 		   loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
-   	       print_send_event(paint, ts, seq, (seq+seqlen));
+   	       if (loss->eventfiles)
+		   	print_send_event(paint, ts, seq, (seq+seqlen));
+		   
 		   if (loss->gnuplot)
 		   	gplotp_send_event(paint, ts, (seq+seqlen));
   		   
@@ -120,9 +128,10 @@ CalculateFlows::simple_action(Packet *p)
 	   if (ackp){ // check for ACK and update as necessary 
 			loss->set_last_ack(ack,cpaint);
 			m_acks.insert(ack, m_acks.find(ack)+1 );
-			print_ack_event(cpaint, type, ts, ack);	
+    	    if (loss->eventfiles)
+				print_ack_event(cpaint, type, ts, ack);	
 			if (loss->gnuplot)
-		     gplotp_ack_event(cpaint, ts, ack);	
+		    	gplotp_ack_event(cpaint, ts, ack);	
 			//printf("[%u, %u]",ack,m_acks[ack]);
 	   }
 	   
@@ -157,11 +166,10 @@ CalculateFlows::simple_action(Packet *p)
 	    sa << src << " > " << dst << ": ip-proto-" << (int)iph->ip_p;
         printf("%s",sa.cc());
 		break;
-		
-		
+				
 	 }
 	}
-	/* printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
+	 /*printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
 	 printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
 	 printf("ACK Number =[%u,%u]", loss->last_ack(0),loss->last_ack(1));
 	 printf("Total Packets =[%u,%u]", loss->packets(0),loss->packets(1));
@@ -216,7 +224,14 @@ CalculateFlows::
 aggregate_notify(uint32_t aggregate_ID,
                  AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
                  const Packet *packet /* null for DELETE_AGG */){
-	printf("ok ---->%d %d\n", aggregate_ID, event);
+//	printf("ok1 ---->%d %d\n", aggregate_ID, event);
+	if (event == NEW_AGG){	
+//		printf("ok2 ---->%d %d\n", aggregate_ID, event);
+		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID,1,1);
+		loss_map.insert(aggregate_ID, tmploss);
+		
+		
+	}
 }	
 
 
