@@ -13,6 +13,45 @@
 
 #include <limits.h>
 
+struct timeval
+CalculateFlows::LossInfo::Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint)
+{
+    assert(paint < 2);
+    timeval tbstart = time_by_firstseq[paint].find(start_seq);
+    timeval tbend = time_by_lastseq[paint].find(end_seq);
+    MapInterval &ibtime = inter_by_time[paint];
+    
+    if (!tbend.tv_sec && !tbend.tv_usec) {
+	if (!tbstart.tv_sec && !tbstart.tv_usec) { // We have a partial retransmission ...
+	    for (MapInterval::Iterator iter = ibtime.first(); iter; iter++){
+		TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
+		if (tinter->start_byte < start_seq && tinter->end_byte > start_seq){
+		    return tinter->time;
+		}
+		//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
+	    }
+	    // nothing matches (that cannot be possible unless there is
+	    // reordering)
+	    outoforder_pckt = 1; //set the outoforder indicator
+	    printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
+		   agganno,
+		   paint, 
+		   start_seq,
+		   end_seq);
+	    timeval tv = timeval();
+	    return tv;
+	} else {
+	    //printf("Found in Start Byte Hash\n");
+	    return tbstart;
+	}
+	
+    } else {
+	//printf("Found in End Byte Hash\n");
+	return tbend;
+    }
+    
+}
+
 void
 CalculateFlows::LossInfo::calculate_loss_events(tcp_seq_t seq, unsigned seqlen, const struct timeval &time, unsigned paint)
 {
@@ -258,10 +297,10 @@ CalculateFlows::CalculateFlows()
 CalculateFlows::~CalculateFlows()
 {
     MOD_DEC_USE_COUNT;
-	 for (MapLoss::Iterator iter = loss_map.first(); iter; iter++){
-	   	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
-	   	delete losstmp;
-	 }
+    for (MapLoss::Iterator iter = loss_map.first(); iter; iter++){
+	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
+	delete losstmp;
+    }
 }
 
 void
@@ -273,16 +312,16 @@ CalculateFlows::notify_noutputs(int n)
 int 
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-	if (cp_va_parse(conf, this, errh,
+    if (cp_va_parse(conf, this, errh,
                     cpElement,  "AggregateFlows element pointer (notifier)", &af,
-					cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd,
-					cpOptional,
-					cpFilename, "filename for output flow1",&outfilename[0],
-					cpFilename, "filename for output flow2",&outfilename[1],
-					0) < 0)
+		    cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd,
+		    cpOptional,
+		    cpFilename, "filename for output flow1",&outfilename[0],
+		    cpFilename, "filename for output flow2",&outfilename[1],
+		    0) < 0)
         return -1;
-		af->add_listener(this); // this is a handler to AggregateFlows Element
-	return 0;
+    af->add_listener(this); // this is a handler to AggregateFlows Element
+    return 0;
 
 }
 int
@@ -294,26 +333,26 @@ CalculateFlows::initialize(ErrorHandler *)
 Packet *
 CalculateFlows::simple_action(Packet *p)
 {
-	const click_ip *iph = p->ip_header();
-	if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from Aggregateflows
+    const click_ip *iph = p->ip_header();
+    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from Aggregateflows
 	|| !IP_FIRSTFRAG(iph)
 	|| p->transport_length() < (int)sizeof(click_udp)) {
 	checked_output_push(1, p);
 	return 0;
     }
   
-  unsigned aggp = AGGREGATE_ANNO(p);
-  unsigned paint = PAINT_ANNO(p); // Our Paint
-  unsigned cpaint = paint^1;	 // and its complement
+    unsigned aggp = AGGREGATE_ANNO(p);
+    unsigned paint = PAINT_ANNO(p); // Our Paint
+    unsigned cpaint = paint^1;	 // and its complement
   
-  IPAddress src(iph->ip_src.s_addr); //for debugging
-  IPAddress dst(iph->ip_dst.s_addr); //for debugging
+    IPAddress src(iph->ip_src.s_addr); //for debugging
+    IPAddress dst(iph->ip_dst.s_addr); //for debugging
   
-  int ip_len = ntohs(iph->ip_len);
-  int payload_len = ip_len - (iph->ip_hl << 2);
-  timeval ts = p->timestamp_anno(); //the packet timestamp	
-	
-  StringAccum sa; // just for debugging
+    int ip_len = ntohs(iph->ip_len);
+    int payload_len = ip_len - (iph->ip_hl << 2);
+    timeval ts = p->timestamp_anno(); //the packet timestamp	
+    
+    StringAccum sa; // just for debugging
     sa << p->timestamp_anno() << ": ";
     sa << "ttl " << (int)iph->ip_ttl << ' ';
     sa << "tos " << (int)iph->ip_tos << ' ';
@@ -321,158 +360,152 @@ CalculateFlows::simple_action(Packet *p)
 	 
     switch (iph->ip_p) { 
 	 
-	 case IP_PROTO_TCP: {
+      case IP_PROTO_TCP: {
 	  // if (aggp == 1765){
-	   int type = 0;// 0 ACK or 1 DACK
- 	   loss = loss_map.find(aggp);
-	   MapS &m_acks = loss->acks[cpaint];
-	   MapT &m_tbfirst = loss->time_by_firstseq[paint];
-	   MapT &m_tblast = loss->time_by_lastseq[paint];
-   	   MapInterval &m_ibtime = loss->inter_by_time[paint];
+	  int type = 0;// 0 ACK or 1 DACK
+	  loss = loss_map.find(aggp);
+	  MapS &m_acks = loss->acks[cpaint];
+	  MapT &m_tbfirst = loss->time_by_firstseq[paint];
+	  MapT &m_tblast = loss->time_by_lastseq[paint];
+	  MapInterval &m_ibtime = loss->inter_by_time[paint];
+	  
 	   
-	   
-	   const click_tcp *tcph = p->tcp_header(); 
-       unsigned seq = ntohl(tcph->th_seq); // sequence number of the current packet
-       unsigned ack = ntohl(tcph->th_ack); // Acknoledgement sequence number
-       unsigned win = ntohs(tcph->th_win); // requested window size
-       unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
-       int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
+	  const click_tcp *tcph = p->tcp_header(); 
+	  tcp_seq_t seq = ntohl(tcph->th_seq); // sequence number of the current packet
+	  tcp_seq_t ack = ntohl(tcph->th_ack); // Acknoledgement sequence number
+	  unsigned win = ntohs(tcph->th_win); // requested window size
+	  unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
+	  int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
 	  if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ){ 
-	  	 unsigned short sport = ntohs(tcph->th_sport);
-  	  	 unsigned short dport = ntohs(tcph->th_dport);
-  	  	 String outfilenametmp;
-		 outfilenametmp = loss->outputdir+"/flowhnames.info";
-		 loss->outfile[4] = fopen(outfilenametmp.cc(), "w");		 
-		 fprintf(loss->outfile[4],"flow%u: %s:%d <-> %s:%d'\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
-	  	 fclose(loss->outfile[4]);
-		 loss->init_time = ts;
-		 ts.tv_usec = 1;
-	   	 ts.tv_sec = 0;
-	   }
+	      unsigned short sport = ntohs(tcph->th_sport);
+	      unsigned short dport = ntohs(tcph->th_dport);
+	      String outfilenametmp;
+	      outfilenametmp = loss->outputdir+"/flowhnames.info";
+	      loss->outfile[4] = fopen(outfilenametmp.cc(), "w");		 
+	      fprintf(loss->outfile[4],"flow%u: %s:%d <-> %s:%d'\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
+	      fclose(loss->outfile[4]);
+	      loss->init_time = ts;
+	      ts.tv_usec = 1;
+	      ts.tv_sec = 0;
+	  } else {
+	      ts.tv_usec++;
+	      ts = ts - loss->init_time;
+	  }
+	  //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
 	   
-	   else{
-	   	ts.tv_usec++;
-		ts = ts - loss->init_time;
-	   }			
-	   //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
+	  // converting the Sequences from Absolute to Relative
+	  if (!loss->init_seq[paint]) { //first time case 
+	      loss->init_seq[paint] = seq;
+	      seq = loss->has_syn[paint];
+	  } else {
+	      if (seq < loss->init_seq[paint]){//hmm we may have a "wrap around" case
+		  seq = seq + (UINT_MAX - loss->init_seq[paint]);
+	      } else { //normal case no "wrap around"
+		  seq = seq - loss->init_seq[paint];
+	      }
+	  }
+	  
+	  if (tcph->th_flags & TH_SYN){ // Is this a SYN packet?
+	      loss->has_syn[paint] = 1;
+	      return p;
+	  }
+	  if (tcph->th_flags & TH_FIN){	// Is this a FIN packet?
+	      loss->has_fin[paint] = 1;
+	      return p;
+	  }
+	  if (seqlen > 0) {
+	      type=1;
+	      loss->calculate_loss_events2(seq,seqlen,ts,paint, tipfd); //calculate loss if any
+	      loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
+	      if (loss->eventfiles) {
+		  print_send_event(paint, ts, seq, (seq+seqlen));
+	      }
+	      if (loss->gnuplot) {
+		  gplotp_send_event(paint, ts, (seq+seqlen));
+	      }
+	      m_tbfirst.insert(seq, ts);
+	      m_tblast.insert((seq+seqlen), ts);
+	      TimeInterval ti;
+	      ti.start_byte = seq;
+	      ti.end_byte = seq+seqlen;
+	      ti.time = ts;
+	      m_ibtime.insert(loss->packets(paint),ti);
+	  }
+	  
+	  if (ackp){ // check for ACK and update as necessary
+	      // converting the Sequences from Absolute to Relative (we need
+	      // that for acks also!)
+	      if (!loss->init_seq[cpaint]) { //first time case
+		  loss->init_seq[cpaint] = ack;
+		  ack = loss->has_syn[cpaint];
+	      } else {
+		  if (ack < loss->init_seq[cpaint]){//hmm we may have a "wrap around" case
+		      ack = ack  + (UINT_MAX - loss->init_seq[cpaint]);
+		  } else { //normal case no "wrap around"
+		      ack = ack - loss->init_seq[cpaint];
+		  }
+	      }
+	      
+	      if (loss->max_ack[cpaint] < ack){
+		  loss->max_ack[cpaint] = ack;
+	      }
+	      
+	      loss->set_last_ack(ack,cpaint);
+	      m_acks.insert(ack, m_acks.find(ack)+1 );
+	      if (loss->eventfiles){
+		  print_ack_event(cpaint, type, ts, ack);	
+	      }
+	      if (loss->gnuplot){
+		  gplotp_ack_event(cpaint, type, ts, ack);	
+		  //printf("[%u, %u]",ack,m_acks[ack]);
+	      }
+	  }
+	  
+	  /* for (MapS::Iterator iter = m_acks.first(); iter; iter++){
+	     short int *value = const_cast<short int *>(&iter.value());
+	     const unsigned *temp = &m_acks.key_of_value(value);
+	     printf("%u:%hd \n",*temp,*value);
+	     
+	     }
+	     timeval tv2 = loss->Search_seq_interval(27 ,600, paint);
+	     printf("RESULT:[%ld.%06ld]: %u - %u \n",tv2.tv_sec, tv2.tv_usec,27, 600);*/
 	   
-	   // converting the Sequences from Absolute to Relative
-	   if ( !loss->init_seq[paint]){ //first time case 
-	   	loss->init_seq[paint] = seq;
-	   	seq = loss->has_syn[paint];
-	   }
-	   else{
-	   	if (seq < loss->init_seq[paint]){//hmm we may have a "wrap around" case
-			seq = seq + (UINT_MAX - loss->init_seq[paint]);
-		}
-		else { //normal case no "wrap around"
-			seq = seq - loss->init_seq[paint];
-	   	}
-	   }
-		 
-	   if (tcph->th_flags & TH_SYN){ // Is this a SYN packet?
-       		loss->has_syn[paint] = 1;
-			return p;
-       }
-	   if (tcph->th_flags & TH_FIN){	// Is this a FIN packet?
-       		loss->has_fin[paint] = 1;
-			return p;
-	   }  
-	   if (seqlen > 0) {
-		   type=1;
-	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint, tipfd); //calculate loss if any
-		   loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
-   	       if (loss->eventfiles){
-		   	print_send_event(paint, ts, seq, (seq+seqlen));
-		   }
-		   if (loss->gnuplot){
-		   	gplotp_send_event(paint, ts, (seq+seqlen));
-  		   }
-		   m_tbfirst.insert(seq, ts);
-		   m_tblast.insert((seq+seqlen), ts);
-		   TimeInterval ti;
-		   ti.start_byte = seq;
-		   ti.end_byte = seq+seqlen;
-		   ti.time = ts;
-		   m_ibtime.insert(loss->packets(paint),ti);
-	   }
-	   
-	   if (ackp){ // check for ACK and update as necessary 
-	   	   // converting the Sequences from Absolute to Relative (we need that
-		   // for acks also!)
-			if ( !loss->init_seq[cpaint]){ //first time case
-	   	   		loss->init_seq[cpaint] = ack;
-				ack = loss->has_syn[cpaint];
-			}
-			else {
-				if (ack < loss->init_seq[cpaint]){//hmm we may have a "wrap around" case
-					ack = ack  + (UINT_MAX - loss->init_seq[cpaint]);
-				}
-				else { //normal case no "wrap around"
-					ack = ack - loss->init_seq[cpaint];
-	   			}
-	   		}
-			
-			if (loss->max_ack[cpaint] < ack){
-				loss->max_ack[cpaint] = ack;
-			}
-			
-			loss->set_last_ack(ack,cpaint);
-			m_acks.insert(ack, m_acks.find(ack)+1 );
-    	    if (loss->eventfiles){
-				print_ack_event(cpaint, type, ts, ack);	
-			}
-			if (loss->gnuplot){
-		    	gplotp_ack_event(cpaint, type, ts, ack);	
-			//printf("[%u, %u]",ack,m_acks[ack]);
-	   		}
-	   }
-	   
-	/* for (MapS::Iterator iter = m_acks.first(); iter; iter++){
-	   	short int *value = const_cast<short int *>(&iter.value());
-		const unsigned *temp = &m_acks.key_of_value(value);
-	   	printf("%u:%hd \n",*temp,*value);
-	    
-	   }
-	   timeval tv2 = loss->Search_seq_interval(27 ,600, paint);
-	   printf("RESULT:[%ld.%06ld]: %u - %u \n",tv2.tv_sec, tv2.tv_usec,27, 600);*/
-	   
-       loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
-	   loss->set_total_bytes((loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
-	 //  printf("[%u] %u:%u:%u\n",paint,loss->packets(paint),loss->total_bytes(paint),seq);
-	// }  
-	   break;
-     }
-     	 
-	 case IP_PROTO_UDP: { // For future use...
-       const click_udp *udph = p->udp_header();
-       unsigned short srcp = ntohs(udph->uh_sport);
-       unsigned short dstp = ntohs(udph->uh_dport);
-       unsigned len = ntohs(udph->uh_ulen);
-       sa << src << '.' << srcp << " > " << dst << '.' << dstp << ": udp " << len;
-       printf("%s",sa.cc());
-	   break;
-     }
+	  loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
+	  loss->set_total_bytes((loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
+	  //  printf("[%u] %u:%u:%u\n",paint,loss->packets(paint),loss->total_bytes(paint),seq);
+	  // }  
+	  break;
+      }
+      
+      case IP_PROTO_UDP: { // For future use...
+	  const click_udp *udph = p->udp_header();
+	  unsigned short srcp = ntohs(udph->uh_sport);
+	  unsigned short dstp = ntohs(udph->uh_dport);
+	  unsigned len = ntohs(udph->uh_ulen);
+	  sa << src << '.' << srcp << " > " << dst << '.' << dstp << ": udp " << len;
+	  printf("%s",sa.cc());
+	  break;
+      }
 	
-	 default :{ // All other packets are not processed
-	 	printf("The packet is not a TCP or UDP");
-	    sa << src << " > " << dst << ": ip-proto-" << (int)iph->ip_p;
-        printf("%s",sa.cc());
-		break;
-				
-	 }
-	}
-	
-	 /*if (aggp == 1){
-	 printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
-	 printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
-	 printf("ACK Number =[%u,%u]", loss->last_ack(0),loss->last_ack(1));
-	 printf("Total Packets =[%u,%u]", loss->packets(0),loss->packets(1));
-	 printf("Total Bytes =[%u,%u]", loss->total_bytes(0),loss->total_bytes(1));
-	 printf("Total Bytes Lost=[%u,%u]\n\n", loss->bytes_lost(0),loss->bytes_lost(1));
-	 }*/
-	 return p;
+      default :{ // All other packets are not processed
+	  printf("The packet is not a TCP or UDP");
+	  sa << src << " > " << dst << ": ip-proto-" << (int)iph->ip_p;
+	  printf("%s",sa.cc());
+	  break;
+	  
+      }
+    }
+    
+    /*if (aggp == 1){
+      printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
+      printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
+      printf("ACK Number =[%u,%u]", loss->last_ack(0),loss->last_ack(1));
+      printf("Total Packets =[%u,%u]", loss->packets(0),loss->packets(1));
+      printf("Total Bytes =[%u,%u]", loss->total_bytes(0),loss->total_bytes(1));
+      printf("Total Bytes Lost=[%u,%u]\n\n", loss->bytes_lost(0),loss->bytes_lost(1));
+      }*/
+    return p;
 }
 
 void
