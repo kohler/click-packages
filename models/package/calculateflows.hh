@@ -335,7 +335,7 @@ class CalculateFlows : public Element, public AggregateListener {
 	    				}
 						// nothing matches (that cannot be possible unless there is reordering)
 						outoforder_pckt = 1; //set the outoforder indicator
-						click_chatter("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?",
+						printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?",
 										agganno,
 										paint, 
 										start_seq,
@@ -550,7 +550,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
 			
 			if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)){
-				click_chatter("Possible gap in Byte Sequence flow %d:%d %d < %d",agganno,paint,_max_seq[paint],seq);
+				printf("Possible gap in Byte Sequence flow %d:%d %d - %d",agganno,paint,_max_seq[paint],seq);
 			}
 			if (seq < _max_seq[paint] && !outoforder_pckt){  // we do a retransmission  (Bytes are lost...)
 				MapS &m_rexmt = rexmt[paint];

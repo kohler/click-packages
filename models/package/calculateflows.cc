@@ -284,7 +284,7 @@ aggregate_notify(uint32_t aggregate_ID,
                  const Packet *packet /* null for DELETE_AGG */){
 //	printf("ok1 ---->%d %d\n", aggregate_ID, event);
 	if (event == NEW_AGG){	
-		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 1, 1) ;
+		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 0, 0) ;
 		loss_map.insert(aggregate_ID, tmploss);
 	}
 	
