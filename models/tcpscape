@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import generators
-import sys, os, re, types, string, struct, gzip
+import sys, os, re, types, string, struct, gzip, array
 #sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
@@ -177,6 +177,30 @@ def unparse_tcp_flags(flags):
         + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
            "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
 
+TH_FIN = 0x01
+TH_SYN = 0x02
+TH_RST = 0x04
+TH_PUSH = 0x08
+TH_ACK = 0x10
+TH_URG = 0x20
+TH_ECE = 0x40
+TH_CWR = 0x80
+th_parse = array.array('B', [0] * 256)
+for c, f in [('F', TH_FIN), ('S', TH_SYN), ('R', TH_RST), ('P', TH_PUSH),
+             ('A', TH_ACK), ('U', TH_URG), ('E', TH_ECE), ('W', TH_CWR)]:
+    th_parse[ord(c)] = f
+
+def parse_tcp_flags(f):
+    if f == "A":
+        return TH_ACK
+    elif f == "PA":
+        return TH_PUSH | TH_ACK
+    else:
+        r = 0
+        for c in f:
+            r |= th_parse[ord(c)]
+        return r
+
 def unparse_ip(ip):
     return "%d.%d.%d.%d" % ((ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, ip & 255)
 
@@ -210,11 +234,7 @@ class Packet(object):
         self.seq = seq
         self.last_seq = self.seq + payloadlen
         self.ack = ack
-        if flags != "A" and flags != "PA":
-            if flags.find("S") >= 0:
-                self.last_seq += 1
-            if flags.find("F") >= 0:
-                self.last_seq += 1
+        self.last_seq += ((flags & TH_SYN) != 0) + ((flags & TH_FIN) != 0)
         self.dup_acks = 0
         self.window = window
     def pure_ack(self):
@@ -348,7 +368,7 @@ class Connection(object):
         if dir is None:
             return self.first_index_after(time, 0), self.first_index_after(time, 1)
         else:
-            fake_pkt = Packet(time, "A", 0, 0, 0)
+            fake_pkt = Packet(time, 0, 0, 0, 0)
             return bisect(self.s[direction(dir)], fake_pkt)
     
     def packets(self, dir, begin=None, end=None, fuzz=0):
@@ -557,18 +577,15 @@ class SafeFile:
 
 class TCPPacket(object):
 
-    __slots__ = ['time', 'iph', 'tcph', 'src', 'dst', 'sport', 'dport', 'ack', 'flags', 'win', 'payload_len']
+    __slots__ = ['time', 'src', 'dst', 'sport', 'dport', 'seq', 'ack', 'flags', 'win', 'payload_len']
 
-    def __init__(self, time, s, hl):
+    def __init__(self, time, s, iphl):
         self.time = time
-        self.iph = iph = s[0:hl]
-        self.tcph = tcph = s[hl:]
-        self.src, self.dst = struct.unpack('!LL', self.iph[12:20])
-        self.sport, self.dport, self.seq, self.ack, crap, flags, self.win = \
-                    struct.unpack('!HHLLBBH', self.tcph[0:16])
-        self.flags = unparse_tcp_flags(flags)
+        self.src, self.dst = struct.unpack('!LL', s[12:20])
+        self.sport, self.dport, self.seq, self.ack, crap, self.flags, self.win = \
+                    struct.unpack('!HHLLBBH', s[iphl:iphl+16])
         tcp_off = ((crap >> 4) & 15) << 2
-        self.payload_len = struct.unpack('!H', self.iph[2:4])[0] - hl - tcp_off
+        self.payload_len = struct.unpack('!H', s[2:4])[0] - iphl - tcp_off
         
 
 class TCPDumpFile:
@@ -774,14 +791,12 @@ class ConnectionReader:
             f_ack = '0.'
         if "tcp_flags" in m:
             if self.read_state == "b":
-                code += 'flag = fields[' + `m["tcp_flags"]` + ']\n\
-if (flag & 24) == flag: flag = "A"\n\
-else: flag = unparse_tcp_flags(flag)\n'
-                f_flags = 'flag'
+                f_flags = ifields["tcp_flags"]
             else:
-                f_flags = 'fields[' + `m["tcp_flags"]` + ']'
+                code += 'flags = parse_tcp_flags(fields[' + `m["tcp_flags"]` + '])\n'
+                f_flags = 'flags'
         else:
-            f_flags = '"A"'
+            f_flags = '0'
         if "tcp_window" in m:
             f_window = ifields["tcp_window"]
         else:
