@@ -1557,7 +1557,7 @@ class PlotFlowWindow:
         vbox.pack_start(menubar, 0, 0)
         menubar.show()
 
-        self.rcv_window_item = self.item_factory.get_item("/View/Hide Receive Window").get_child()
+        self.rcv_window_item = self.item_factory.get_item("/View/Hide Receive Window")
 
     def _init_toolbar(self, win, vbox):
         toolbar = gtk.Toolbar()
