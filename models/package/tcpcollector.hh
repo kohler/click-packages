@@ -238,6 +238,7 @@ struct TCPCollector::Pkt {
     tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
     uint32_t* sack;		// pointer to sack information
+    tcp_seq_t max_ack() const;	// either ack or latest sack
     struct timeval timestamp;	// timestamp of this packet
     uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
@@ -380,6 +381,12 @@ TCPCollector::free_pkt_list(Pkt *head, Pkt *tail)
 	tail->next = _free_pkt;
 	_free_pkt = head;
     }
+}
+
+inline tcp_seq_t
+TCPCollector::Pkt::max_ack() const
+{
+    return sack ? sack[*sack] : ack;
 }
 
 CLICK_ENDDECLS
