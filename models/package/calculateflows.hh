@@ -207,6 +207,7 @@ struct CalculateFlows::Pkt {
     Pkt *next;
     Pkt *prev;
 
+    uint32_t data_packetno;	// data packet number of this packet
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
@@ -236,12 +237,13 @@ struct CalculateFlows::Pkt {
 
     tcp_seq_t event_id;		// ID of loss event
 
-    Pkt *cumack_pkt;		// packet that this ack cumacks
     Pkt *caused_ack;		// ack that this data packet caused
 };
 
 struct CalculateFlows::LossInfo {
     LossType type;
+    uint32_t data_packetno;
+    uint32_t end_data_packetno;
     tcp_seq_t seq;
     tcp_seq_t top_seq;
     struct timeval time;

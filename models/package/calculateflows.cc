@@ -152,10 +152,12 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
     else
 	loss.type = LOSS;
     loss.time = startk->timestamp;
+    loss.data_packetno = startk->data_packetno;
     loss.seq = startk->seq;
     if (SEQ_LT(endk->seq, startk->seq))
 	loss.seq = endk->seq;
     loss.end_time = endk->timestamp;
+    loss.end_data_packetno = endk->data_packetno;
     loss.top_seq = max_live_seq;
 
     // We just completed a loss event, so reset max_live_seq and max_loss_seq.
@@ -764,7 +766,8 @@ CalculateFlows::LossInfo::unparse_xml(StringAccum &sa) const
 
     // add times and sequence numbers; all are relative in XML
     sa << "time='" << time << "' seq='" << seq << "' endtime='"
-       << end_time << "' lastseq='" << top_seq << "' />\n";
+       << end_time << "' lastseq='" << top_seq << "' dpacketno='"
+       << data_packetno << "' enddpacketno='" << end_data_packetno << "' />\n";
 }
 
 void
@@ -1004,6 +1007,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	const click_ip *iph = p->ip_header();
 
 	// set fields appropriately
+	np->data_packetno = stream.total_packets - stream.ack_packets;
 	np->seq = ntohl(tcph->th_seq) - stream.init_seq;
 	np->end_seq = np->seq + calculate_seqlen(iph, tcph);
 	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
@@ -1051,7 +1055,7 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	
 	// find acked packet
 	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
-	    k->cumack_pkt = acked_pkt;
+	    //k->cumack_pkt = acked_pkt;
 	    struct timeval latency = k->timestamp - acked_pkt->timestamp;
 	    if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
 		ack_stream.have_ack_latency = true;
@@ -1228,7 +1232,7 @@ CalculateFlows::new_pkt()
     else {
 	Pkt *p = _free_pkt;
 	_free_pkt = p->next;
-	p->next = p->prev = p->cumack_pkt = p->caused_ack = 0;
+	p->next = p->prev = p->caused_ack = 0;
 	return p;
     }
 }
