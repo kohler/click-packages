@@ -2017,7 +2017,8 @@ class PlotCanvas_MetaPostDrawable:
                         (595, 842): "A4",
                         (420, 595): "A5" }
 
-    ANCHOR_NAME = { ANCHOR_N: "bot", ANCHOR_E: "lft", ANCHOR_S: "top" }
+    ANCHOR_NAME = { ANCHOR_N: "bot", ANCHOR_E: "lft", ANCHOR_S: "top",
+                    ANCHOR_S|ANCHOR_ROT: "lft" }
 
     def __init__(self, plotcanvas, options):
         self.plotcanvas = plotcanvas
@@ -2168,7 +2169,7 @@ beginfig(1);
 
     def draw_text(self, gc, font, text, x, y, anchor=ANCHOR_N):
         if font is None: font = ("", "")
-        self.f.write("  label." + self.ANCHOR_NAME[anchor & ~ANCHOR_ROT] + "(btex " + font[0] + text + font[1] + " etex");
+        self.f.write("  label." + self.ANCHOR_NAME[anchor] + "(btex " + font[0] + text + font[1] + " etex");
         if anchor & ANCHOR_ROT:
             self.f.write(" rotated 90");
         self.f.write(", (" + str(x) + ", " + str(self.top - y) + "));\n");
