@@ -1383,50 +1383,10 @@ class PlotBox:
         return self.frame
 
 
-class FlowTree:
-    def __init__(self, fset, plotbox):
-        self.scrolled_window = gtk.ScrolledWindow()
-        self.scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-
-        self.model = FlowSetTreeModelByLosses(fset)
-        self.treeview = gtk.TreeView(self.model)
-        self.treeview.set_headers_visible(gtk.FALSE)
-        cell1 = gtk.CellRendererText()
-        # the text in the column comes from column 0
-        column = gtk.TreeViewColumn("tuples", cell1, text=0)
-        self.treeview.append_column(column)
-        column = gtk.TreeViewColumn("tuples", cell1, text=1)
-        self.treeview.append_column(column)
-        column = gtk.TreeViewColumn("tuples", cell1, text=2)
-        self.treeview.append_column(column)
-        column = gtk.TreeViewColumn("tuples", cell1, text=3)
-        self.treeview.append_column(column)
-        self.treeview.show()
-
-        self.scrolled_window.add(self.treeview)
-        self.scrolled_window.show()
-
-        self.plotbox = plotbox
-        self.treeview.connect("row_activated", self.cmd_row_activated)
-
-    def select_flowref(self, fref):
-        #self.model.flowref_changed(fref) 
-        pass
-
-    def cmd_row_activated(self, widget, path, column):
-        fref = self.model.path2flowref(path)
-        if self.plotbox is not None:
-            self.plotbox.set_flowref(fref)
-        self.select_flowref(fref)
-
-    def get_widget(self):
-        return self.scrolled_window
-
-
 class PlotFlowWindow:
     def __init__(self, fset):
         self.flowset = fset
-        self.flowid = 0
+        self.flowid = None
         
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
@@ -1444,14 +1404,13 @@ class PlotFlowWindow:
         paned.show()
         
         self.plotbox = PlotBox()
-        self.flowtree = FlowTree(fset, self.plotbox)
+        flowtree = self._init_flowtree()
 
         paned.add1(self.plotbox.get_widget())
-        paned.add2(self.flowtree.get_widget())
+        paned.add2(flowtree)
 
         if len(fset):
-            self.plotbox.set_flowref(fset[0])
-            self.flowtree.select_flowref(fset[0])
+            self.set_flowid(0)
         self._activate_flow_items()
 
         win.show()
@@ -1495,6 +1454,31 @@ class PlotFlowWindow:
         vbox.pack_start(toolbar, 0, 0)
         toolbar.show()
 
+    def _init_flowtree(self):
+        scrolled_window = gtk.ScrolledWindow()
+        scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+
+        self.flowtree_model = FlowSetTreeModelByLosses(self.flowset)
+        treeview = gtk.TreeView(self.flowtree_model)
+        treeview.set_headers_visible(gtk.FALSE)
+        cell1 = gtk.CellRendererText()
+        # the text in the column comes from column 0
+        column = gtk.TreeViewColumn("tuples", cell1, text=0)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=1)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=2)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=3)
+        treeview.append_column(column)
+        treeview.show()
+
+        scrolled_window.add(treeview)
+        scrolled_window.show()
+
+        treeview.connect("row_activated", self.cmd_flowtree_row_activated)
+        return scrolled_window
+
     def cmd_exit(self, *args):
         gtk.main_quit()
 
@@ -1519,25 +1503,40 @@ class PlotFlowWindow:
         self.prev_flow_button.set_sensitive(self.flowid > 0)
 
     def flowref(self):
-        return self.flowset[self.flowid]
+        if self.flowid is None:
+            return None
+        else:
+            return self.flowset[self.flowid]
+
+    def connection(self):
+        if self.flowid is None:
+            return None
+        else:
+            return self.flowset[self.flowid].conn
     
-    def _change_flowid(self, new_flowid):
-        of, nf = self.flowset[self.flowid], self.flowset[new_flowid]
-        if of.conn is not nf.conn:
-            of.unload()
+    def set_flowref(self, new_flowref):
+        self.set_flowid(self.flowset.index(new_flowref))
+    
+    def set_flowid(self, new_flowid):
+        nf = self.flowset[new_flowid]
+        oc = self.connection()
+        if oc is not nf.conn and oc is not None:
+            oc.unload()
         self.plotbox.set_flowref(nf)
-        self.flowtree.select_flowref(nf)
         self.flowid = new_flowid
         self._activate_flow_items()
-    
+
     def cmd_next_flow(self, widget, event):
-        self._change_flowid(self.flowid + 1)
+        self.set_flowid(self.flowid + 1)
 
     def cmd_prev_flow(self, widget, event):
-        self._change_flowid(self.flowid - 1)
+        self.set_flowid(self.flowid - 1)
 
     def cmd_swap_dir(self, widget, event):
-        self._change_flowid(self.flowset.index(self.flowref().opposite()))
+        self.set_flowref(self.flowref().opposite())
+
+    def cmd_flowtree_row_activated(self, widget, path, column):
+        self.set_flowref(self.flowtree_model.path2flowref(path))
 
 
 if __name__ == "__main__":
