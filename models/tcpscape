@@ -26,7 +26,7 @@ def frange(start, stop, step):
         i += 1
 
 class Packet:
-    def __init__(self, time, flags, seq, payloadlen, ack):
+    def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0):
         self.time = float(time)
         self.seq = int(seq)
         self.last_seq = self.seq + int(payloadlen)
@@ -34,6 +34,7 @@ class Packet:
         if flags != "A" and flags != "AU":
             if flags.find("S") or flags.find("F"):
                 self.last_seq += 1
+        self.dup_acks = int(dup_acks)
     def pure_ack(self):
         return self.seq == self.last_seq
     def has_data(self):
@@ -85,10 +86,14 @@ class Connection:
         else:
             self.filename = f
     def read(self, f):
+        last_ack = [-1, -1]; dup_acks = [0, 0]
         for line in f:
             if not re.match('[\\!\\#]', line):
                 time, dir, flags, seq, payloadlen, ack = line.split()
-                self.s[direction(dir)].append(Packet(time, flags, seq, payloadlen, ack))
+                dir, ack = direction(dir), int(ack)
+                if ack == last_ack[dir]: dup_acks[dir] += 1
+                else: dup_acks[dir] = 0; last_ack[dir] = ack
+                self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
             elif re.match('\\#[pf]?loss', line):
                 type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
                 self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
@@ -119,6 +124,17 @@ class Connection:
         while i < len(self.s[dir]) and (end is None or self.s[dir][i].time <= end):
             yield self.s[dir][i]
             i += 1
+    def rev_packets(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        if end is None:
+            i = len(self.s[dir]) - 1
+        else:
+            i = self.first_index_after(end, dir) - 1
+        while i >= 0 and (begin is None or self.s[dir][i].time >= begin):
+            yield self.s[dir][i]
+            i -= 1
     def losses(self, dir, begin=None, end=None):
         if not self.available:
             self.load()
@@ -144,17 +160,17 @@ class Connection:
     def _seq_range(self, dir, begin, end):
         s0, s1 = 1e10, None
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
-            s0 = min(s0, self.s[dir][i].seq - 20)
-            s1 = max(s1, self.s[dir][i].last_seq + 20)
+            s0 = min(s0, self.s[dir][i].seq - 10)
+            s1 = max(s1, self.s[dir][i].last_seq + 10)
         for l in self.losses(dir, begin, end):
-            s0 = min(s0, l.seq - 20)
-            s1 = max(s1, l.end_seq + 20)
+            s0 = min(s0, l.seq - 10)
+            s1 = max(s1, l.end_seq + 10)
         return max(s0, 0), s1
     def _ack_range(self, dir, begin, end):
         s0, s1 = 1e10, None
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
-            s0 = min(s0, self.s[dir][i].ack - 20)
-            s1 = max(s1, self.s[dir][i].ack + 20)
+            s0 = min(s0, self.s[dir][i].ack - 10)
+            s1 = max(s1, self.s[dir][i].ack + 10)
         return max(s0, 0), s1
     def seq_range(self, dir=None, begin=None, end=None):
         if not self.available:
@@ -482,6 +498,11 @@ class PlotCanvas:
 
             # variables
             playout = self.canvas.create_pango_layout("")
+            new_pcontext = self.canvas.create_pango_context()
+            new_pfontdesc = new_pcontext.get_font_description().copy()
+            new_pfontdesc.set_size(new_pfontdesc.get_size() * 0.75)
+            new_pcontext.set_font_description(new_pfontdesc)
+            small_playout = pango.Layout(new_pcontext)
 
             # clear background
             drawable.draw_rectangle(self.canvas.get_style().white_gc, gtk.TRUE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
@@ -491,7 +512,7 @@ class PlotCanvas:
             for l in self.conn.losses(self.dir, t0, t1):
                 x0 = max(t0, l.begin) * tscale + toff
                 x1 = min(t1, l.end) * tscale + toff
-                y0 = max(s0, l.seq) * sscale + soff
+                y0 = max(s0, l.seq) * sscale + soff + 1
                 y1 = min(s1, l.end_seq) * sscale + soff
                 drawable.draw_rectangle(self.gc[l.type], gtk.TRUE, x0, y1, x1 - x0, y0 - y1)
                 drawable.draw_rectangle(gc, gtk.FALSE, x0, y1, x1 - x0, y0 - y1)
@@ -513,13 +534,23 @@ class PlotCanvas:
                 drawable.draw_line(gc, x, y, x, yy)
             
             # ack packets
-            gc1 = self.gc["ack"]; gc2 = self.gc["dataack"]
-            for p in self.conn.packets(1 - self.dir, t0, t1):
+            gc, gc1, gc2 = self.gc["border"], self.gc["ack"], self.gc["dataack"]
+            last_dupack, last_dupack_x = -1, None
+            for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
-                if p.pure_ack(): gc = gc1
-                else: gc = gc2
-                drawable.draw_line(gc, x - 2, y - 2, x + 2, y + 2)
-                drawable.draw_line(gc, x - 2, y + 2, x + 2, y - 2)
+                if p.dup_acks > 0 and (p.ack != last_dupack or x < last_dupack_x):
+                    small_playout.set_text(str(p.dup_acks), -1)
+                    ir, lr = small_playout.get_extents()
+                    if p.ack != last_dupack or x + lr[2]/2048.0 < last_dupack_x:
+                        drawable.draw_layout(gc, x - lr[2]/2048.0, y + 2, small_playout)
+                        last_dupack = p.ack
+                        last_dupack_x = x - lr[2]/2048.0 - 4
+                if p.pure_ack():
+                    drawable.draw_line(gc1, x - 2, y - 2, x + 2, y + 2)
+                    drawable.draw_line(gc1, x - 2, y + 2, x + 2, y - 2)
+                else:
+                    drawable.draw_line(gc2, x - 2, y - 2, x + 2, y + 2)
+                    drawable.draw_line(gc2, x - 2, y + 2, x + 2, y - 2)
 
             self.plotted = True
 
