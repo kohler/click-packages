@@ -77,8 +77,8 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
 	iter!= peaks.end(); iter++){
 	p = *iter;
-	fprintf(f, "    <peak center='%lf' index='%d' area='%d'>\n",
-		p->center, p->index, p->area);
+	fprintf(f, "   <peak center='%lf' index='%d' area='%d' left='%d' right='%d'>\n",
+		p->center, p->index, p->area, p->left, p->right);
     }
     
     
@@ -104,6 +104,10 @@ static int compare(const void *a, const void *b){
     irateb = (bc->interval.tv_sec + bc->interval.tv_usec/1.0e6)
 	/ ((bc->size)*8.0);
 
+    if(ac->interval < bc->interval) return -1;
+    if(ac->interval == bc->interval) return -1;
+    return 1;
+
     if(iratea < irateb) return -1;
     if(iratea == irateb) return 0;
     return 1;
@@ -121,9 +125,10 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	uint32_t i, prev, area;
 	max = 0;
 	maxi = histpoints+1;
-
-	for(i=0; i < histpoints; i++){
-	    if(valid[i] && hist[i] > max && hist[i] > 1){
+	uint32_t rightedge, leftedge;
+	
+	for(i=1; i < histpoints; i++){
+	    if(valid[i] && hist[i] > max && hist[i] > 2){
 		max = hist[i];
 		maxi = i;
 	    }
@@ -138,29 +143,36 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	valid[maxi] = 0;
 	prev = area = max;
 	
+	rightedge = leftedge = maxi;
+
 	i = maxi + 1;
-	while(i < histpoints && hist[i] > 0 && hist[i] < prev){
+	while(i < histpoints && valid[i] && hist[i] > 0 && hist[i]-1 < prev){
 	    area += hist[i];
 	    valid[i]=0;
 	    prev = hist[i];
 	    i++;
+	    rightedge++;
 	}
 
 	i = maxi - 1;
 	prev = max;
-	while(i > 0 && hist[i] > 0 && hist[i] < prev){
+	while(i > 0 && valid[i] && hist[i] > 0 && hist[i]-1 < prev){
 	    area += hist[i];
 	    valid[i]=0;
 	    prev = hist[i];
 	    i--;
+	    leftedge--;
 	}
 
 	//append to list of peaks
 	peak = new Peak;
 	peak->area = area;
-	peak->center = cutoff[i];
+	peak->center = (cutoff[i] + cutoff[i-1]) / 2;
 	peak->index = maxi;
+	peak->left = leftedge;
+	peak->right = rightedge;
 	peaks.push_back(peak);
+	
 
 	//printf("added new peak: %d %lf %d\n", peak->area,
 	//      peak->center, peak->index);
@@ -301,11 +313,11 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	
 	_stream[0].fill_intervals();
 	_stream[0].histogram();
-	_stream[0].findpeaks(7);
+	_stream[0].findpeaks(12);
 	_stream[0].write_xml(f);
 	_stream[1].fill_intervals();
 	_stream[1].histogram();
-	_stream[1].findpeaks(7);
+	_stream[1].findpeaks(12);
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }
