@@ -1,16 +1,16 @@
-/* -*- c-basic-offset: 4 -*- */
-#ifndef FROMTUSUMMARYLOG_HH
-#define FROMTUSUMMARYLOG_HH
+// -*- mode: c++; c-basic-offset: 4 -*-
+#ifndef CLICK_FROMTUSUMMARYDUMP_HH
+#define CLICK_FROMTUSUMMARYDUMP_HH
 #include <click/element.hh>
 #include <click/task.hh>
 
-class FromTUSummaryLog : public Element { public:
+class FromTUSummaryDump : public Element { public:
 
-    FromTUSummaryLog();
-    ~FromTUSummaryLog();
+    FromTUSummaryDump();
+    ~FromTUSummaryDump();
 
-    const char *class_name() const	{ return "FromTUSummaryLog"; }
-    FromTUSummaryLog *clone() const	{ return new FromTUSummaryLog; }
+    const char *class_name() const	{ return "FromTUSummaryDump"; }
+    FromTUSummaryDump *clone() const	{ return new FromTUSummaryDump; }
     const char *processing() const	{ return AGNOSTIC; }
 
     int configure(const Vector<String> &, ErrorHandler *);

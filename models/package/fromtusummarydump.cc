@@ -1,9 +1,9 @@
-/* -*- c-basic-offset: 4 -*- */
+// -*- mode: c++; c-basic-offset: 4 -*-
 
 #include <config.h>
 #include <click/config.h>
 
-#include "fromtusummarylog.hh"
+#include "fromtusummarydump.hh"
 #include <click/standard/scheduleinfo.hh>
 #include <click/error.hh>
 #include <click/router.hh>
@@ -15,19 +15,19 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-FromTUSummaryLog::FromTUSummaryLog()
+FromTUSummaryDump::FromTUSummaryDump()
     : Element(0, 1), _fd(-1), _buf(0), _pos(0), _len(0), _cap(0), _task(this)
 {
     MOD_INC_USE_COUNT;
 }
 
-FromTUSummaryLog::~FromTUSummaryLog()
+FromTUSummaryDump::~FromTUSummaryDump()
 {
     MOD_DEC_USE_COUNT;
 }
 
 int
-FromTUSummaryLog::configure(const Vector<String> &conf, ErrorHandler *errh)
+FromTUSummaryDump::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     _active = true;
     _stop = false;
@@ -44,7 +44,7 @@ FromTUSummaryLog::configure(const Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-FromTUSummaryLog::initialize(ErrorHandler *errh)
+FromTUSummaryDump::initialize(ErrorHandler *errh)
 {
     if (_filename == "-")
 	_fd = STDIN_FILENO;
@@ -61,7 +61,7 @@ FromTUSummaryLog::initialize(ErrorHandler *errh)
 }
 
 void
-FromTUSummaryLog::uninitialize()
+FromTUSummaryDump::uninitialize()
 {
     if (_fd >= 0 && _fd != STDIN_FILENO)
 	close(_fd);
@@ -71,7 +71,7 @@ FromTUSummaryLog::uninitialize()
 }
 
 bool
-FromTUSummaryLog::read_more_buf()
+FromTUSummaryDump::read_more_buf()
 {
     // first, shift down unused portion of buffer
     if (_cap - _pos < 1024 && _cap >= 2048) {
@@ -111,7 +111,7 @@ FromTUSummaryLog::read_more_buf()
 }
 
 Packet *
-FromTUSummaryLog::try_read_packet()
+FromTUSummaryDump::try_read_packet()
 {
     // first, get line
     int line = _pos;
@@ -188,7 +188,7 @@ FromTUSummaryLog::try_read_packet()
 }
 
 Packet *
-FromTUSummaryLog::read_packet()
+FromTUSummaryDump::read_packet()
 {
     Packet *p;
     while (!(p = try_read_packet()) && _active)
@@ -197,7 +197,7 @@ FromTUSummaryLog::read_packet()
 }
 
 void
-FromTUSummaryLog::run_scheduled()
+FromTUSummaryDump::run_scheduled()
 {
     if (_active) {
 	if (Packet *p = read_packet())
@@ -210,7 +210,7 @@ FromTUSummaryLog::run_scheduled()
 }
 
 Packet *
-FromTUSummaryLog::pull(int)
+FromTUSummaryDump::pull(int)
 {
     if (_active)
 	return read_packet();
@@ -222,11 +222,11 @@ FromTUSummaryLog::pull(int)
 }
 
 void
-FromTUSummaryLog::add_handlers()
+FromTUSummaryDump::add_handlers()
 {
     if (output_is_push(0))
 	add_task_handlers(&_task);
 }
 
 ELEMENT_REQUIRES(userlevel)
-EXPORT_ELEMENT(FromTUSummaryLog)
+EXPORT_ELEMENT(FromTUSummaryDump)
