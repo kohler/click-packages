@@ -9,18 +9,55 @@
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
+#include <click/handlercall.hh>
 #include "elements/analysis/aggregateipflows.hh"
 #if TCPCOLLECTOR_XML
 # include <algorithm>
-# include <function>
+# include <functional>
 #endif
 CLICK_DECLS
+
+
+/*******************************/
+/* HELPERS                     */
+/*                             */
+/*******************************/
+
+timeval
+TCPCollector::ConnInfo::duration() const
+{
+    timeval d = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
+    if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > d)
+	d = _stream[1].pkt_tail->timestamp;
+    return d;
+}
 
 
 /*******************************/
 /* PACKET PROCESSING           */
 /*                             */
 /*******************************/
+
+TCPCollector::Pkt *
+TCPCollector::new_pkt()
+{
+    if (!_free_pkt)
+	if (Pkt *pkts = new Pkt[1024]) {
+	    _pkt_bank.push_back(pkts);
+	    for (int i = 0; i < 1024; i++) {
+		pkts[i].next = _free_pkt;
+		_free_pkt = &pkts[i];
+	    }
+	}
+    if (!_free_pkt)
+	return 0;
+    else {
+	Pkt *p = _free_pkt;
+	_free_pkt = p->next;
+	p->next = p->prev = 0;
+	return p;
+    }
+}
 
 void
 TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
@@ -38,7 +75,7 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
     k->ack = ntohl(tcph->th_ack) - conn->stream(!direction)->init_seq;
     if (!(tcph->th_flags & TH_ACK))
 	k->ack = 0;
-    k->ip_id = (parent->_ip_id ? iph->ip_id : 0);
+    k->ip_id = (conn->ip_id() ? iph->ip_id : 0);
     k->timestamp = p->timestamp_anno() - conn->init_time();
     k->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
     k->flags = 0;
@@ -71,7 +108,7 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
 
     // update max_seq
     if (SEQ_GT(k->end_seq, max_seq))
-	max_seq = np->end_seq;
+	max_seq = k->end_seq;
 
     // process options, if there are any
     process_options(tcph, p->transport_length());
@@ -111,7 +148,7 @@ TCPCollector::StreamInfo::process_options(const click_tcp *tcph, int transport_l
 }
 
 void
-TCPCollector::StreamInfo::process_ack(Pkt *k, const Packet *p, StreamInfo &stream)
+TCPCollector::StreamInfo::process_ack(Pkt *k, const Packet *, StreamInfo &stream)
 {
     // update acknowledgment information
     if (SEQ_GT(k->ack, max_ack))
@@ -134,31 +171,31 @@ TCPCollector::StreamInfo::process_ack(Pkt *k, const Packet *p, StreamInfo &strea
 }
 
 void
-TCPCollector::StreamInfo::attach_packet(Pkt *np)
+TCPCollector::StreamInfo::attach_packet(Pkt *nk)
 {
-    assert(np->flags == 0);
-    assert(!np->prev || np->timestamp >= np->prev->timestamp);
+    assert(!(nk->flags & (Pkt::F_NEW | Pkt::F_NONORDERED)));
+    assert(!nk->prev || nk->timestamp >= nk->prev->timestamp);
 
     // hook up to packet list
-    np->next = 0;
-    np->prev = pkt_tail;
+    nk->next = 0;
+    nk->prev = pkt_tail;
     if (pkt_tail)
-	pkt_tail = pkt_tail->next = np;
+	pkt_tail = pkt_tail->next = nk;
     else
-	pkt_head = pkt_tail = np;
+	pkt_head = pkt_tail = nk;
     
-    if (np->seq == np->end_seq)
+    if (nk->seq == nk->end_seq)
 	// exit if this is a pure ack
 	// NB pure acks will not include IP ID check for network duplicates
 	return;
     else
-	pkt_data_tail = np;
+	pkt_data_tail = nk;
     
     // exit if there is any new data
-    if (SEQ_GT(np->end_seq, max_seq)) {
-	np->flags |= Pkt::F_NEW;
-	if (SEQ_LT(np->seq, max_seq))
-	    np->flags |= Pkt::F_DUPDATA;
+    if (SEQ_GT(nk->end_seq, max_seq)) {
+	nk->flags |= Pkt::F_NEW;
+	if (SEQ_LT(nk->seq, max_seq))
+	    nk->flags |= Pkt::F_DUPDATA;
 	return;
     }
 
@@ -166,43 +203,43 @@ TCPCollector::StreamInfo::attach_packet(Pkt *np)
     // Find the most relevant previous transmission of overlapping data.
     Pkt *x;
     int sequence = 0;
-    for (x = np->prev; x; x = x->prev) {
+    for (x = nk->prev; x; x = x->prev) {
 
 	sequence++;
 	
-	if ((x->flags & Pkt::F_NEW) && SEQ_LEQ(x->end_seq, np->seq)) {
+	if ((x->flags & Pkt::F_NEW) && SEQ_LEQ(x->end_seq, nk->seq)) {
 	    // 'x' is the first packet whose newest data is as old or older
 	    // than our oldest data. Nothing relevant can precede it.
 	    // Either we have a retransmission or a reordering.
 	    break;
 
-	} else if (np->seq == np->end_seq) {
+	} else if (nk->seq == nk->end_seq) {
 	    // ignore pure acks
 	
-	} else if (np->seq == x->seq) {
+	} else if (nk->seq == x->seq) {
 	    // this packet overlaps with our data
-	    np->flags |= Pkt::F_DUPDATA;
+	    nk->flags |= Pkt::F_DUPDATA;
 	    
-	    if (np->ip_id
-		&& np->ip_id == x->ip_id
-		&& np->end_seq == x->end_seq) {
+	    if (nk->ip_id
+		&& nk->ip_id == x->ip_id
+		&& nk->end_seq == x->end_seq) {
 		// network duplicate
-		np->flags |= Pkt::F_DUPLICATE;
+		nk->flags |= Pkt::F_DUPLICATE;
 		return;
-	    } else if (np->end_seq == max_seq
-		       && np->seq + 1 == np->end_seq) {
+	    } else if (nk->end_seq == max_seq
+		       && nk->seq + 1 == nk->end_seq) {
 		// keepalive XXX
-		np->flags |= Pkt::F_KEEPALIVE;
+		nk->flags |= Pkt::F_KEEPALIVE;
 		return;
 	    }
 
 	    break;
 	    
-	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->end_seq))
-		   || (SEQ_LT(x->seq, np->end_seq) && SEQ_LEQ(np->end_seq, x->end_seq))) {
+	} else if ((SEQ_LEQ(x->seq, nk->seq) && SEQ_LT(nk->seq, x->end_seq))
+		   || (SEQ_LT(x->seq, nk->end_seq) && SEQ_LEQ(nk->end_seq, x->end_seq))) {
 	    // partial retransmission. There might be a more relevant
 	    // preceding retransmission, so keep searching for one.
-	    np->flags |= Pkt::F_DUPDATA;
+	    nk->flags |= Pkt::F_DUPDATA;
 	}
     }
     
@@ -276,8 +313,8 @@ TCPCollector::StreamInfo::StreamInfo()
 {
 }
 
-TCPCollector::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_call)
-    : _aggregate(AGGREGATE_ANNO(p)), _finished(false), _clean(true)
+TCPCollector::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_call, bool ip_id)
+    : _aggregate(AGGREGATE_ANNO(p)), _ip_id(ip_id), _clean(true)
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
@@ -299,107 +336,18 @@ TCPCollector::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_cal
     _stream[1].direction = 1;
 }
 
-
-
-
-/*******************************/
-/* UNPARSING                   */
-/*                             */
-/*******************************/
-
 void
-TCPCollector::StreamInfo::write_full_rcv_window_xml(FILE *f) const
+TCPCollector::kill_conn(ConnInfo *conn)
 {
-    if (filled_rcv_window) {
-	fprintf(f, "    <fullrcvwindow>\n");
-	for (Pkt *k = pkt_head; k; k = k->next)
-	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
-	fprintf(f, "    </fullrcvwindow>\n");
-    }
+#if TCPCOLLECTOR_XML
+    if (_traceinfo_file)
+	conn->write_xml(_traceinfo_file, this);
+#endif
+    
+    free_pkt_list(conn->stream(0)->pkt_head, conn->stream(0)->pkt_tail);
+    free_pkt_list(conn->stream(1)->pkt_head, conn->stream(1)->pkt_tail);
+    delete conn;
 }
-
-void
-TCPCollector::StreamInfo::write_window_probe_xml(FILE *f) const
-{
-    if (sent_window_probe) {
-	fprintf(f, "    <windowprobe>\n");
-	for (Pkt *k = pkt_head; k; k = k->next)
-	    if (k->flags & Pkt::F_WINDOW_PROBE)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
-	fprintf(f, "    </windowprobe>\n");
-    }
-}
-
-void
-TCPCollector::StreamInfo::write_packets_xml(FILE *f) const
-{
-    fprintf(f, "    <packet>\n");
-    for (Pkt *k = pkt_head; k; k = k->next)
-	fprintf(f, "%ld.%06ld %u %u %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
-    fprintf(f, "    </packet>\n");
-}
-
-void
-TCPCollector::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_flags) const
-{
-    fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u'",
-	    direction, total_packets - ack_packets, ack_packets,
-	    init_seq, total_seq);
-    if (sent_sackok)
-	fprintf(f, " sentsackok='yes'");
-    if (different_syn)
-	fprintf(f, " differentsyn='yes'");
-    if (different_fin)
-	fprintf(f, " differentfin='yes'");
-    if (time_confusion)
-	fprintf(f, " timeconfusion='yes'");
-
-    if (((write_flags & WR_FULLRCVWND) && filled_rcv_window)
-	|| ((write_flags & WR_WINDOWPROBE) && sent_window_probe)
-	|| (write_flags & WR_PACKETS)) {
-	fprintf(f, ">\n");
-	if (write_flags & WR_FULLRCVWND)
-	    write_full_rcv_window_xml(f);
-	if (write_flags & WR_WINDOWPROBE)
-	    write_window_probe_xml(f);
-	if (write_flags & WR_PACKETS)
-	    write_packets_xml(f);
-	fprintf(f, "  </stream>\n");
-    } else
-	fprintf(f, " />\n");
-}
-
-void
-TCPCollector::ConnInfo::kill(TCPCollector *cf)
-{
-    finish(cf);
-    _stream[0].output_loss(this, cf);
-    _stream[1].output_loss(this, cf);
-    if (FILE *f = cf->traceinfo_file()) {
-	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
-	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
-	    end_time = _stream[1].pkt_tail->timestamp;
-	
-	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
-		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
-		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
-		_init_time.tv_sec, _init_time.tv_usec,
-		end_time.tv_sec, end_time.tv_usec);
-	if (_filepos)
-	    fprintf(f, " filepos='%s'", String(_filepos).cc());
-	fprintf(f, ">\n");
-
-	_stream[0].write_xml(this, f, cf->write_flags());
-	_stream[1].write_xml(this, f, cf->write_flags());
-	
-	fprintf(f, "</flow>\n");
-    }
-    cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
-    cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
-    delete this;
-}
-
 
 
 
@@ -420,10 +368,16 @@ TCPCollector::add_trace_xmlattr(const String &attrname, const String &value)
     return 0;
 }
 
+inline bool
+TCPCollector::XMLHook::operator()(const XMLHook &other_hook) const
+{
+    return name == other_hook.name;
+}
+
 int
 TCPCollector::add_xmlattr(Vector<XMLHook> &v, const XMLHook &in_hook)
 {
-    if (std::find_if(v.begin(), v.end(), bind2nd(mem_fun(XMLHook::same_name), in_hook.name)) < v.end())
+    if (std::find_if(v.begin(), v.end(), in_hook) < v.end())
 	return -1;
     v.push_back(in_hook);
     return 0;
@@ -432,7 +386,7 @@ TCPCollector::add_xmlattr(Vector<XMLHook> &v, const XMLHook &in_hook)
 int
 TCPCollector::add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook hook, void *thunk)
 {
-    XMLAttr x;
+    XMLHook x;
     x.name = attrname;
     x.hook.connection = hook;
     x.thunk = thunk;
@@ -442,53 +396,136 @@ TCPCollector::add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHo
 int
 TCPCollector::add_stream_xmlattr(const String &attrname, StreamXMLAttrHook hook, void *thunk)
 {
-    XMLAttr x;
+    XMLHook x;
     x.name = attrname;
     x.hook.stream = hook;
     x.thunk = thunk;
     return add_xmlattr(_stream_xmlattr, x);
 }
 
-static String
-xmlprotect(const String &s)
+int
+TCPCollector::add_stream_xmltag(const String &attrname, StreamXMLTagHook hook, void *thunk)
 {
-    const char *begin = s.begin();
+    XMLHook x;
+    x.name = attrname;
+    x.hook.streamtag = hook;
+    x.thunk = thunk;
+    return add_xmlattr(_stream_xmltag, x);
+}
+
+static String
+xmlprotect(const String &str)
+{
+    const char *begin = str.begin();
+    const char *end = str.end();
     const char *s = begin;
     StringAccum sa;
-    while (s < s.end()) {
-	if (*s == '\"' || *s == '&') {
+    while (s < end) {
+	if (*s == '\'' || *s == '&') {
 	    sa.append(begin, s);
-	    sa << (*s == '\"' ? "&quot;" : "&amp;");
+	    sa << (*s == '\'' ? "&apos;" : "&amp;");
 	    begin = s + 1;
 	}
 	s++;
     }
-    if (begin == s.begin())
-	return s;
-    else
+    if (begin == str.begin())
+	return str;
+    else {
+	sa.append(begin, str.end());
 	return sa.take_string();
+    }
 }
 
-
 void
-TCPCollector::write_traceopen_xml(FILE *f) const
+TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner) const
 {
-    fprintf(f, "<trace");
-    for (int i = 0; i < _trace_xmlattr_name.size(); i++)
-	fprintf(f, " %s=\"%s\"", _trace_xmlattr_name[i].c_str(), _trace_xmlattr_value[i].c_str());
+    timeval duration = this->duration();
+    
+    fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+	    _aggregate,
+	    _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
+	    _flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
+	    _init_time.tv_sec, _init_time.tv_usec,
+	    duration.tv_sec, duration.tv_usec);
+
+    if (_filepos)
+	fprintf(f, " filepos='%s'", String(_filepos).cc());
+
+    for (const XMLHook *x = owner->_conn_xmlattr.begin(); x < owner->_conn_xmlattr.end(); x++)
+	if (String value = x->hook.connection(*this, x->name, x->thunk))
+	    fprintf(f, " %s='%s'", x->name.c_str(), xmlprotect(value).c_str());
+    
     fprintf(f, ">\n");
+
+    _stream[0].write_xml(f, *this, owner);
+    _stream[1].write_xml(f, *this, owner);
+    
+    fprintf(f, "</flow>\n");
 }
 
 void
-TCPCollector::write_traceclose_xml(FILE *f) const
+TCPCollector::StreamInfo::write_xml(FILE *f, const ConnInfo &conn, const TCPCollector *owner) const
 {
-    fprintf(f, "</trace>\n");
+    fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u'",
+	    direction, total_packets - ack_packets, ack_packets,
+	    init_seq, total_seq);
+    if (sent_sackok)
+	fprintf(f, " sentsackok='yes'");
+    if (different_syn)
+	fprintf(f, " differentsyn='yes'");
+    if (different_fin)
+	fprintf(f, " differentfin='yes'");
+    if (time_confusion)
+	fprintf(f, " timeconfusion='yes'");
+
+    for (const XMLHook *x = owner->_stream_xmlattr.begin(); x < owner->_stream_xmlattr.end(); x++)
+	if (String value = x->hook.stream(*this, conn, x->name, x->thunk))
+	    fprintf(f, " %s='%s'", x->name.c_str(), xmlprotect(value).c_str());
+
+    fprintf(f, ">\n");
+
+    for (const XMLHook *x = owner->_stream_xmltag.begin(); x < owner->_stream_xmltag.end(); x++)
+	x->hook.streamtag(f, *this, conn, x->name, x->thunk);
+
+    fprintf(f, "  </stream>\n");
 }
 
 
+// OPTIONAL STREAM XML TAGS
+
 void
-TCPCollector::write_connection_xml(FILE *f, const ConnInfo &conn) const
+TCPCollector::StreamInfo::packet_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
 {
+    if (stream.pkt_head) {
+	fprintf(f, "    <%s>\n", tagname.c_str());
+	for (Pkt *k = stream.pkt_head; k; k = k->next)
+	    fprintf(f, "%ld.%06ld %u %u %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
+	fprintf(f, "    </%s>\n", tagname.c_str());
+    }
+}
+
+void
+TCPCollector::StreamInfo::fullrcvwindow_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+{
+    if (stream.filled_rcv_window) {
+	fprintf(f, "    <%s>\n", tagname.c_str());
+	for (Pkt *k = stream.pkt_head; k; k = k->next)
+	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
+		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	fprintf(f, "    </%s>\n", tagname.c_str());
+    }
+}
+
+void
+TCPCollector::StreamInfo::windowprobe_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+{
+    if (stream.sent_window_probe) {
+	fprintf(f, "    <%s>\n", tagname.c_str());
+	for (Pkt *k = stream.pkt_head; k; k = k->next)
+	    if (k->flags & Pkt::F_WINDOW_PROBE)
+		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	fprintf(f, "    </%s>\n", tagname.c_str());
+    }
 }
 
 #endif
@@ -496,13 +533,15 @@ TCPCollector::write_connection_xml(FILE *f, const ConnInfo &conn) const
 
 
 /*******************************/
-/* UNPARSING                   */
+/* TOP LEVEL                   */
 /*                             */
 /*******************************/
 
 TCPCollector::TCPCollector()
-    : Element(1, 1), _traceinfo_file(0), _filepos_h(0),
-      _free_pkt(0), _packet_source(0)
+    : Element(1, 1), _free_pkt(0), _filepos_h(0), _packet_source(0)
+#if TCPCOLLECTOR_XML
+    , _traceinfo_file(0)
+#endif
 {
     MOD_INC_USE_COUNT;
 }
@@ -525,18 +564,25 @@ int
 TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0;
-    bool ip_id = true, full_rcv_window = false, window_probe = false, packets = false;
+    bool ip_id = true;
+#if TCPCOLLECTOR_XML
+    bool full_rcv_window = false, window_probe = false, packets = false;
+#endif
     if (cp_va_parse(conf, this, errh,
+#if TCPCOLLECTOR_XML
 		    cpOptional,
 		    cpFilename, "output connection info file", &_traceinfo_filename,
+#endif
 		    cpKeywords,
-		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
-		    "SOURCE", cpElement, "packet source element", &_packet_source,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
+		    "SOURCE", cpElement, "packet source element", &_packet_source,
+		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
+#if TCPCOLLECTOR_XML
+		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
 		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
 		    "WINDOWPROBE", cpBool, "output window probes XML?", &window_probe,
 		    "PACKET", cpBool, "output packet XML?", &packets,
-		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
+#endif
 		    0) < 0)
         return -1;
     
@@ -547,34 +593,44 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 	af->add_listener(this);
 
     _ip_id = ip_id;
-    _write_flags = (full_rcv_window ? WR_FULLRCVWND : 0)
-	| (window_probe ? WR_WINDOWPROBE : 0)
-	| (packets ? WR_PACKETS : 0);
+
+#if TCPCOLLECTOR_XML
+    if (packets)
+	add_stream_xmltag("packet", StreamInfo::packet_xmltag, 0);
+    if (full_rcv_window)
+	add_stream_xmltag("fullrcvwindow", StreamInfo::fullrcvwindow_xmltag, 0);
+    if (window_probe)
+	add_stream_xmltag("windowprobe", StreamInfo::windowprobe_xmltag, 0);
+#endif
+
     return 0;
 }
 
 int
 TCPCollector::initialize(ErrorHandler *errh)
 {
+#if TCPCOLLECTOR_XML
     if (!_traceinfo_filename)
 	/* nada */;
     else if (_traceinfo_filename == "-")
 	_traceinfo_file = stdout;
     else if (!(_traceinfo_file = fopen(_traceinfo_filename.cc(), "w")))
 	return errh->error("%s: %s", _traceinfo_filename.cc(), strerror(errno));
+    
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "<?xml version='1.0' standalone='yes'?>\n\
 <trace");
-	if (_tipfd)
-	    fprintf(_traceinfo_file, " flowfilepattern='%s'",
-		    _tipfd->output_pattern().cc());
-	if (String s = HandlerCall::call_read(_packet_source, "filename").trim_space())
-	    fprintf(_traceinfo_file, " file='%s'", s.cc());
-	else if (_tipsd && _tipsd->filename())
-	    fprintf(_traceinfo_file, " file='%s'", _tipsd->filename().cc());
+	if (_packet_source)
+	    if (String s = HandlerCall::call_read(_packet_source, "filename").trim_space())
+		fprintf(_traceinfo_file, " file='%s'", xmlprotect(s).c_str());
+	for (int i = 0; i < _trace_xmlattr_name.size(); i++)
+	    fprintf(_traceinfo_file, " %s='%s'", _trace_xmlattr_name[i].c_str(), xmlprotect(_trace_xmlattr_value[i]).c_str());
 	fprintf(_traceinfo_file, ">\n");
-	HandlerCall::reset_read(_filepos_h, _packet_source, "packet_filepos");
     }
+#endif
+
+    if (_packet_source)
+	HandlerCall::reset_read(_filepos_h, _packet_source, "packet_filepos");
 
     return 0;
 }
@@ -582,36 +638,16 @@ TCPCollector::initialize(ErrorHandler *errh)
 void
 TCPCollector::cleanup(CleanupStage)
 {
-    for (ConnMap::iterator iter = _conn_map.begin(); iter; iter++) {
-	ConnInfo *losstmp = const_cast<ConnInfo *>(iter.value());
-	losstmp->kill(this);
-    }
+    for (ConnMap::iterator iter = _conn_map.begin(); iter; iter++)
+	kill_conn(iter.value());
     _conn_map.clear();
+    
+#if TCPCOLLECTOR_XML
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "</trace>\n");
 	fclose(_traceinfo_file);
     }
-}
-
-TCPCollector::Pkt *
-TCPCollector::new_pkt()
-{
-    if (!_free_pkt)
-	if (Pkt *pkts = new Pkt[1024]) {
-	    _pkt_bank.push_back(pkts);
-	    for (int i = 0; i < 1024; i++) {
-		pkts[i].next = _free_pkt;
-		_free_pkt = &pkts[i];
-	    }
-	}
-    if (!_free_pkt)
-	return 0;
-    else {
-	Pkt *p = _free_pkt;
-	_free_pkt = p->next;
-	p->next = p->prev = 0;
-	return p;
-    }
+#endif
 }
 
 Packet *
@@ -621,7 +657,7 @@ TCPCollector::simple_action(Packet *p)
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())) {
 	ConnInfo *loss = _conn_map.find(aggregate);
 	if (!loss) {
-	    if ((loss = new ConnInfo(p, _filepos_h)))
+	    if ((loss = new ConnInfo(p, _filepos_h, _ip_id)))
 		_conn_map.insert(aggregate, loss);
 	    else {
 		click_chatter("out of memory!");
@@ -641,9 +677,9 @@ void
 TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
-	if (ConnInfo *tmploss = _conn_map.find(aggregate)) {
+	if (ConnInfo *conn = _conn_map.find(aggregate)) {
 	    _conn_map.remove(aggregate);
-	    tmploss->kill(this);
+	    kill_conn(conn);
 	}
 }
 
@@ -658,13 +694,13 @@ TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const P
 enum { H_CLEAR };
 
 int
-TCPCollector::write_handler(const String &s, Element *e, void *thunk, ErrorHandler *errh)
+TCPCollector::write_handler(const String &, Element *e, void *thunk, ErrorHandler *)
 {
     TCPCollector *cf = static_cast<TCPCollector *>(e);
     switch ((intptr_t)thunk) {
       case H_CLEAR:
 	for (ConnMap::iterator i = cf->_conn_map.begin(); i; i++)
-	    i.value()->kill(cf);
+	    cf->kill_conn(i.value());
 	cf->_conn_map.clear();
 	return 0;
       default:
@@ -678,7 +714,8 @@ TCPCollector::add_handlers()
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
 }
 
-ELEMENT_REQUIRES(userlevel false)
+ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(TCPCollector)
 #include <click/bighashmap.cc>
+#include <click/vector.cc>
 CLICK_ENDDECLS
