@@ -4,7 +4,6 @@
 #include "traceinfo.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
-#include <packet_anno.hh>
 #include <ctime>
 
 /* this will generate the master-xxx file, together with some general trace info. 

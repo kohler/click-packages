@@ -3,7 +3,6 @@
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include <click/packet_anno.hh>
-#include <packet_anno.hh>
 #include <clicknet/tcp.h>
 #include <click/router.hh>
 

@@ -5,7 +5,6 @@
 #include <click/error.hh>
 #include <click/hashmap.hh>
 #include <click/confparse.hh>
-#include <packet_anno.hh>
 
 SplitInOutBound::SplitInOutBound() : Element(1,5) 
 {
