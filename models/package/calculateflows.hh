@@ -58,6 +58,11 @@ Filename. If given, then output information about each aggregate to that file,
 in an XML format. Information includes the flow identifier, total sequence
 space used on each flow, and loss counts for each flow.
 
+=item STATLOSS
+
+Boolean. If true, then STATFILE will contain information about each loss.
+Default is false.
+
 =item ABSOLUTE_TIME
 
 Boolean. If true, then output absolute timestamps instead of relative ones.
@@ -114,6 +119,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     
     struct StreamInfo;
     class ConnInfo;
+    struct LossInfo;
+    struct LossBlock;
     struct Pkt;
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
@@ -121,6 +128,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
     FILE *stat_file() const		{ return _stat_file; }
+    bool stat_losses() const		{ return _stat_losses; }
     bool absolute_time() const		{ return _absolute_time; }
     bool absolute_seq() const		{ return _absolute_seq; }
     bool ack_match() const		{ return _ack_match; }
@@ -139,6 +147,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     bool _absolute_time : 1;
     bool _absolute_seq : 1;
+    bool _stat_losses : 1;
     bool _ack_match : 1;
     bool _ip_id : 1;
     
@@ -171,6 +180,27 @@ struct CalculateFlows::Pkt {
     int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
+};
+
+struct CalculateFlows::LossInfo {
+    LossType type;
+    tcp_seq_t seq;
+    tcp_seq_t last_seq;
+    struct timeval time;
+    struct timeval end_time;
+
+    bool unparse(StringAccum &, const StreamInfo *, const ConnInfo *, bool include_aggregate, bool absolute_time = true, bool absolute_seq = true) const;
+    void unparse_xml(StringAccum &) const;
+};
+
+struct CalculateFlows::LossBlock {
+    enum { CAPACITY = 256 };
+    LossBlock *next;
+    int n;
+    LossInfo loss[CAPACITY];
+
+    LossBlock(LossBlock *the_next)	: next(the_next), n(0) { }
+    void write_xml(FILE *) const;
 };
 
 struct CalculateFlows::StreamInfo {
@@ -208,13 +238,11 @@ struct CalculateFlows::StreamInfo {
     Pkt *pkt_tail;		// last packet record
 
     // information about the most recent loss event
-    LossType loss_type;		// type of loss event
-    tcp_seq_t loss_seq;		// first seqno in loss event
-    tcp_seq_t loss_last_seq;	// last seqno in loss event
-    struct timeval loss_time;	// first time in loss event
-    struct timeval loss_end_time; // last time in loss event
+    LossInfo loss;		// most recent loss event
+    LossBlock *loss_trail;	// previous loss events
     
     StreamInfo();
+    ~StreamInfo();
 
     void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
@@ -223,6 +251,7 @@ struct CalculateFlows::StreamInfo {
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
 
     void output_loss(ConnInfo *, CalculateFlows *);
+    void write_xml(FILE *) const;
     
 };
 

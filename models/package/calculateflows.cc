@@ -21,8 +21,17 @@ CalculateFlows::StreamInfo::StreamInfo()
       loss_events(0), possible_loss_events(0), false_loss_events(0),
       event_id(0),
       pkt_head(0), pkt_tail(0),
-      loss_type(NO_LOSS)
+      loss_trail(0)
 {
+    loss.type = NO_LOSS;
+}
+
+CalculateFlows::StreamInfo::~StreamInfo()
+{
+    while (LossBlock *b = loss_trail) {
+	loss_trail = b->next;
+	delete b;
+    }
 }
 
 void
@@ -94,18 +103,18 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
     endk->event_id = event_id;
 
     // Store information about the loss event
-    if (loss_type != NO_LOSS) // output any previous loss event
+    if (loss.type != NO_LOSS) // output any previous loss event
 	output_loss(conn, parent);
     if (SEQ_GT(max_ack, endk->seq))
-	loss_type = FALSE_LOSS;
+	loss.type = FALSE_LOSS;
     else if (SEQ_GEQ(endk->last_seq, max_live_seq))
-	loss_type = POSSIBLE_LOSS;
+	loss.type = POSSIBLE_LOSS;
     else
-	loss_type = LOSS;
-    loss_time = startk->timestamp;
-    loss_seq = startk->seq;
-    loss_end_time = endk->timestamp;
-    loss_last_seq = max_live_seq;
+	loss.type = LOSS;
+    loss.time = startk->timestamp;
+    loss.seq = startk->seq;
+    loss.end_time = endk->timestamp;
+    loss.last_seq = max_live_seq;
 
     // We just completed a loss event, so reset max_live_seq and max_loss_seq.
     max_live_seq = endk->last_seq;
@@ -165,56 +174,90 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
     return potential_answer;
 }
 
-void
-CalculateFlows::StreamInfo::output_loss(ConnInfo *loss_info, CalculateFlows *cf)
+bool
+CalculateFlows::LossInfo::unparse(StringAccum &sa, const StreamInfo *cstr, const ConnInfo *conn, bool include_aggregate, bool absolute_time, bool absolute_seq) const
 {
-    if (loss_type == NO_LOSS)
+    if (type == NO_LOSS)
+	return false;
+
+    // figure out loss type, count loss
+    if (type == LOSS)
+	sa << "loss ";
+    else if (type == POSSIBLE_LOSS)
+	sa << "ploss ";
+    else
+	sa << "floss ";
+
+    // add (optional) aggregate number and direction
+    if (include_aggregate)
+	sa << conn->aggregate() << ' ';
+    sa << (cstr->direction ? "< " : "> ");
+
+    // add times and sequence numbers
+    if (!absolute_time && !absolute_seq)
+	// common case
+	sa << time << ' ' << seq << ' '
+	   << end_time << ' ' << last_seq;
+    else {
+	if (absolute_time)
+	    sa << (time + conn->init_time()) << ' ';
+	else
+	    sa << time << ' ';
+	if (absolute_seq)
+	    sa << (seq + cstr->init_seq) << ' ';
+	else
+	    sa << seq << ' ';
+	if (absolute_time)
+	    sa << (end_time + conn->init_time()) << ' ';
+	else
+	    sa << end_time << ' ';
+	if (absolute_seq)
+	    sa << (last_seq + cstr->init_seq);
+	else
+	    sa << last_seq;
+    }
+
+    return true;
+}
+
+void
+CalculateFlows::StreamInfo::output_loss(ConnInfo *conn, CalculateFlows *cf)
+{
+    if (loss.type == NO_LOSS)
 	return;
 
     // figure out loss type, count loss
-    const char *loss_type_str;
-    if (loss_type == LOSS) {
-	loss_type_str = "aloss ";
+    if (loss.type == LOSS)
 	loss_events++;
-    } else if (loss_type == POSSIBLE_LOSS) {
-	loss_type_str = "aploss ";
+    else if (loss.type == POSSIBLE_LOSS)
 	possible_loss_events++;
-    } else {
-	assert(loss_type == FALSE_LOSS);
-	loss_type_str = "afloss ";
+    else {
+	assert(loss.type == FALSE_LOSS);
 	false_loss_events++;
     }
 
     // output to ToIPSummaryDump and/or ToIPFlowDumps
-    ToIPSummaryDump *sumd = cf->summary_dump();
-    ToIPFlowDumps *flowd = cf->flow_dumps();
+    if (ToIPFlowDumps *flowd = cf->flow_dumps()) {
+	StringAccum sa(80);
+	loss.unparse(sa, this, conn, false, flowd->absolute_time(), flowd->absolute_seq());
+	flowd->add_note(conn->aggregate(), sa.take_string());
+    }
+    if (ToIPSummaryDump *sumd = cf->summary_dump()) {
+	StringAccum sa(80);
+	sa << 'a';
+	loss.unparse(sa, this, conn, true);
+	sumd->add_note(sa.take_string());
+    }
 
-    if (flowd || sumd) {
-	StringAccum sa;
-	sa << (direction ? "< " : "> ");
-	if (!flowd->absolute_time() && !flowd->absolute_seq())
-	    // common case
-	    sa << loss_time << ' ' << loss_seq << ' '
-	       << loss_end_time << ' ' << loss_last_seq;
-	else {
-	    struct timeval time_adj = (flowd->absolute_time() ? loss_info->init_time() : make_timeval(0, 0));
-	    uint32_t seq_adj = (flowd->absolute_seq() ? init_seq : 0);
-	    sa << (loss_time + time_adj) << ' '
-	       << (loss_seq + seq_adj) << ' '
-	       << (loss_end_time + time_adj) << ' '
-	       << (loss_last_seq + seq_adj);
-	}
-
-	String s = sa.take_string();
-	uint32_t aggregate = loss_info->aggregate();
-	if (flowd)
-	    flowd->add_note(aggregate, (loss_type_str + 1) + s);
-	if (sumd)
-	    sumd->add_note(loss_type_str + String(aggregate) + " " + s);
+    // store loss
+    if (cf->stat_losses()) {
+	if (!loss_trail || loss_trail->n == LossBlock::CAPACITY)
+	    loss_trail = new LossBlock(loss_trail);
+	loss_trail->loss[loss_trail->n++] = loss;
     }
     
     // clear loss
-    loss_type = NO_LOSS;
+    loss.type = NO_LOSS;
 }
 
 
@@ -240,29 +283,66 @@ CalculateFlows::ConnInfo::ConnInfo(const Packet *p)
 }
 
 void
+CalculateFlows::LossInfo::unparse_xml(StringAccum &sa) const
+{
+    if (type == NO_LOSS)
+	return;
+
+    // figure out loss type, count loss
+    sa << "    <loss type='";
+    if (type == LOSS)
+	sa << "loss' ";
+    else if (type == POSSIBLE_LOSS)
+	sa << "ploss' ";
+    else
+	sa << "floss' ";
+
+    // add times and sequence numbers; all are relative in XML
+    sa << "time='" << time << "' seq='" << seq << "' endtime='"
+       << end_time << "' lastseq='" << last_seq << "' />\n";
+}
+
+void
+CalculateFlows::LossBlock::write_xml(FILE *f) const
+{
+    if (next)
+	next->write_xml(f);
+    StringAccum sa(n * 80);
+    for (int i = 0; i < n; i++)
+	loss[i].unparse_xml(sa);
+    fwrite(sa.data(), 1, sa.length(), f);
+}
+
+void
+CalculateFlows::StreamInfo::write_xml(FILE *f) const
+{
+    fprintf(f, "  <flow dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
+	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
+    if (loss_trail) {
+	fprintf(f, ">\n");
+	loss_trail->write_xml(f);
+	fprintf(f, "  </flow>\n");
+    } else
+	fprintf(f, " />\n");
+}
+
+void
 CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 {
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
-    if (cf->stat_file()) {
+    if (FILE *f = cf->stat_file()) {
 	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
-
-	fprintf(cf->stat_file(), "<connection aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'>\n\
-  <flow dir='0' seq='%u' loss='%u' ploss='%u' floss='%u' />\n\
-  <flow dir='1' seq='%u' loss='%u' ploss='%u' floss='%u' />\n\
-</connection>\n",
+	fprintf(f, "<connection aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'>\n",
 		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
 		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
 		_init_time.tv_sec, _init_time.tv_usec,
-		end_time.tv_sec, end_time.tv_usec,
-		
-		_stream[0].total_seq, _stream[0].loss_events,
-		_stream[0].possible_loss_events, _stream[0].false_loss_events,
-		
-		_stream[1].total_seq, _stream[1].loss_events,
-		_stream[1].possible_loss_events, _stream[1].false_loss_events);
+		end_time.tv_sec, end_time.tv_usec);
+	_stream[0].write_xml(f);
+	_stream[1].write_xml(f);
+	fprintf(f, "</connection>\n");
     }
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
     cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
@@ -351,13 +431,13 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	    }
 	    // check whether this acknowledges something in the last loss
 	    // event; if so, we should output the loss event
-	    if (ack_stream.loss_type != NO_LOSS
-		&& SEQ_GT(ack, ack_stream.loss_seq)) {
+	    if (ack_stream.loss.type != NO_LOSS
+		&& SEQ_GT(ack, ack_stream.loss.seq)) {
 		// check for a false loss event: we don't believe the ack
 		// could have seen the retransmitted packet yet
-		if (k->timestamp - ack_stream.loss_end_time < 0.6 * ack_stream.min_ack_bounce
+		if (k->timestamp - ack_stream.loss.end_time < 0.6 * ack_stream.min_ack_bounce
 		    && ack_stream.have_ack_bounce)
-		    ack_stream.loss_type = FALSE_LOSS;
+		    ack_stream.loss.type = FALSE_LOSS;
 		ack_stream.output_loss(this, cf);
 	    }
 	}
@@ -407,15 +487,14 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool absolute_time = false, absolute_seq = false, ack_match = false, ip_id = true;
+    bool stat_losses = false, ack_match = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element pointer (notifier)", &tipsd_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    "STATFILE", cpFilename, "filename for XML loss statistics", &_stat_filename,
-		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
-		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
+		    "STATLOSS", cpBool, "output every loss to STATFILE?", &stat_losses,
 		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
@@ -432,8 +511,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
 	return errh->error("SUMMARYDUMP must be a ToIPSummaryDump element");
 
-    _absolute_time = absolute_time;
-    _absolute_seq = absolute_seq;
+    _stat_losses = stat_losses;
     _ack_match = (ack_match && _tipfd);
     _ip_id = ip_id;
     return 0;
