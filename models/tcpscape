@@ -5,7 +5,7 @@ import sys, os, re, types, string, struct, gzip, array
 sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
-import gtk, gobject, pango, xml.parsers.expat
+import gtk, gobject, pango, xml.parsers.expat, getopt
 KEY_ESCAPE = 0xFF1B
 
 class LineDescriptor:
@@ -24,6 +24,7 @@ class LineDescriptor:
 
 _screen_style = {
     "data": LineDescriptor(1, 0, 0),
+    "data.undelivered": LineDescriptor(0, 0, 0),
     "ack": LineDescriptor(0.42, 0.56, 0.14),
     "dataack": LineDescriptor(0, 0, 1),
     "window": LineDescriptor(0.8, 0.8, 1, linewidth=2),
@@ -39,7 +40,7 @@ _screen_style = {
     "border": LineDescriptor(0.66, 0.66, 0.66),
     "bg": LineDescriptor(1, 1, 1),
     "label": LineDescriptor(0.4, 0.4, 0.4),
-    "link": LineDescriptor(0.8, 0.8, 0.8, dash=[4, 4]),
+    "link": LineDescriptor(0.7, 0.7, 0.7),
 
     "H": LineDescriptor(1, 0.9, 0, linewidth=2),
     "H.cause": LineDescriptor(1, 200/255., 200/255.),
@@ -49,6 +50,7 @@ _screen_style = {
 
 _postscript_style = {
     "data": LineDescriptor(1, 0, 0, linewidth=0.5),
+    "data.undelivered": LineDescriptor(0, 0, 0, linewidth=0.5),
     "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
     "dataack": LineDescriptor(0, 0, 1, linewidth=0.5),
     "window": LineDescriptor(0.8, 0.8, 1, linewidth=1.5),
@@ -64,7 +66,7 @@ _postscript_style = {
     "border": LineDescriptor(0, 0, 0),
     "bg": LineDescriptor(1, 1, 1),
     "label": LineDescriptor(0, 0, 0),
-    "link": LineDescriptor(0.8, 0.8, 0.8, dash=[4, 4])
+    "link": LineDescriptor(0.7, 0.7, 0.7, dash=[4, 4])
     }
 
 PRINT_PRINTER = 0
@@ -191,6 +193,7 @@ TH_ACK = 0x10
 TH_URG = 0x20
 TH_ECE = 0x40
 TH_CWR = 0x80
+TH_UNDELIVERED = 0x1000
 th_parse = array.array('B', [0] * 256)
 for c, f in [('F', TH_FIN), ('S', TH_SYN), ('R', TH_RST), ('P', TH_PUSH),
              ('A', TH_ACK), ('U', TH_URG), ('E', TH_ECE), ('W', TH_CWR)]:
@@ -330,6 +333,8 @@ class PacketLink:
             p = conn.find_packet(self.t1, dir)
             if p is not None:
                 self.s1 = (p.seq + p.last_seq) // 2
+    def __str__(self):
+        return "[" + str(self.t0) + "," + str(self.s0) + " - " + str(self.t1) + "," + str(self.s1) + "]"
 
 
 ####################
@@ -368,12 +373,13 @@ def direction(dir):
 
 class Connection(object):
 
-    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime', 'link']
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime', 'link', 'undelivered']
 
     def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None, filepos=None, endtime=None):
         self.s = ([], [])
         self.loss = ([], [])
         self.link = ([], [])
+        self.undelivered = ([], [])
         self.available = False
         self.dynload = dynload
         if src is not None:
@@ -423,6 +429,14 @@ class Connection(object):
                 p.adjust(t0, s0, s1)
             for p in self.s[1]:
                 p.adjust(t0, s1, s0)
+        for t in self.undelivered[0]:
+            p = self.find_packet(t, 0)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
+        for t in self.undelivered[1]:
+            p = self.find_packet(t, 1)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
     
     def first_index_after(self, time, dir=None):
         if not self.available:
@@ -1156,6 +1170,7 @@ class FlowSet:
     READ_NONE = 0
     READ_TRACE = 1
     READ_ACKCAUSALITY = 2
+    READ_UNDELIVERED = 3
 
     def __init__(self):
         self.conns = []
@@ -1181,6 +1196,7 @@ class FlowSet:
         self.parser.CharacterDataHandler = self._char_data
         self.reading_state = FlowSet.READ_NONE
         self.reading_connection = self.reading_direction = None
+        self.reading_lastline = None
 
         return self._read_process
 
@@ -1279,6 +1295,8 @@ class FlowSet:
                 pass
         elif name == 'ackcausality' and self.reading_direction is not None:
             self.reading_state = FlowSet.READ_ACKCAUSALITY
+        elif name == 'undelivered' and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_UNDELIVERED
 
     def _end_element(self, name):
         if name == 'trace':
@@ -1289,8 +1307,17 @@ class FlowSet:
             self.reading_direction = None
         elif name == 'ackcausality' and self.reading_state == FlowSet.READ_ACKCAUSALITY:
             self.reading_state = FlowSet.READ_TRACE
+        elif name == 'undelivered' and self.reading_state == FlowSet.READ_UNDELIVERED:
+            self.reading_state = FlowSet.READ_TRACE
 
     def _char_data(self, data):
+        if self.reading_state != FlowSet.READ_ACKCAUSALITY and self.reading_state != FlowSet.READ_UNDELIVERED:
+            return
+        if self.reading_lastline is not None:
+            data = self.reading_lastline + data
+        last_newline = data.rfind("\n")
+        self.reading_lastline = data[last_newline+1:]
+        data = data[0:last_newline+1]
         if self.reading_state == FlowSet.READ_ACKCAUSALITY:
             links = self.reading_connection.link[self.reading_direction]
             for line in data.splitlines():
@@ -1298,7 +1325,14 @@ class FlowSet:
                 if len(x) >= 3:
                     t0, s1, t1 = x[0:3]
                     ft0 = float(t0)
+                    if ft0 > 900: print x, line
                     links.append(PacketLink(ft0, None, ft0 + float(t1), float(s1)))
+        elif self.reading_state == FlowSet.READ_UNDELIVERED:
+            undelivered = self.reading_connection.undelivered[self.reading_direction]
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 2:
+                    undelivered.append(float(x[0]))
 
     def _flow_sorter(a, b):
         return int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
@@ -2553,8 +2587,9 @@ class PlotCanvas:
                 drawable.unclip(gc)
 
             # data packets
-            gc = drawable.gc("data")
+            gc1, gc2 = drawable.gc("data"), drawable.gc("data.undelivered")
             for p in self.conn.packets(self.dir, t0, t1):
+                gc = (p.flags & TH_UNDELIVERED and gc2 or gc1)
                 drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
                 if p.flags & (TH_SYN | TH_FIN | TH_RST):
                     s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
@@ -3101,6 +3136,7 @@ class PlotFlowWindow:
         self.statusbox.pack_end(self.progressbar, 0, 0, padding=3)
 
         self.activating = None
+        self.time_range = None
         
         self.canvas.add_highlight_hook(self.highlight_hook)
         return frame
@@ -3203,6 +3239,9 @@ class PlotFlowWindow:
         self.flowref = fref
         self._activate_flow_items(fref)
         self.statusbar_description()
+        if self.time_range is not None:
+            self.canvas.set_time_range(self.time_range[0], self.time_range[1])
+            self.time_range = None
 
     def cmd_next_flow(self, widget, event):
         self.set_flow(id=self.flowid + 1)
@@ -3290,9 +3329,14 @@ def initial_sort_flows():
 if __name__ == "__main__":
     all_connections = FlowSet()
     try:
+        optlist, args = getopt.getopt(sys.argv[1:], "t:", ["time="])
         window = PlotFlowWindow(all_connections)
-        if len(sys.argv) >= 2:
-            f = file(sys.argv[1])
+        for o, a in optlist:
+            if o == "-t" or o == "--time":
+                window.time_range = map(float, a.split(':'))
+                window.time_range[1] -= window.time_range[0]
+        if len(args) >= 1:
+            f = file(args[0])
             p = ConnectionReader(flowset=all_connections).read_process(sys.argv[1], f)
             window.watch_process(p, complete=initial_read_complete, text="Reading " + sys.argv[1] + "...")
         else:
