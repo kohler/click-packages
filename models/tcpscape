@@ -557,7 +557,7 @@ class SafeFile:
 
 class TCPPacket(object):
 
-    __slots__ = ['time', 'iph', 'tpch', 'src', 'dst', 'sport', 'dport', 'ack', 'flags', 'win', 'payload_len']
+    __slots__ = ['time', 'iph', 'tcph', 'src', 'dst', 'sport', 'dport', 'ack', 'flags', 'win', 'payload_len']
 
     def __init__(self, time, s, hl):
         self.time = time
