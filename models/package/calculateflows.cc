@@ -23,12 +23,12 @@ operator*(double frac, const struct timeval &tv)
 
 CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
-      have_ack_bounce(false),
+      have_ack_latency(false),
       init_seq(0), max_seq(0), max_ack(0), max_live_seq(0), max_loss_seq(0),
       total_packets(0), total_seq(0),
       loss_events(0), possible_loss_events(0), false_loss_events(0),
       event_id(0),
-      pkt_head(0), pkt_tail(0),
+      pkt_head(0), pkt_tail(0), pkt_data_tail(0),
       loss_trail(0)
 {
     loss.type = NO_LOSS;
@@ -68,45 +68,68 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 
     // Otherwise, it is a reordering, or possibly a retransmission.
     // Find the most relevant previous transmission of overlapping data.
-    Pkt *x = np->prev;
-    Pkt *partial = 0;
-    while (x) {
-	if (np->seq == x->seq) {
+    Pkt *rexmit = 0;
+    Pkt *x;
+    for (x = np->prev; x; x = x->prev) {
+	
+	if ((x->flags & Pkt::F_NEW)
+	    && SEQ_LEQ(x->last_seq, np->seq)) {
+	    // packet has new data older than our oldest data;
+	    // therefore, nothing relevant can precede it.
+	    // either we have a retransmission or a reordering.
+	    break;
+
+	} else if (np->seq == np->last_seq) {
+	    // ignore pure acks
+	
+	} else if (np->seq == x->seq) {
+	    // this packet overlaps with our data
 	    np->flags |= Pkt::F_REXMIT;
-	    if (np->ip_id && np->ip_id == x->ip_id
-		&& np->last_seq == x->last_seq)
+	    
+	    if (np->ip_id
+		&& np->ip_id == x->ip_id
+		&& np->last_seq == x->last_seq) {
 		// network duplicate
 		np->flags |= Pkt::F_DUPLICATE;
-	    else if (np->last_seq == max_seq && np->seq + 1 == np->last_seq)
+		return;
+	    } else if (np->last_seq == max_seq
+		       && np->seq + 1 == np->last_seq) {
 		// keepalive XXX
 		np->flags |= Pkt::F_KEEPALIVE;
-	    else if (np->event_id != x->event_id)
-		// retransmission of something from an old loss event
-		/* nada */;
-	    else
-		// new loss event
-		register_loss_event(x, np, conn, parent);
-	    return;
-	} else if (x->flags == Pkt::F_NEW && SEQ_LEQ(x->last_seq, np->seq)) {
-	    // reordering
-	    if (partial) {
-		np->flags |= Pkt::F_REXMIT | Pkt::F_STRANGE;
-		register_loss_event(x, np, conn, parent);
-	    } else
-		np->flags |= Pkt::F_REORDER;
-	    return;
+		return;
+	    }
+
+	    if (np->last_seq == x->last_seq) {
+		// it has the same data as we do; call off the search
+		np->flags |= Pkt::F_FULL_REXMIT;
+		rexmit = x;
+		break;
+	    }
+	    if (!rexmit)
+		rexmit = x;
+	    
 	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->last_seq))
 		   || (SEQ_LT(x->seq, np->last_seq) && SEQ_LEQ(np->last_seq, x->last_seq))) {
-	    // Odd partial retransmission. There might be a more relevant
+	    // partial retransmission. There might be a more relevant
 	    // preceding retransmission, so keep searching for one.
-	    partial = x;
-	    x = x->prev;
-	} else
-	    x = x->prev;
+	    np->flags |= Pkt::F_REXMIT;
+	    rexmit = x;
+	}
     }
     
-    // If we ran out of packets, it's a reordering.
-    np->flags |= Pkt::F_REORDER;
+    // we have identified retransmissions already.
+    if (np->flags & Pkt::F_REXMIT) {
+	// ignore retransmission of something from an old loss event
+	if (rexmit->event_id == np->event_id)
+	    // new loss event
+	    register_loss_event(rexmit, np, conn, parent);
+    } else {
+	// if not a retransmission, then a reordering
+	np->flags |= Pkt::F_REORDER;
+	// mark intervening packets as in a reordering event
+	for (x = (x ? x->next : pkt_head); x; x = x->next)
+	    x->flags |= Pkt::F_IN_REORDER;
+    }
 }
 
 void
@@ -169,23 +192,49 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 }
 
 CalculateFlows::Pkt *
-CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &timestamp)
+CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &timestamp, Pkt *search_hint) const
 {
-    // XXX start from the middle?
-    Pkt *potential_answer = 0;
-    for (Pkt *k = pkt_tail; k; k = k->prev) {
-	if (k->last_seq == ack) {
-	    if ((k->flags & Pkt::F_REXMIT)
-		&& have_ack_bounce
-		&& timestamp - k->timestamp < min_ack_bounce)
-		potential_answer = k;
-	    else
-		return k;
-	} else if (SEQ_LT(k->seq, ack) && SEQ_LEQ(ack, k->last_seq))
-	    // partial ack
-	    potential_answer = k;
+    // region of interest is:
+    // bounded on the left by a packet whose last_seq < ack, and which is
+    // neither a reordering nor a retransmission
+    // bounded on the right by a packet whose seq >= ack, and which is not
+    // part of a reordered block
+    
+    // move search_hint forward to right edge
+    while (search_hint && !(SEQ_GEQ(search_hint->seq, ack)
+			    && !(search_hint->flags & Pkt::F_IN_REORDER)))
+	search_hint = search_hint->next;
+
+    // move backwards to left edge
+    Pkt *possible = 0;
+    int possible_goodness = -1;
+    for (Pkt *k = (search_hint ? search_hint->prev : pkt_data_tail);
+	 k && (SEQ_GEQ(k->last_seq, ack)
+	       || (k->flags & (Pkt::F_REORDER | Pkt::F_REXMIT)));
+	 k = k->prev) {
+
+	// a packet with last_seq == ack is definitely the right answer
+	// if it is the first transmission of the relevant data
+	// and there was no later retransmission
+	if (possible_goodness <= 0
+	    && k->last_seq == ack
+	    && (k->flags & Pkt::F_NEW))
+	    return k;
+
+	// skip it if couldn't be an ack
+	if (SEQ_LT(k->last_seq, ack) || SEQ_GEQ(k->seq, ack))
+	    continue;
+
+	// measure goodness == (ack latency fits) + (last_seq == ack)
+	int goodness =
+	    (!have_ack_latency || timestamp - k->timestamp >= min_ack_latency)
+	    + (k->last_seq == ack);
+	// store the best guess so far
+	if (goodness > possible_goodness)
+	    possible = k, possible_goodness = goodness;
     }
-    return potential_answer;
+
+    return possible;
 }
 
 bool
@@ -330,13 +379,40 @@ CalculateFlows::LossBlock::write_xml(FILE *f) const
 }
 
 void
-CalculateFlows::StreamInfo::write_xml(FILE *f) const
+CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
+{
+    fprintf(f, "    <acklatency");
+    if (have_ack_latency)
+	fprintf(f, " minlatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+    fprintf(f, ">\n");
+    
+    const StreamInfo *acks = conn->stream(!direction);
+    Pkt *hint = pkt_head;
+    tcp_seq_t last_ack = (tcp_seq_t) -1;
+    for (Pkt *ack = acks->pkt_head; ack; ack = ack->next)
+	if (ack->ack != last_ack) {
+	    last_ack = ack->ack;
+	    if (Pkt *k = find_acked_pkt(ack->ack, ack->timestamp, hint)) {
+		struct timeval latency = ack->timestamp - k->timestamp;
+		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->last_seq, latency.tv_sec, latency.tv_usec);
+		hint = k;
+	    }
+	}
+    
+    fprintf(f, "    </acklatency>\n");
+}
+
+void
+CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, bool ack_latency) const
 {
     fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
 	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
-    if (loss_trail) {
+    if (loss_trail || (ack_latency && have_ack_latency)) {
 	fprintf(f, ">\n");
-	loss_trail->write_xml(f);
+	if (loss_trail)
+	    loss_trail->write_xml(f);
+	if (ack_latency)
+	    write_ack_latency_xml(conn, f);
 	fprintf(f, "  </stream>\n");
     } else
 	fprintf(f, " />\n");
@@ -361,8 +437,9 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
 	
-	_stream[0].write_xml(f);
-	_stream[1].write_xml(f);
+	_stream[0].write_xml(this, f, cf->write_ack_latency());
+	_stream[1].write_xml(this, f, cf->write_ack_latency());
+	
 	fprintf(f, "</flow>\n");
     }
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
@@ -411,6 +488,8 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	    stream.pkt_tail = stream.pkt_tail->next = np;
 	else
 	    stream.pkt_head = stream.pkt_tail = np;
+	if (np->seq != np->last_seq)
+	    stream.pkt_data_tail = np;
 
 	return np;
     } else
@@ -432,32 +511,26 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	tcp_seq_t ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
 	if (SEQ_GT(ack, ack_stream.max_ack))
 	    ack_stream.max_ack = ack;
+	else if (ack != ack_stream.max_ack)
+	    k->flags |= Pkt::F_ACK_REORDER;
 	
 	// find acked packet
 	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(ack, k->timestamp)) {
-
-	    // output ack match
-	    if (cf->ack_match()) {
-		StringAccum sa;
-		sa << "ackm " << (direction ? '>' : '<') << ' '
-		   << k->timestamp << ' ' << ack << ' '
-		   << acked_pkt->timestamp << ' ' << acked_pkt->last_seq;
-		cf->flow_dumps()->add_note(_aggregate, sa.take_string());
+	    
+	    struct timeval latency = k->timestamp - acked_pkt->timestamp;
+	    if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
+		ack_stream.have_ack_latency = true;
+		ack_stream.min_ack_latency = latency;
 	    }
 	    
-	    struct timeval bounce = k->timestamp - acked_pkt->timestamp;
-	    if (!ack_stream.have_ack_bounce || bounce < ack_stream.min_ack_bounce) {
-		ack_stream.have_ack_bounce = true;
-		ack_stream.min_ack_bounce = bounce;
-	    }
 	    // check whether this acknowledges something in the last loss
 	    // event; if so, we should output the loss event
 	    if (ack_stream.loss.type != NO_LOSS
 		&& SEQ_GT(ack, ack_stream.loss.seq)) {
 		// check for a false loss event: we don't believe the ack
 		// could have seen the retransmitted packet yet
-		if (k->timestamp - ack_stream.loss.end_time < 0.6 * ack_stream.min_ack_bounce
-		    && ack_stream.have_ack_bounce)
+		if (k->timestamp - ack_stream.loss.end_time < 0.6 * ack_stream.min_ack_latency
+		    && ack_stream.have_ack_latency)
 		    ack_stream.loss.type = FALSE_LOSS;
 		ack_stream.output_loss(this, cf);
 	    }
@@ -510,7 +583,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool ack_match = false, ip_id = true;
+    bool acklatency = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
 		    cpOptional,
 		    cpFilename, "output connection info file", &_traceinfo_filename,
@@ -520,7 +593,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element for loss annotations", &tipsd_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element for loss annotations", &tipfd_element,
-		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
+		    "ACKLATENCY", cpBool, "output ack latency XML?", &acklatency,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
         return -1;
@@ -536,8 +609,8 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
 	return errh->error("SUMMARYDUMP must be a ToIPSummaryDump element");
 
-    _ack_match = (ack_match && _tipfd);
     _ip_id = ip_id;
+    _ack_latency = acklatency;
     return 0;
 }
 

@@ -73,10 +73,16 @@ false loss events, and DIRECTION is "C<&gt;>" or "C<&lt;>".
 Boolean. If true, then use IP ID to distinguish network duplicates from
 retransmissions. Default is true.
 
-=item ACK_MATCH
+=item ACKLATENCY
 
-Boolean. If true, then output comments about which packet each ACK matches to
-the FLOWDUMPS element. Default is false.
+Boolean. If true, then output the latencies between data packets and their
+acknowledgements to the TRACEINFO file. This information will be written
+inside an "C<&lt;acklatency&gt;>" XML element as a series of non-XML lines.
+Each line has the format "I<timestamp> I<seq> I<latency>", where I<timestamp>
+is the data packet's timestamp, I<seq> is its last sequence number, and
+I<latency> is the delay between the packet's arrival and its ack's arrival at
+the trace point. These lines will generally be sorted in increasing order of
+I<timestamp>, but that is not guaranteed.
 
 =back
 
@@ -124,7 +130,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
-    bool ack_match() const		{ return _ack_match; }
+    bool write_ack_latency() const	{ return _ack_latency; }
 
     static double float_timeval(const struct timeval &);
     
@@ -139,7 +145,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *_traceinfo_file;
     HandlerCall *_filepos_h;
 
-    bool _ack_match : 1;
+    bool _ack_latency : 1;
     bool _ip_id : 1;
     
     Pkt *_free_pkt;
@@ -168,7 +174,17 @@ struct CalculateFlows::Pkt {
     struct timeval timestamp;	// timestamp of this packet
     uint16_t ip_id;		// IP ID of this packet
 
-    enum Flags { F_NEW = 1, F_REXMIT = 2, F_DUPLICATE = 4, F_REORDER = 8, F_STRANGE = 16, F_PARTIAL_REXMIT = 32, F_KEEPALIVE = 64 };
+    enum Flags {
+	F_NEW = 1,		// packet contains some new data
+	F_REXMIT = 2,		// packet contains some retransmitted data
+	F_FULL_REXMIT = 4,	// retransmitted data corresponds exactly
+				// to an earlier packet
+	F_DUPLICATE = 8,	// packet is a network duplicate
+	F_REORDER = 16,		// packet is reordered
+	F_IN_REORDER = 32,	// packet is part of a reordered block
+	F_KEEPALIVE = 64,	// packet is a keepalive
+	F_ACK_REORDER = 128	// packet's ackno is reordered
+    };
     int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
@@ -200,7 +216,7 @@ struct CalculateFlows::StreamInfo {
     bool have_init_seq : 1;	// have we seen a sequence number yet?
     bool have_syn : 1;		// have we seen a SYN?
     bool have_fin : 1;		// have we seen a FIN?
-    bool have_ack_bounce : 1;	// have we seen an ACK bounce?
+    bool have_ack_latency : 1;	// have we seen an ACK match?
     
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
@@ -224,10 +240,11 @@ struct CalculateFlows::StreamInfo {
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
 
-    struct timeval min_ack_bounce; // minimum time between packet and ACK
+    struct timeval min_ack_latency; // minimum time between packet and ACK
 
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
+    Pkt *pkt_data_tail;		// last packet record with data
 
     // information about the most recent loss event
     LossInfo loss;		// most recent loss event
@@ -240,10 +257,11 @@ struct CalculateFlows::StreamInfo {
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
     void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
     
-    Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
+    Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &, Pkt *search_hint = 0) const;
 
     void output_loss(ConnInfo *, CalculateFlows *);
-    void write_xml(FILE *) const;
+    void write_xml(ConnInfo *, FILE *, bool ack_latency) const;
+    void write_ack_latency_xml(ConnInfo *, FILE *) const;
     
 };
 
@@ -254,6 +272,7 @@ class CalculateFlows::ConnInfo {  public:
 
     uint32_t aggregate() const		{ return _aggregate; }
     const struct timeval &init_time() const { return _init_time; }
+    const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
 
     void handle_packet(const Packet *, CalculateFlows *);
     
