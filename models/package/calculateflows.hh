@@ -112,6 +112,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *stat_file() const		{ return _stat_file; }
     bool absolute_time() const		{ return _absolute_time; }
     bool absolute_seq() const		{ return _absolute_seq; }
+
+    static double float_timeval(const struct timeval &);
     
     typedef BigHashMap<unsigned, LossInfo *> MapLoss;
     
@@ -263,6 +265,20 @@ CalculateFlows::Pkt::init(tcp_seq_t seq_, uint32_t seqlen_, const struct timeval
     type = UNKNOWN;
     event_id = eid_;
     nacks = 0;
+}
+
+inline struct timeval
+operator*(double frac, const struct timeval &tv)
+{
+    double what = frac * (tv.tv_sec + tv.tv_usec / 1e6);
+    int32_t sec = (int32_t)what;
+    return make_timeval(sec, (int32_t)((what - sec) * 1e6));
+}
+
+inline double
+CalculateFlows::float_timeval(const struct timeval &tv)
+{
+    return tv.tv_sec + tv.tv_usec / 1e6;
 }
 
 CLICK_ENDDECLS

@@ -298,7 +298,7 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
     // mark SYN and FIN packets
     if (tcph->th_flags & TH_SYN) {
 	if (stream.have_syn && stream.syn_seq != seq)
-	    click_chatter("different SYN seqnos!"); // XXX report error
+	    click_chatter("%u: different SYN seqnos!", _aggregate); // XXX report error
 	else {
 	    stream.syn_seq = seq;
 	    stream.have_syn = true;
@@ -340,7 +340,8 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		&& SEQ_GT(ack, ack_stream.loss_seq)) {
 		// check for a false loss event: we don't believe the ack
 		// could have seen the retransmitted packet yet
-		if (k->timestamp - ack_stream.loss_end_time < ack_stream.min_ack_bounce)
+		if (k->timestamp - ack_stream.loss_end_time < 0.6 * ack_stream.min_ack_bounce
+		    && ack_stream.have_ack_bounce)
 		    ack_stream.loss_type = FALSE_LOSS;
 		ack_stream.output_loss(this, !direction, cf);
 	    }
