@@ -58,7 +58,7 @@ A ToIPFlowDumps element. If provided, CalculateTCPLossEvents reports loss
 events to that element; they will show up as comments like "C<#LOSSTYPE
 DIRECTION TIME SEQ ENDTIME ENDSEQ>", where LOSSTYPE is "C<loss>" for loss
 events, "C<ploss>" for possible loss events, or "C<floss>" for false loss
-events, and DIRECTION is "C<&gt;>" or "C<&lt;>".
+events, and DIRECTION is "C<E<gt>>" or "C<E<lt>>".
 
 =item SUMMARYDUMP
 
@@ -66,7 +66,7 @@ A ToIPSummaryDump element. If provided, CalculateTCPLossEvents reports loss
 events to that element; they will show up as comments like "C<#ALOSSTYPE
 AGGREGATE DIRECTION TIME SEQ ENDTIME ENDSEQ>", where ALOSSTYPE is "C<aloss>"
 for loss events, "C<aploss>" for possible loss events, or "C<afloss>" for
-false loss events, and DIRECTION is "C<&gt;>" or "C<&lt;>".
+false loss events, and DIRECTION is "C<E<gt>>" or "C<E<lt>>".
 
 =item IP_ID
 
@@ -77,7 +77,7 @@ retransmissions. Default is true.
 
 Boolean. If true, then output the latencies between data packets and their
 acknowledgements to the TRACEINFO file. This information will be written
-inside an "C<&lt;acklatency&gt;>" XML element as a series of non-XML lines.
+inside an "C<E<lt>acklatencyE<gt>>" XML element as a series of non-XML lines.
 Each line has the format "I<timestamp> I<seq> I<latency>", where I<timestamp>
 is the data packet's timestamp, I<seq> is its end sequence number, and
 I<latency> is the delay between the packet's arrival and its ack's arrival at
@@ -99,7 +99,7 @@ guaranteed.
 =item FULLRCVWINDOW
 
 Boolean. If true, then output a list of data packets that fill the receiver's
-advertised window to the TRACEINFO file, inside a "C<&lt;fullrcvwindow&rt;>"
+advertised window to the TRACEINFO file, inside a "C<E<lt>fullrcvwindowE<gt>>"
 XML element. Each line has the format "I<timestamp> I<seq>", where
 I<timestamp> is the packet's timestamp and I<seq> is its end sequence number.
 
@@ -107,7 +107,7 @@ I<timestamp> is the packet's timestamp and I<seq> is its end sequence number.
 
 Boolean. If true, then output a list of data packets that did not appear to be
 delivered to the receiver to the TRACEINFO file, inside a
-"C<&lt;undelivered&gt;>" XML element. Each line has the format "I<timestamp>
+"C<E<lt>undeliveredE<gt>>" XML element. Each line has the format "I<timestamp>
 I<seq>", where I<timestamp> is the packet's timestamp and I<seq> is its end
 sequence number.
 
