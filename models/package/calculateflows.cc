@@ -339,7 +339,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     // skip packets that have causalities already
     // skip packets with old sequence numbers if this is a new ack
     Pkt *k = k_cumack;
-    
+
     while (k
 	   && (!(k->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
 	       || (k->flags & Pkt::F_ACK_CAUSE)
@@ -347,23 +347,50 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	       || (SEQ_GT(k->seq, ackk->ack) && SEQ_GT(ackk->ack, max_ack))))
 	k = k->next;
 
-    // From this point on, we are shifting over packets that might, indeed,
-    // cause ack latencies later, so don't change the stable k_cumack hint.
-
     // Only set k_cumack to the new value if acks were not reordered.
     if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
 	k_cumack = k;
+
+    // From this point on, we are shifting over packets that might, indeed,
+    // cause ack latencies later, so don't change the stable k_cumack hint.
+
+    // If this ack is greater than the last cumulative ack, then it probably
+    // isn't in response to a packet with greater sequence number
+    if (k && ackk->prev && SEQ_GT(ackk->ack, ackk->prev->ack)
+	&& SEQ_GT(k->end_seq, ackk->ack))
+	k = k->next;
     
     // Handle reordering: skip packets that are in a hole.
-    if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE))
-	for (k = k->next;
-	     k && (!(k->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
-		   || (k->flags & Pkt::F_ACK_CAUSE));
-	     k = k->next)
+    if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE)) {
+	// Don't shift forward if the next ack acks this packet (that would be
+	// an impossible reordering situation)
+	Pkt *next_ackk;
+	for (next_ackk = ackk->next; next_ackk && next_ackk->ack == ackk->ack; next_ackk = next_ackk->next)
 	    /* nada */;
+	if (next_ackk && next_ackk->ack == k->end_seq) // Impossible!
+	    k = 0;
+	else
+	    k = k->next;
+    }
 
+    // Shift over impossible packets again
+    while (k && (!(k->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
+		 || (k->flags & Pkt::F_ACK_CAUSE)))
+	k = k->next;
+
+    // If the ack causality is unusually long, check for a later match
+    if (k && ackk->timestamp - k->timestamp >= 5 * min_ack_latency) {
+	Pkt *new_k_cumack = k->next;
+	tcp_seq_t new_max_ack = max_ack;
+	if (SEQ_GT(k->end_seq, new_max_ack))
+	    new_max_ack = k->end_seq;
+	Pkt *new_k = find_ack_cause2(ackk, new_k_cumack, new_max_ack);
+	// Ignore later matches that don't significantly change the delay
+	if (new_k && ackk->timestamp - new_k->timestamp <= 3 * min_ack_latency)
+	    k = new_k;
+    }
+    
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
-	k->flags |= Pkt::F_ACK_CAUSE;
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
 	return k;
@@ -633,6 +660,7 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *conn, FILE *f) con
 	    Pkt *old_hint = hint;
 	    tcp_seq_t max_ack2 = max_ack;
 	    if (Pkt *k = find_ack_cause2(ack, hint, max_ack)) {
+		k->flags |= Pkt::F_ACK_CAUSE;
 		struct timeval latency = ack->timestamp - k->timestamp;
 		fprintf(f, "%ld.%06ld %u %ld.%06ld %ld.%06ld %u %x\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec, old_hint->timestamp.tv_sec, old_hint->timestamp.tv_usec, max_ack2, ack->flags);
 	    }
