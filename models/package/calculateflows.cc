@@ -440,8 +440,11 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 		    && SEQ_GT(k->seq, ackk->prev->ack)) {
 		    // except ignore this heuristic in cases that look like
 		    // delayed acks
-		    if (!(k->prev && SEQ_LEQ(k->prev->seq, ackk->prev->ack)
-			  && SEQ_GEQ(k->end_seq, ackk->ack))) {
+		    if (!(k->prev && ackk->prev->prev
+			  && SEQ_LEQ(k->prev->seq, ackk->prev->ack)
+			  && SEQ_GEQ(k->end_seq, ackk->ack)
+			  && ackk->prev->prev->ack != ackk->prev->ack
+			  && (!ackk->next || ackk->next->ack != ackk->ack))) {
 			k_time_hint = k;
 			ack_jump_end_seq = k->seq;
 		    }
