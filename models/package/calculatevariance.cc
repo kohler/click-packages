@@ -51,7 +51,7 @@ CalculateVariance::initialize(ErrorHandler *)
 Packet *
 CalculateVariance::simple_action(Packet *p)
 {
-    int row = AGGREGATE_ANNO(p);
+    unsigned row = AGGREGATE_ANNO(p);
 
     if ((row<0) || (row>_num_aggregates)) {
 	click_chatter("aggregate %d is bigger than reserved value! counter resized!",row);
@@ -74,7 +74,7 @@ CalculateVariance::simple_action(Packet *p)
 }
 
 double
-CalculateVariance::get_variance(int row)
+CalculateVariance::get_variance(unsigned row)
 {
     if ((row<0)||(row>=_num_aggregates)) {
 	click_chatter("no such aggregate %d!",row);
