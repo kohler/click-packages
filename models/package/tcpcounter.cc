@@ -74,7 +74,7 @@ TCPCounter::simple_action(Packet *p)
 }
 
 void
-TCPCounter::print_connection(TCPConnection &conn, TCPConnectionCounter *c)
+TCPCounter::print_connection(TCPCounter::TCPConnection &conn, TCPCounter::TCPConnectionCounter *c)
 {
     //srcip dstip sport dport starttime endtime bytes_transferred pkts_lost reordered
     printf("%s %s %d %d %ld.%ld %ld.%ld %d %d %d\n",
@@ -85,3 +85,10 @@ TCPCounter::print_connection(TCPConnection &conn, TCPConnectionCounter *c)
 	    c->total_pkts_lost,
 	    c->reordered?1:0);
 }
+
+EXPORT_ELEMENT(TCPCounter);
+
+#include <click/bighashmap.cc>
+#if EXPLICIT_TEMPLATE_INSTANCES
+template class BigHashMap<TCPCounter::TCPConnection, TCPCounter::TCPConnectionCounter>
+#endif

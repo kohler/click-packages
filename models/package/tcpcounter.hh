@@ -21,7 +21,11 @@ class TCPCounter : public Element {
 
     
     class TCPConnection{
+
 	public:
+
+	TCPConnection();
+	~TCPConnection();
 	TCPConnection(IPAddress s, uint32_t sport, IPAddress d, uint32_t dport ) { 
 	    srcip = s; 
 	    srcport = sport; 
@@ -40,10 +44,14 @@ class TCPCounter : public Element {
 		    (dstip == b.dstip) && 
 		    (dstport == b.dstport));
 	}
+
+	
     };
 
     class TCPConnectionCounter{
 	public:
+	TCPConnectionCounter();
+	~TCPConnectionCounter();
 	TCPConnectionCounter(struct timeval stime, unsigned int s):total_pkts_lost(0),reordered(false){
 	    start_time = stime;
 	    start_seqno = s;
@@ -67,8 +75,13 @@ class TCPCounter : public Element {
     tcpcounter_table _hashed_tcpcounters;
 
     Packet *simple_action(Packet *);
-    void print_connection(TCPConnection &, TCPConnectionCounter *);
+    void print_connection(TCPCounter::TCPConnection &, TCPCounter::TCPConnectionCounter *);
 
 };
 
+inline unsigned int hashcode(const TCPCounter::TCPConnection &c) {
+    unsigned int sip = c.srcip.addr();
+    unsigned int dip = c.dstip.addr();
+    return ((sip<<16) + (dip & 0xFFFF));
+}
 #endif
