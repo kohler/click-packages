@@ -14,13 +14,15 @@
 
 #include <limits.h>
 
-CalculateFlows::HalfConnectionInfo::HalfConnectionInfo()
+CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
-      init_seq(0), total_packets(0), total_seq(0)
+      init_seq(0), max_seq(0), max_ack(0), max_live_seq(0), max_loss_seq(0),
+      total_packets(0), total_seq(0), loss_events(0), possible_loss_events(0),
+      lost_packets(0), lost_seq(0)
 {
 }
 
-CalculateFlows::LossInfo::LossInfo(const Packet *p, bool gnuplot, bool eventfiles, const String *outfilenamep)
+CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const String *outfilenamep)
     : _aggregate(AGGREGATE_ANNO(p))
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
@@ -37,21 +39,14 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool gnuplot, bool eventfile
 	timerclear(&_init_time);
 
     // plot variables
-    _gnuplot = (gnuplot && outfilenamep[0] && outfilenamep[1]);
     _eventfiles = (eventfiles && outfilenamep[0] && outfilenamep[1]);
     _outputdir = "./flown" + String(_aggregate);
-    if (_gnuplot || _eventfiles)
+    if (_eventfiles)
 	system("mkdir -p ./" + _outputdir);
 
     // set filenames
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++)
 	_outfilename[i] = _outputdir + "/" + outfilenamep[i];
-	_outfilenameg[i] = _outfilename[i] + "_acks.gp";
-	_outfilenameg[i+2] = _outfilename[i] + "_xmts.gp";
-	_outfilenameg[i+4] = _outfilename[i] + "_levt.gp";
-	_outfilenameg[i+6] = _outfilename[i] + "_plevt.gp";
-	_outfilenameg[i+8] = _outfilename[i] + "_dacks.gp";
-    }
 
     // open files if necessary
     if (_eventfiles)
@@ -60,14 +55,6 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool gnuplot, bool eventfile
 		fclose(f);
 	    else {
 		click_chatter("%s: %s", _outfilename[i].cc(), strerror(errno));
-		return;
-	    }
-    if (_gnuplot)
-	for (int i = 0; i < 10; i++)
-	    if (FILE *f = fopen(_outfilenameg[i].cc(), "w"))
-		fclose(f);
-	    else {
-		click_chatter("%s: %s", _outfilenameg[i].cc(), strerror(errno));
 		return;
 	    }
 }
@@ -83,13 +70,13 @@ CalculateFlows::LossInfo::print_stats()
 	    const char *direction = i ? "B->A" : "A->B";
 	    fprintf(f, "Flow %u direction from %s \n", _aggregate, direction);
 	    fprintf(f, "Total Bytes = [%u]\n", total_seq(i));
-	    fprintf(f, "Total Bytes Lost = [%u]\n", bytes_lost(i));
+	    fprintf(f, "Total Bytes Lost = [%u]\n", lost_seq(i));
 	    fprintf(f, "Total Packets = [%u]  ", total_packets(i));
-	    fprintf(f, "Total Packets Lost = [%u]\n", packets_lost(i));
+	    fprintf(f, "Total Packets Lost = [%u]\n", lost_packets(i));
 	    fprintf(f, "Total Loss Events = [%u]\n", loss_events(i));
 	    fprintf(f, "Total Possible Loss Events = [%u]\n", ploss_events(i));
 	    fprintf(f, "I saw the start(SYN):[%d], I saw the end(FIN):[%d]",
-		    _hc[i].have_syn, _hc[i].have_fin);
+		    _stream[i].have_syn, _stream[i].have_fin);
 	    fclose(f);
 	} else {
 	    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
@@ -110,10 +97,10 @@ CalculateFlows::LossInfo::Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end
 	if (!tbstart.tv_sec && !tbstart.tv_usec) { // We have a partial retransmission ...
 	    for (MapInterval::Iterator iter = ibtime.first(); iter; iter++) {
 		TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
-		if (tinter->start_byte < start_seq && tinter->end_byte > start_seq) {
+		if (SEQ_LT(tinter->start_seq, start_seq) && SEQ_GT(tinter->end_seq, start_seq)) {
 		    return tinter->time;
 		}
-		//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
+		//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_seq, tinter->end_seq);
 	    }
 	    // nothing matches (that cannot be possible unless there is
 	    // reordering)
@@ -143,21 +130,135 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p)
     assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
-    // set timestamp offset
-
     // set TCP sequence number offsets
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
-    if (!_hc[direction].have_init_seq) {
-	_hc[direction].init_seq = ntohl(tcph->th_seq);
-	_hc[direction].have_init_seq = true;
+    if (!_stream[direction].have_init_seq) {
+	_stream[direction].init_seq = ntohl(tcph->th_seq);
+	_stream[direction].have_init_seq = true;
     }
-    if ((tcph->th_flags & TH_ACK) && !_hc[!direction].have_init_seq) {
-	_hc[!direction].init_seq = ntohl(tcph->th_ack);
-	_hc[!direction].have_init_seq = true;
+    if ((tcph->th_flags & TH_ACK) && !_stream[!direction].have_init_seq) {
+	_stream[!direction].init_seq = ntohl(tcph->th_ack);
+	_stream[!direction].have_init_seq = true;
     }
 
     // save everything else for later
+}
+
+
+// Questions for Angelos.
+
+// What does _last_seq mean? It sort of seems to mean "the last sequence
+// number sent by anyone", but that is not robust to reordering, and only
+// calculate_loss_events() used it. (Several people set it.) I'm going to get
+// rid of it, on the theory that calculate_loss_events() is a bad function.
+
+// It looks like all the _prev_diff stuff was left over from the Jitu
+// algorithm. No one uses it in the main algorithm. I got rid of it.
+
+// It looks like no one uses last_ack either. Removed it.
+
+// _doubling and _prev_doubling were only used by calculate_loss_events().
+// Removed them.
+
+// Should max_loss_seq (formerly _upper_wind_seq) contain information about
+// *all prior* loss events, or just the last one before this one?
+
+
+void
+CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen, const struct timeval &time, unsigned paint, ToIPFlowDumps *tipfdp)
+{
+    assert(paint < 2);
+    StreamInfo &stream = _stream[paint];
+
+    // Return if this is new or already-acknowledged data
+    if (SEQ_GEQ(seq + 1, stream.max_seq) // Change to +1 for keep alives
+				// XXX Should be > ?
+	|| SEQ_LEQ(seq + seqlen, stream.max_ack))
+	return;
+
+    // XXX What does this mean?
+    short num_of_rexmt = rexmt[paint].find(seq);
+    if (SEQ_LT(seq, stream.max_loss_seq) && num_of_rexmt <= 0)
+	return;
+
+    // XXX Return if packets are out of order
+    if (_outoforder_pckt)
+	return;
+
+    // If we get this far, it is a new loss event.
+    
+    rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
+
+    // Generate message
+    StringAccum sa;
+    const char *direction = paint ? " < " : " > ";
+    struct timeval time_last_sent = Search_seq_interval(seq, seq+seqlen, paint);	
+    short num_of_acks = _acks[paint].find(seq);
+    bool possible_loss_event; // true if possible loss event
+    if (SEQ_LT(seq + seqlen, stream.max_live_seq)) {
+	possible_loss_event = false;
+	sa << "loss" << direction << time_last_sent << " "
+	   << (seq+seqlen) << " " << time
+	   << " " << stream.max_live_seq << " " << num_of_acks;
+	stream.loss_events++;
+    } else {
+	possible_loss_event = true;
+	sa << "ploss" << direction << time_last_sent << " "
+	   << seq << " " << time
+	   << " " << seqlen << " " << num_of_acks;
+	stream.possible_loss_events++;
+    }
+    tipfdp->add_note(_aggregate, sa.cc());
+
+    if (!possible_loss_event) {
+	printf("We have a loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+	       _aggregate,
+	       time.tv_sec, 
+	       time.tv_usec, 
+	       seq,
+	       num_of_acks);
+    } else {
+	printf("We have a POSSIBLE loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+	       _aggregate,
+	       time.tv_sec, 
+	       time.tv_usec, 
+	       seq,
+	       num_of_acks);
+    }
+    _acks[paint].insert(seq, -10000);
+
+    // We just completed a loss event, so reset max_live_seq and max_loss_seq.
+    stream.max_live_seq = seq + seqlen;
+    if (SEQ_GT(stream.max_seq, stream.max_loss_seq))
+	stream.max_loss_seq = stream.max_seq;
+}
+
+void
+CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigned paint)
+{
+    assert(paint < 2);
+    StreamInfo &stream = _stream[paint];
+    
+    if (SEQ_LT(stream.max_seq + 1, seq) && stream.total_packets) {
+	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, stream.max_seq, seq);
+    }
+    if (SEQ_LT(seq + 1, stream.max_seq) && !_outoforder_pckt) {  // we do a retransmission  (Bytes are lost...)
+	MapS &m_rexmt = rexmt[paint];
+	//	printf("ok:%u:%u",seq,_max_seq[paint]);
+	m_rexmt.insert(seq, m_rexmt.find(seq) + 1);					
+	if (SEQ_LT(seq + seqlen, stream.max_seq)) { // are we transmiting totally new bytes also?
+	    stream.lost_seq += seqlen;
+	    
+	} else { // we retransmit something old but partial
+	    stream.lost_seq += stream.max_seq - seq;
+	}
+	stream.lost_packets++;
+    } else { // this is a first time send event
+	// no loss normal data transfer
+	_outoforder_pckt = false; //reset the indicator
+    }	
+    
 }
 
 void
@@ -168,259 +269,48 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p)
 
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
-    HalfConnectionInfo &hc = _hc[direction];
-    tcp_seq_t seq = ntohl(tcph->th_seq);
+    StreamInfo &stream = _stream[direction];
+    tcp_seq_t seq = ntohl(tcph->th_seq) - stream.init_seq;
     uint32_t seqlen = calculate_seqlen(p->ip_header(), tcph);
 
     // update counters
-    hc.total_packets++;
-    hc.total_seq += seqlen;
+    stream.total_packets++;
+    stream.total_seq += seqlen;
     
     // mark SYN and FIN packets
     if (tcph->th_flags & TH_SYN) {
-	if (hc.have_syn && hc.syn_seq != seq)
+	if (stream.have_syn && stream.syn_seq != seq)
 	    click_chatter("different SYN seqnos!"); // XXX report error
 	else {
-	    hc.syn_seq = seq;
-	    hc.have_syn = true;
+	    stream.syn_seq = seq;
+	    stream.have_syn = true;
 	}
     }
     if (tcph->th_flags & TH_FIN) {
-	if (hc.have_fin && hc.fin_seq != seq + seqlen - 1)
+	if (stream.have_fin && stream.fin_seq != seq + seqlen - 1)
 	    click_chatter("different FIN seqnos!"); // XXX report error
 	else {
-	    hc.fin_seq = seq + seqlen - 1;
-	    hc.have_fin = true;
+	    stream.fin_seq = seq + seqlen - 1;
+	    stream.have_fin = true;
 	}
     }
-}
 
-void
-CalculateFlows::LossInfo::calculate_loss_events(tcp_seq_t seq, unsigned seqlen, const struct timeval &time, unsigned paint)
-{
-    assert(paint < 2);
-    double curr_diff;
-    short int num_of_acks = acks[paint].find(seq);
-    if (seq < _max_seq[paint]) { // then we may have a new event.
-	if (seq < _last_seq[paint]) { // We have a new event ...
-	    timeval time_last_sent = Search_seq_interval(seq, seq + seqlen, paint);	
-	    if (_prev_diff[paint] == 0) { // first time
-		_prev_diff[paint] = timesub(time, time_last_sent);
-		curr_diff = _prev_diff[paint];
-	    } else {
-		_prev_diff[paint] = (_prev_diff[paint] < 0.000001 ? 0.000001 : _prev_diff[paint]);
-		curr_diff = timesub(time,time_last_sent);
-		if ((_doubling[paint] == 32) && (fabs(1-curr_diff/_prev_diff[paint]) < 0.1)) {
-		    printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
-		} else {
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))) {
-			if (_doubling[paint] < 1) {
-			    _doubling[paint] = _prev_doubling[paint];
-			}
-			_doubling[paint] = 2*_doubling[paint];
-		    }
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))) {
-			_prev_doubling[paint] = _doubling[paint];
-			_doubling[paint] = 0;
-		    }
-		}
-	    }					
-	    
-	    if (num_of_acks > 3) { //triple dup.
-		printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-		       time.tv_sec,
-		       time.tv_usec,
-		       seq,
-		       num_of_acks);
-		_loss_events[paint]++;
-		acks[paint].insert(seq, -10000);
-	    } else { 					
-		acks[paint].insert(seq, -10000);
-		_doubling[paint] = (_doubling[paint] < 1 ? 1 : _doubling[paint]);
-		printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-			(log(_doubling[paint])/log(2)),
-			time.tv_sec,
-			time.tv_usec,
-			seq,
-			num_of_acks);
-		_loss_events[paint]++;
-		_prev_diff[paint] = curr_diff;
-	    }
-	}
-    } else { // this is a first time send event
-	if (_max_seq[paint] < _last_seq[paint]) {
-	    _max_seq[paint] = _last_seq[paint];
-	}
-    }	
-    
-}
+    // update max_seq and max_live_seq
+    if (SEQ_GT(seq + seqlen, stream.max_seq))
+	stream.max_seq = seq + seqlen;
+    if (SEQ_GT(seq + seqlen, stream.max_live_seq))
+	stream.max_live_seq = seq + seqlen;
 
-void
-CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, unsigned seqlen, const struct timeval &time, unsigned paint, ToIPFlowDumps *tipfdp)
-{
-    assert(paint < 2);
-    double curr_diff;
-    short int num_of_acks = acks[paint].find(seq);
-    short int  num_of_rexmt = rexmt[paint].find(seq);
-    short int possible_loss_event=0; //0 for loss event 1 for possible loss event
-    //printf("seq:%u ,rexmt: %d\n",seq , num_of_rexmt);
-    if ( ((seq+1) < _max_seq[paint]) && ((seq+seqlen) > _max_ack[paint]) &&  // Change to +1 for keep alives
-	 (seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))) { // then we have a new event.
-	//printf("last_seq[%d]=%u \n",paint,seq );
-	timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
-	if (!_outoforder_pckt) {
-	    rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
-	    StringAccum sa;
-	    String direction = paint ? " < " : " > ";
-	    if (_max_wind_seq[paint] > (seq+seqlen)) {
-		sa << "loss" << direction << time_last_sent << " " <<
-		    (seq+seqlen) << " " << time <<
-		    " " << _max_wind_seq[paint] << " " << num_of_acks;
-		tipfdp->add_note(_aggregate, sa.cc());
-		if (_gnuplot) {
-		    FILE *f = fopen(_outfilenameg[paint+4].cc(), "a");
-		    fprintf(f, "%f %.1f %f %.1f\n",
-			    timeadd(time,time_last_sent)/2.,
-			    (_max_wind_seq[paint]+seq+seqlen)/2.,
-			    timesub(time,time_last_sent)/2.,
-			    (_max_wind_seq[paint]-seq-seqlen)/2.); 
-		    fclose(f);
-		}
-	    } else {
-		possible_loss_event = 1; // possible loss event
-		sa << "ploss" << direction << time_last_sent << " " << seq << " " << time <<
-		    " " << seqlen << " " << num_of_acks  ;
-		tipfdp->add_note(_aggregate, sa.cc());
-		
-		if (_gnuplot) {
-		    FILE *f = fopen(_outfilenameg[paint+6].cc(), "a");
-		    fprintf(f, "%f %.1f %f %.1f\n",
-			    timeadd(time,time_last_sent)/2.,
-			    (double)(seq+seqlen/2.),
-			    timesub(time,time_last_sent)/2.,
-			    seqlen/2.); 
-		    fclose(f);
-		}	
-	    }						
-	    if (_prev_diff[paint] == 0) { //first time
-		_prev_diff[paint] = timesub(time, time_last_sent);
-		curr_diff = _prev_diff[paint];
-	    } else {
-		_prev_diff[paint] = (_prev_diff[paint] < 0.000001 ? 0.000001 : _prev_diff[paint]);
-		curr_diff = timesub(time,time_last_sent);
-		if ((_doubling[paint] == 32) && (fabs(1-curr_diff/_prev_diff[paint]) < 0.1)) {
-		    printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
-		} else {
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))) {
-			if (_doubling[paint] < 1) {
-			    _doubling[paint] = _prev_doubling[paint];
-			}
-			_doubling[paint] = 2*_doubling[paint];
-		    }
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))) {
-			_prev_doubling[paint] = _doubling[paint];
-			_doubling[paint] = 0;
-		    }
-		}
-	    }					
-	    
-	    if (num_of_acks > 3) { //triple dup.
-		if (!possible_loss_event) {
-		    printf("We have a loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-			   _aggregate,
-			   time.tv_sec, 
-			   time.tv_usec, 
-			   seq,
-			   num_of_acks);
-		    _loss_events[paint]++;
-		} else {
-		    printf("We have a POSSIBLE loss Event/CWNDCUT [Triple Dup] in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-			   _aggregate,
-			   time.tv_sec, 
-			   time.tv_usec, 
-			   seq,
-			   num_of_acks);
-		    _p_loss_events[paint]++;
-		}
-		//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",
-		//			time.tv_sec,time.tv_usec,_max_seq[paint]); 
-		acks[paint].insert(seq, -10000);
-	    } else { 					
-		acks[paint].insert(seq, -10000);
-		_doubling[paint] = (_doubling[paint] < 1 ? 1 : _doubling[paint]);
-		if (!possible_loss_event) {
-		    printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-			    (log(_doubling[paint])/log(2)), 
-			    _aggregate,
-			    time.tv_sec, 
-			    time.tv_usec, 
-			    seq,
-			    num_of_acks); 
-		    _loss_events[paint]++;
-		} else{
-		    printf("We have a POSSIBLE loss Event/CWNDCUT [Timeout] of %1.0f in flow %u, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-			   (log(_doubling[paint])/log(2)), 
-			   _aggregate,
-			   time.tv_sec, 
-			   time.tv_usec, 
-			   seq,
-			   num_of_acks); 
-		    _p_loss_events[paint]++;
-		}
-		//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",time.tv_sec,time.tv_usec,seq); 	
-		//	_prev_diff[paint] = curr_diff;
-	    }
-	    _max_wind_seq[paint] = seq; //reset the maximum sequence transmitted in this window
-	    if (_max_seq[paint] > _upper_wind_seq[paint]) {
-		//printf("%u:%u",_last_wind_mseq[paint],_max_seq[paint]);
-		_upper_wind_seq[paint] = _max_seq[paint]; // the window for this event loss
-	    }
-	}
+    // update acknowledgment information for other half-connection
+    StreamInfo &ack_stream = _stream[!direction];
+    if (tcph->th_flags & TH_ACK) {
+	tcp_seq_t ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
+	if (SEQ_GT(ack, ack_stream.max_ack))
+	    ack_stream.max_ack = ack;
+	// XXX what about -100000 ?
+	short &num_acks = _acks[!direction].find_force(ack);
+	num_acks++;
     }
-    
-}
-
-void
-CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, unsigned block_size, unsigned paint)
-{
-    assert(paint < 2);
-    
-    if (((_max_seq[paint]+1) < seq) && (_max_seq[paint] > 0)) {
-	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, _max_seq[paint],seq);
-    }
-    if ((seq+1) < _max_seq[paint] && !_outoforder_pckt) {  // we do a retransmission  (Bytes are lost...)
-	MapS &m_rexmt = rexmt[paint];
-	//	printf("ok:%u:%u",seq,_max_seq[paint]);
-	m_rexmt.insert(seq, m_rexmt.find(seq)+1 );					
-	if (seq + block_size < _max_seq[paint]) { // are we transmiting totally new bytes also?
-	    _bytes_lost[paint] = _bytes_lost[paint] + block_size;
-	    
-	} else { // we retransmit something old but partial
-	    _bytes_lost[paint] = _bytes_lost[paint] + (_max_seq[paint]-seq);
-	    _last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
-	    
-	    if (_max_seq[paint] < _last_seq[paint]) {
-		_max_seq[paint] = _last_seq[paint];
-	    }
-	    if (_max_wind_seq[paint] < _last_seq[paint]) {
-		_max_wind_seq[paint] = _last_seq[paint];
-	    }
-	}
-	_packets_lost[paint]++;
-    } else { // this is a first time send event
-	// no loss normal data transfer
-	_outoforder_pckt = false; //reset the indicator
-	_last_seq[paint] = seq+block_size;  // increase our last sequence to cover new data
-	
-	if (_max_seq[paint] < _last_seq[paint]) {
-	    _max_seq[paint] = _last_seq[paint];
-	}
-	if (_max_wind_seq[paint] < _last_seq[paint]) {
-	    _max_wind_seq[paint] = _last_seq[paint];
-	}
-	
-    }	
-    
 }
 
 void
@@ -433,50 +323,29 @@ CalculateFlows::LossInfo::handle_packet(const Packet *p, ToIPFlowDumps *flowdump
     pre_update_state(p);
 
     int paint = (PAINT_ANNO(p) & 1);
-    MapS &m_acks = acks[!paint];
     MapT &m_tbfirst = time_by_firstseq[paint];
     MapT &m_tblast = time_by_lastseq[paint];
     MapInterval &m_ibtime = inter_by_time[paint];
     
     const click_tcp *tcph = p->tcp_header(); 
-    tcp_seq_t seq = ntohl(tcph->th_seq) - _hc[paint].init_seq;
-    tcp_seq_t ack = ntohl(tcph->th_ack) - _hc[!paint].init_seq;
-    unsigned win = ntohs(tcph->th_win); // requested window size
-    unsigned seqlen = calculate_seqlen(p->ip_header(), tcph);
-    int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
+    tcp_seq_t seq = ntohl(tcph->th_seq) - _stream[paint].init_seq;
+    uint32_t seqlen = calculate_seqlen(p->ip_header(), tcph);
 
     struct timeval ts = p->timestamp_anno() - _init_time;
     
     if (seqlen > 0) {
-	if (_eventfiles)
-	    print_send_event(paint, ts, seq, (seq+seqlen));
-	if (_gnuplot)
-	    gplotp_send_event(paint, ts, (seq+seqlen));
-
 	calculate_loss_events2(seq, seqlen, ts, paint, flowdumps); //calculate loss if any
 	calculate_loss(seq, seqlen, paint); //calculate loss if any
 	m_tbfirst.insert(seq, ts);
-	m_tblast.insert((seq+seqlen), ts);
+	m_tblast.insert(seq + seqlen, ts);
 	TimeInterval ti;
-	ti.start_byte = seq;
-	ti.end_byte = seq + seqlen;
+	ti.start_seq = seq;
+	ti.end_seq = seq + seqlen;
 	ti.time = ts;
 	m_ibtime.insert(total_packets(paint), ti);
     }
 
-    if (ackp) { // check for ACK and update as necessary
-	if (_eventfiles)
-	    print_ack_event(!paint, (seqlen > 0), ts, ack);	
-	if (_gnuplot)
-	    gplotp_ack_event(!paint, (seqlen > 0), ts, ack);	
-
-	if (_max_ack[!paint] < ack)
-	    _max_ack[!paint] = ack;
-	set_last_ack(ack, !paint);
-	m_acks.insert(ack, m_acks.find(ack)+1);
-    }
-
-    // update counters and so forth
+    // update counters, maximum sequence numbers, and so forth
     post_update_state(p);
 }
 
@@ -590,13 +459,13 @@ CalculateFlows::simple_action(Packet *p)
     sa << "ttl " << (int)iph->ip_ttl << ' ';
     sa << "tos " << (int)iph->ip_tos << ' ';
     sa << "length " << ip_len << ' ';
-	 
+    
     switch (iph->ip_p) { 
 	 
       case IP_PROTO_TCP: {
 	  LossInfo *loss = _loss_map.find(aggregate);
 	  if (!loss) {
-	      if ((loss = new LossInfo(p, true, true, _outfilename)))
+	      if ((loss = new LossInfo(p, true, _outfilename)))
 		  _loss_map.insert(aggregate, loss);
 	      else {
 		  click_chatter("out of memory!");
@@ -630,53 +499,6 @@ CalculateFlows::simple_action(Packet *p)
     return p;
 }
 
-void
-CalculateFlows::LossInfo::print_ack_event(unsigned paint, int type, const timeval &tstamp, tcp_seq_t ackseq)
-{
-    assert(paint < 2);
-    if (FILE *f = fopen(_outfilename[paint].cc(), "a")) {
-	if (type == 0) {
-	    fprintf(f, "%ld.%06ld PACK %u\n", tstamp.tv_sec, tstamp.tv_usec,ackseq); 
-	} else {
-	    fprintf(f, "%ld.%06ld ACK %u\n", tstamp.tv_sec, tstamp.tv_usec,ackseq); 
-	}
-	fclose(f);
-    }
-}
-
-void
-CalculateFlows::LossInfo::print_send_event(unsigned paint, const timeval &tstamp, tcp_seq_t startseq, tcp_seq_t endseq)
-{
-    assert(paint < 2);
-    if (FILE *f = fopen(_outfilename[paint].cc(), "a")) {
-	fprintf(f, "%ld.%06ld SEND %u %u\n", tstamp.tv_sec, tstamp.tv_usec, startseq,endseq);
-	fclose(f);
-    }
-}
-
-void
-CalculateFlows::LossInfo::gplotp_ack_event(unsigned paint, int type, const timeval &tstamp, tcp_seq_t ackseq)
-{
-    assert(paint < 2);
-    if (type == 0) {
-	FILE *f = fopen(_outfilenameg[paint].cc(), "a");
-	fprintf(f, "%ld.%06ld %u\n", tstamp.tv_sec, tstamp.tv_usec, ackseq); 
-	fclose(f);
-    } else {
-	FILE *f = fopen(_outfilenameg[paint+8].cc(), "a");
-	fprintf(f, "%ld.%06ld %u\n", tstamp.tv_sec, tstamp.tv_usec,ackseq);
-	fclose(f);
-    }
-}
-
-void
-CalculateFlows::LossInfo::gplotp_send_event(unsigned paint, const timeval &tstamp, tcp_seq_t endseq)
-{
-    FILE *f = fopen(_outfilenameg[paint+2].cc(), "a");
-    fprintf(f, "%ld.%06ld %u\n", tstamp.tv_sec, tstamp.tv_usec, endseq);
-    fclose(f);
-}
-
 void 
 CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
@@ -687,6 +509,70 @@ CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const
 	}
     }
 }
+
+
+
+#if 0
+void
+CalculateFlows::LossInfo::calculate_loss_events(tcp_seq_t seq, uint32_t seqlen, const struct timeval &time, unsigned paint)
+{
+    assert(paint < 2);
+    double curr_diff;
+    short int num_of_acks = acks[paint].find(seq);
+    if (SEQ_LT(seq, _max_seq[paint])) { // then we may have a new event.
+	if (SEQ_LT(seq, _last_seq[paint])) { // We have a new event ...
+	    timeval time_last_sent = Search_seq_interval(seq, seq + seqlen, paint);	
+	    if (_prev_diff[paint] == 0) { // first time
+		_prev_diff[paint] = timesub(time, time_last_sent);
+		curr_diff = _prev_diff[paint];
+	    } else {
+		_prev_diff[paint] = (_prev_diff[paint] < 0.000001 ? 0.000001 : _prev_diff[paint]);
+		curr_diff = timesub(time,time_last_sent);
+		if ((_doubling[paint] == 32) && (fabs(1-curr_diff/_prev_diff[paint]) < 0.1)) {
+		    printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
+		} else {
+		    if ((fabs(2.-curr_diff/_prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))) {
+			if (_doubling[paint] < 1) {
+			    _doubling[paint] = _prev_doubling[paint];
+			}
+			_doubling[paint] = 2*_doubling[paint];
+		    }
+		    if ((fabs(2.-curr_diff/_prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))) {
+			_prev_doubling[paint] = _doubling[paint];
+			_doubling[paint] = 0;
+		    }
+		}
+	    }					
+	    
+	    if (num_of_acks > 3) { //triple dup.
+		printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+		       time.tv_sec,
+		       time.tv_usec,
+		       seq,
+		       num_of_acks);
+		_loss_events[paint]++;
+		acks[paint].insert(seq, -10000);
+	    } else { 					
+		acks[paint].insert(seq, -10000);
+		_doubling[paint] = (_doubling[paint] < 1 ? 1 : _doubling[paint]);
+		printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
+			(log(_doubling[paint])/log(2)),
+			time.tv_sec,
+			time.tv_usec,
+			seq,
+			num_of_acks);
+		_loss_events[paint]++;
+		_prev_diff[paint] = curr_diff;
+	    }
+	}
+    } else { // this is a first time send event
+	if (SEQ_LT(_max_seq[paint], _last_seq[paint])) {
+	    _max_seq[paint] = _last_seq[paint];
+	}
+    }	
+    
+}
+#endif
 
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(CalculateFlows)

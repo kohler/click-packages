@@ -56,12 +56,12 @@ class CalculateFlows : public Element, public AggregateListener { public:
     
     struct TimeInterval {
 	struct timeval time;
-	uint32_t start_byte;
-	uint32_t end_byte;
-	TimeInterval(): start_byte(0), end_byte(0) { }
+	uint32_t start_seq;
+	uint32_t end_seq;
+	TimeInterval(): start_seq(0), end_seq(0) { }
     };
 
-    class HalfConnectionInfo;
+    class StreamInfo;
     class LossInfo;
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
@@ -88,95 +88,44 @@ class CalculateFlows : public Element, public AggregateListener { public:
     
 };
 
-struct CalculateFlows::HalfConnectionInfo {
-    bool have_init_seq : 1;
-    bool have_syn : 1;
-    bool have_fin : 1;
+struct CalculateFlows::StreamInfo {
+    bool have_init_seq : 1;	// have we seen a sequence number yet?
+    bool have_syn : 1;		// have we seen a SYN?
+    bool have_fin : 1;		// have we seen a FIN?
     
-    tcp_seq_t init_seq;		// first sequence number seen, if any
+    tcp_seq_t init_seq;		// first absolute sequence number seen, if any
+				// all other sequence numbers are relative
+    
     tcp_seq_t syn_seq;		// sequence number of SYN, if any
     tcp_seq_t fin_seq;		// sequence number of FIN, if any
+
+    tcp_seq_t max_seq;		// maximum sequence number seen on connection
+    tcp_seq_t max_ack;		// maximum sequence number acknowledged
+
+    tcp_seq_t max_live_seq;	// maximum sequence number seen since last
+				// loss event completed
+    tcp_seq_t max_loss_seq;	// maximum sequence number seen in any loss
+				// event
     
     uint32_t total_packets;	// total number of packets seen (incl. rexmits)
     uint32_t total_seq;		// total sequence space seen (incl. rexmits)
+    
+    uint32_t loss_events;	// number of loss events
+    uint32_t possible_loss_events; // number of possible loss events
 
-    HalfConnectionInfo();
+    uint32_t lost_packets;	// number of packets lost (incl. multiple loss)
+    uint32_t lost_seq;		// sequence space lost
+    
+    StreamInfo();
 };
 
-class CalculateFlows::LossInfo {
-  private:
-    tcp_seq_t _last_seq[2];
-    tcp_seq_t _upper_wind_seq[2];
-    tcp_seq_t _max_wind_seq[2];
-    tcp_seq_t _last_ack[2];
-    tcp_seq_t _max_seq[2];
-    unsigned  _total_bytes[2];
-    unsigned  _bytes_lost[2];
-    unsigned  _packets_lost[2];
-    unsigned  _packets[2];
-    unsigned  _loss_events[2];
-    unsigned  _p_loss_events[2];
-    
-    double _prev_diff[2];
-    short _doubling[2];
-    short _prev_doubling[2];
-    bool _outoforder_pckt;
-
-    String _outputdir;
-    String _outfilename[2];	// Event output files using Jitu format 
-    String _outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
-    // 6,7 for Possible loss Events, 8,9 for Data Acks
-    
-    uint32_t _aggregate;
-
-  public:
-    MapT time_by_firstseq[2];
-    MapT time_by_lastseq[2];
-    MapInterval inter_by_time[2];
-    MapS acks[2];
-    MapS rexmt[2];
-    timeval _init_time;
-    tcp_seq_t _max_ack[2];
-    
-    bool _gnuplot;
-    bool _eventfiles;
+class CalculateFlows::LossInfo {  public:
     
     void init() { 
-	_gnuplot = _eventfiles = false;
-	_init_time.tv_usec = 0;
-	_init_time.tv_sec = 0;
 	_outoforder_pckt = 0;
-	
-	_prev_diff[0] = 0;
-	_doubling[0] = -1;
-	_prev_doubling[0] = 0;
-	_max_ack[0] = 0;
-	_upper_wind_seq[0] = 0;
-	_max_wind_seq[0] = 0;
-	_last_seq[0] = 0;
-	_last_ack[0] = 0;
-	_max_seq[0] = 0;
-	_bytes_lost[0] = 0;
-	_packets_lost[0] = 0;
-	_loss_events[0] = 0;
-	_p_loss_events[0] = 0;
-	
-	_prev_diff[1]=0;
-	_doubling[1] = -1;
-	_prev_doubling[1] = 0;
-	_max_ack[1] = 0;
-	_upper_wind_seq[1] = 0;
-	_max_wind_seq[1] = 0;
-	_last_seq[1] = 0;
-	_last_ack[1] = 0;
-	_max_seq[1] = 0;
-	_bytes_lost[1] = 0;
-	_packets_lost[1] = 0;
-	_loss_events[1] = 0;
-	_p_loss_events[1] = 0;
     }
     
-    LossInfo(const Packet *, bool gnuplot, bool eventfiles, const String *outfilenames);
+    LossInfo(const Packet *, bool eventfiles, const String *outfilenames);
 
     ~LossInfo() {
 	if (_eventfiles)
@@ -210,66 +159,54 @@ class CalculateFlows::LossInfo {
 	return (end_time.tv_sec + start_time.tv_sec) + 0.000001 * (end_time.tv_usec + start_time.tv_usec);
     }
     
-    void calculate_loss_events(tcp_seq_t seq, unsigned seqlen, const timeval &time, unsigned paint);
+    void calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen, const timeval &time, unsigned paint, ToIPFlowDumps *tipfdp);
 
-    void calculate_loss_events2(tcp_seq_t seq, unsigned seqlen, const timeval &time, unsigned paint, ToIPFlowDumps *tipfdp);
-
-    void calculate_loss(tcp_seq_t seq, unsigned block_size, unsigned paint);
+    void calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigned paint);
     
-    void set_last_seq(tcp_seq_t seq, unsigned paint) {
-	assert(paint < 2);
-	_last_seq[paint] = seq;
-    }
-    void set_last_ack(tcp_seq_t ack, unsigned paint) {
-	assert(paint < 2);
-	_last_ack[paint] = ack;
-    }
-    void set_total_bytes(unsigned bytes, unsigned paint){
-	assert(paint < 2);
-	_total_bytes[paint] = bytes;
-    }
-    
-    tcp_seq_t last_seq(unsigned paint) const {
-	assert(paint < 2);
-	return _last_seq[paint];
-    }
-    tcp_seq_t last_ack(unsigned paint) const {
-	assert(paint < 2);
-	return _last_seq[paint];
-    }
     unsigned total_seq(unsigned paint) const {
 	assert(paint < 2);
-	return _hc[paint].total_seq;
+	return _stream[paint].total_seq;
     }
     uint32_t total_packets(unsigned paint) const {
 	assert(paint < 2);
-	return _hc[paint].total_packets;
-    }
-    unsigned bytes_lost(unsigned paint) const {
-	assert(paint < 2);
-	return _bytes_lost[paint];
+	return _stream[paint].total_packets;
     }
     unsigned loss_events(unsigned paint) const {
 	assert(paint < 2);
-	return _loss_events[paint];
+	return _stream[paint].loss_events;
     }
     unsigned ploss_events(unsigned paint) const {
 	assert(paint < 2);
-	return _p_loss_events[paint];
+	return _stream[paint].possible_loss_events;
     }
-    unsigned packets_lost(unsigned paint) const {
+    unsigned lost_packets(unsigned paint) const {
 	assert(paint < 2);
-	return _packets_lost[paint];
+	return _stream[paint].lost_packets;
+    }
+    unsigned lost_seq(unsigned paint) const {
+	assert(paint < 2);
+	return _stream[paint].lost_seq;
     }
 
-    void print_ack_event(unsigned, int, const timeval &, tcp_seq_t);
-    void print_send_event(unsigned, const timeval &, tcp_seq_t, tcp_seq_t);
-    void gplotp_ack_event(unsigned, int, const timeval &, tcp_seq_t);
-    void gplotp_send_event(unsigned, const timeval &, tcp_seq_t);
-
+    //void calculate_loss_events(tcp_seq_t seq, uint32_t seqlen, const timeval &time, unsigned paint);
+    
   private:
 
-    HalfConnectionInfo _hc[2];
+    uint32_t _aggregate;
+    struct timeval _init_time;
+    StreamInfo _stream[2];
+    
+    bool _outoforder_pckt;
+
+    MapT time_by_firstseq[2];
+    MapT time_by_lastseq[2];
+    MapInterval inter_by_time[2];
+    MapS _acks[2];
+    MapS rexmt[2];
+    
+    bool _eventfiles;
+    String _outputdir;
+    String _outfilename[2];	// Event output files using Jitu format 
     
 };
 
