@@ -1360,12 +1360,10 @@ class PlotCanvas:
         x, y, self.wwidth, self.wheight = widget.get_allocation()
         self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
         self.backing_store_updated = False
-
-        # xxx
-        self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
-        
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
+        self._check_tool(0)
+        
     def cmd_expose(self, widget, event):
         if not self.backing_store_updated:
             self.plot()
@@ -1394,9 +1392,12 @@ class PlotCanvas:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff
         else:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff, yy2 * self.sscale + self.soff
-    def _transform_packet(self, p, dir):
+    def _transform_packet(self, p, dir, top=False):
         if dir == self.dir:
-            return self._transform(p.time, p.seq)
+            if top:
+                return self._transform(p.time, p.last_seq)
+            else:
+                return self._transform(p.time, p.seq)
         else:
             return self._transform(p.time, p.ack)
     
@@ -1430,8 +1431,10 @@ class PlotCanvas:
                     self.set_time_range(self.drag_t0 - shift_x)
             elif self.tool == PlotCanvas.TOOL_IDENTIFY:
                 if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None and self.show_tool == PlotCanvas.TOOL_IDENTIFY:
-                    cp = self.closest_packet(x, y, mindist=PlotCanvas.DRAG_MAGNETISM)
-                    if cp is not None: x, y = self._transform_packet(cp[1], cp[2])
+                    dir = None
+                    if self.highlight[4][0] == 'packet': dir = self.highlight[4][2]
+                    cp = self.closest_packet(x, y, mindist=PlotCanvas.DRAG_MAGNETISM, dir=dir)
+                    if cp is not None: x, y = self._transform_packet(cp[1], cp[2], top=True)
                     t, s = self._itransform(x, y, constrain=False)
                     tt, ss = self._itransform(self.press[0], self.press[1])
                     h = ["bandwidth", 0, x, y, self.highlight[4]]
@@ -1483,25 +1486,27 @@ class PlotCanvas:
         return 1
 
     # IDENTIFY tool
-    def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM):
+    def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM, dir=None):
         try:
             t0, t1 = self.get_plotted_time_range()
             t = self._itransform(x0, y0, constrain=False)[0]
             delta = mindist / self.tscale
             found = None; best_dist = mindist ** 2
             tscale, toff, sscale, soff = self.tscale, self.toff, self.sscale, self.soff
-            for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
-                x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
-                dist = (x - x0) ** 2
-                if y0 > y1: dist += (y0 - y1) ** 2
-                elif y0 < y2: dist += (y0 - y2) ** 2
-                if dist < best_dist:
-                    found = ('packet', p, self.dir); best_dist = dist
-            for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
-                x, y = p.time * tscale + toff, p.ack * sscale + soff
-                dist = (x - x0) ** 2 + (y - y0) ** 2
-                if dist < best_dist:
-                    found = ('packet', p, 1 - self.dir); best_dist = dist
+            if dir is None or dir == self.dir:
+                for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
+                    x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
+                    dist = (x - x0) ** 2
+                    if y0 > y1: dist += (y0 - y1) ** 2
+                    elif y0 < y2: dist += (y0 - y2) ** 2
+                    if dist < best_dist:
+                        found = ('packet', p, self.dir); best_dist = dist
+            if dir is None or dir == 1 - self.dir:
+                for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
+                    x, y = p.time * tscale + toff, p.ack * sscale + soff
+                    dist = (x - x0) ** 2 + (y - y0) ** 2
+                    if dist < best_dist:
+                        found = ('packet', p, 1 - self.dir); best_dist = dist
             return found
         except ValueError:
             return None
@@ -1767,8 +1772,8 @@ class PlotFlowWindow:
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH)
         self.toolbar_tools = { }
-        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_toolbar_tool, 0)
-        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_toolbar_tool, 0)
+        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", "", stock_image(gtk.STOCK_YES), self.cmd_toolbar_tool, 0)
+        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", "", stock_image(gtk.STOCK_YES), self.cmd_toolbar_tool, 0)
         toolbar.append_space()
         toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
         toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
