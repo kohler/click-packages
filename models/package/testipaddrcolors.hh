@@ -50,7 +50,7 @@ errors.
 =h details read-only
 
 Returns a string detailing the numbers of packets, bad-color errors,
-bad-color-pair errors, and large colors.
+bad-color-pair errors, and large colors (nonprimary colors).
 
 =a
 
@@ -83,7 +83,6 @@ class TestIPAddrColors : public Element, public IPAddrColors { public:
     uint64_t _n_large_colors;
     bool _verbose;
 
-    void test_error(uint64_t &, const char *, ...);
     static String read_handler(Element *, void *);
     
 };

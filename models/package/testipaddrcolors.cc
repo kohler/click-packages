@@ -65,18 +65,6 @@ TestIPAddrColors::cleanup(CleanupStage)
     IPAddrColors::cleanup();
 }
 
-void
-TestIPAddrColors::test_error(uint64_t &counter, const char *format, ...)
-{
-    counter++;
-    if (_verbose) {
-	va_list val;
-	va_start(val, format);
-	ErrorHandler::default_handler()->verror(ErrorHandler::ERR_ERROR, String(), format, val);
-	va_end(val);
-    }
-}
-
 inline void
 TestIPAddrColors::test(Packet *p)
 {
@@ -90,13 +78,19 @@ TestIPAddrColors::test(Packet *p)
     color_t scolor = color(saddr);
     color_t dcolor = color(daddr);
 
-    if (scolor > MAXCOLOR)
-	test_error(_n_bad_colors, "src %#.0A: bad color %u", saddr, scolor);
-    else if (dcolor > MAXCOLOR)
-	test_error(_n_bad_colors, "dst %#.0A: bad color %u", daddr, dcolor);
-    else if (scolor != (dcolor ^ 1))
-	test_error(_n_bad_pairs, "src %#.0A, dst %#.0A: bad color pair %u, %u", saddr, daddr, scolor, dcolor);
-    else if (scolor >= 2)
+    if (scolor > MAXCOLOR) {
+	_n_bad_colors++;
+	if (_verbose)
+	    ErrorHandler::default_handler()->error("src %s: bad color %u", IPAddress(htonl(saddr)).s().cc(), scolor);
+    } else if (dcolor > MAXCOLOR) {
+	_n_bad_colors++;
+	if (_verbose)
+	    ErrorHandler::default_handler()->error("dst %s: bad color %u", IPAddress(htonl(daddr)).s().cc(), scolor);
+    } else if (scolor != (dcolor ^ 1)) {
+	_n_bad_pairs++;
+	if (_verbose)
+	    ErrorHandler::default_handler()->error("src %s, dst %s: bad color pair %u, %u", IPAddress(htonl(saddr)).s().cc(), IPAddress(htonl(daddr)).s().cc(), scolor, dcolor);
+    } else if (scolor >= 2)
 	_n_large_colors++;
 }
 
