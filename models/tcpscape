@@ -37,7 +37,9 @@ _screen_style = {
 
     "border": LineDescriptor(0.66, 0.66, 0.66),
     "bg": LineDescriptor(1, 1, 1),
-    "label": LineDescriptor(0.66, 0.66, 0.66)
+    "label": LineDescriptor(0.66, 0.66, 0.66),
+
+    "highlight": LineDescriptor(1, 0.9, 0)
     }
 
 _postscript_style = {
@@ -95,6 +97,13 @@ def bisect_with_cmp(list, cmp, lo=0, hi=None):
         if cmp(list[mid]) < 0: hi = mid
         else: lo = mid + 1
     return lo
+
+def union_rectangle(r1, r2):
+    x, y = min(r1[0], r2[0]), min(r1[1], r2[1])
+    return (x, y, max(r1[0] + r1[2], r2[0] + r2[2]) - x, max(r1[1] + r1[3], r2[1] + r2[3]) - y)
+
+def expand_rectangle(r1, v):
+    return (r1[0] - v, r1[1] - v, r1[2] + 2*v, r1[3] + 2*v)
 
 
 class Packet:
@@ -941,10 +950,11 @@ class PlotCanvas_ScreenDrawable:
 
     _gcs = { }
 
-    def __init__(self, plotcanvas):
+    def __init__(self, plotcanvas, immediate=False):
         self.plotcanvas = plotcanvas
         self.playout = None
         self.small_playout = None
+        if immediate: self.drawable = plotcanvas.canvas.window
 
     def gc(self, name):
         if name in PlotCanvas_ScreenDrawable._gcs:
@@ -1010,8 +1020,14 @@ class PlotCanvas_ScreenDrawable:
         if len(l) > 1:
             self.drawable.draw_lines(gc, l)
 
-    def fill_rectangle(self, gc, x1, y1, w, h):
-        self.drawable.draw_rectangle(gc, gtk.TRUE, x1, y1, w, h)
+    def fill_rectangle(self, gc, *args):
+        if len(args) == 1 and len(args[0]) == 4:
+            area = args[0]
+            self.drawable.draw_rectangle(gc, True, area[0], area[1], area[2], area[3])
+        elif len(args) == 4:
+            self.drawable.draw_rectangle(gc, True, args[0], args[1], args[2], args[3])
+        else:
+            raise TypeError("PlotCanvas_Drawable.fill_rectangle() takes 1 or 4 arguments")
 
     def draw_rectangle(self, gc, x1, y1, w, h):
         self.drawable.draw_rectangle(gc, gtk.FALSE, x1, y1, w, h)
@@ -1030,9 +1046,9 @@ class PlotCanvas_ScreenDrawable:
         layout.set_text(text, -1)
         ir, lr = layout.get_extents()
         if anchor == ANCHOR_N:
-            return (x - lr[2]/2048.0, y + 2, x + lr[2]/2048.0, y + 2 + lr[3]/1024.0)
+            return (x - lr[2]/2048.0, y + 2, lr[2]/1024.0, lr[3]/1024.0)
         elif anchor == ANCHOR_E:
-            return (x - 4 - lr[2]/1024.0, y - lr[3]/2048.0, x - 4, y + lr[3]/2048.0)
+            return (x - 4 - lr[2]/1024.0, y - lr[3]/2048.0, lr[2]/1024.0, lr[3]/1024.0)
         else:
             raise RuntimeError("bad anchor " + str(anchor))
 
@@ -1159,9 +1175,9 @@ class PlotCanvas_PostScriptDrawable:
                 s = " L\n"
             self.f.write("stroke\n")
 
-    def fill_rectangle(self, gc, x1, y1, w, h):
+    def fill_rectangle(self, gc, x, y, w, h):
         if self.cur_gc is not gc: self.select_gc(gc)
-        self.f.write(str(x1) + " " + str(self.top - y1 - h) + " " + str(w) + " " + str(h) + " rf\n")
+        self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rf\n")
 
     def draw_rectangle(self, gc, x1, y1, w, h):
         if self.cur_gc is not gc: self.select_gc(gc)
@@ -1181,9 +1197,9 @@ class PlotCanvas_PostScriptDrawable:
     def text_extents(self, font, text, x, y, anchor=ANCHOR_N):
         lr = font.extents(text)
         if anchor == ANCHOR_N:
-            return (x - lr[2]/2.0, y + 2, x + lr[2]/2.0, y + 2 + lr[3])
+            return (x - lr[2]/2.0, y + 2, lr[2], lr[3])
         elif anchor == ANCHOR_E:
-            return (x - 4 - lr[2], y - lr[3]/2.0, x - 4, y + lr[3]/2.0)
+            return (x - 4 - lr[2], y - lr[3]/2.0, lr[2], lr[3])
         else:
             raise RuntimeError("bad anchor " + str(anchor))
 
@@ -1210,6 +1226,9 @@ class PlotCanvas:
     TOOL_IDENTIFY = 5
     _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "")
 
+    DRAG_STICKINESS = 5
+    IDENTIFY_MAGNETISM = 15
+    
     # initialization
     def __init__(self, master, width=600, height=500):
         self.canvas = gtk.DrawingArea()
@@ -1225,7 +1244,7 @@ class PlotCanvas:
         self.canvas.connect("key_press_event", self.cmd_check_state_focus)
         self.canvas.connect("key_release_event", self.cmd_check_state_focus)
         self.canvas.connect("enter_notify_event", self.cmd_check_state)
-        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.BUTTON1_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
+        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
         master.pack_start(self.canvas, expand=1, fill=1)
         self.canvas.show()
@@ -1237,7 +1256,7 @@ class PlotCanvas:
         self.plotted = False
         self.press_x = None
         self.press_state = 0
-        self.tool = PlotCanvas.TOOL_HAND
+        self.tool = PlotCanvas.TOOL_IDENTIFY
         self.show_tool = PlotCanvas.TOOL_NONE
         self.begin = 0
         self.end = 1000000000.0
@@ -1245,6 +1264,8 @@ class PlotCanvas:
         self.backing_store = None
         self.backing_store_updated = False
 
+        self.highlight = None
+        
         self.adjustment = gtk.Adjustment()
         self.adjustment.connect("value_changed", self.adj_value_changed)
         self.adjusting = False
@@ -1267,6 +1288,7 @@ class PlotCanvas:
     # setting properties
     def set_flowref(self, fref, keeptime=False):
         self.conn, self.dir = fref.conn, fref.dir
+        self.highlight = None
         if keeptime:
             self.plot()
         else:
@@ -1283,6 +1305,7 @@ class PlotCanvas:
         if interval is None: interval = self.end - self.begin
         self.end = min(max(begin, 0) + interval, true_end)
         self.begin = max(min(begin, self.end - interval), 0)
+        self.highlight = None
         if self.plotted: self.plot()
 
         # now, emit changed values onto the adjustment
@@ -1325,8 +1348,15 @@ class PlotCanvas:
         if not self.backing_store_updated:
             self.plot()
         else:
+            self.expose_rectangle(event.area)
+        if self.highlight is not None:
+            self.draw_highlight()
+    def expose_rectangle(self, area):
+        x, y, w, h = area
+        if not self.backing_store_updated:
+            self.plot()
+        elif w > 0 and h > 0:
             gc = self.canvas.get_style().black_gc
-            x, y, w, h = event.area
             self.canvas.window.draw_drawable(gc, self.backing_store, x, y, x, y, w, h)
 
     def _itransform(self, x, y, constrain=True):
@@ -1334,6 +1364,13 @@ class PlotCanvas:
             return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
         else:
             raise ValueError
+    def _transform(self, xx, yy, yy2=None):
+        if not self.plotted:
+            raise ValueError
+        elif yy2 is None:
+            return xx * self.tscale + self.toff, yy * self.sscale + self.soff
+        else:
+            return xx * self.tscale + self.toff, yy * self.sscale + self.soff, yy2 * self.sscale + self.soff
     
     def cmd_press(self, widget, event):
         if event.button == 1:
@@ -1348,16 +1385,18 @@ class PlotCanvas:
         self.grab_focus()
         return 1
     def cmd_motion(self, widget, event):
+        x, y, state = widget.window.get_pointer()
         try:
             if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press_x is not None:
-                x, y, state = widget.window.get_pointer()
-                if self.stuck and (abs(self.press_x - x) > 5):
+                if self.stuck and (abs(self.press_x - x) > PlotCanvas.DRAG_STICKINESS):
                     self.stuck = False
                     self.drag_t0 = self.get_plotted_time_range()[0]
                     self.drag_tscale = self.tscale
                 if not self.stuck:
                     shift_x = (x - self.press_x) / self.drag_tscale
                     self.set_time_range(self.drag_t0 - shift_x)
+            elif self.show_tool == PlotCanvas.TOOL_IDENTIFY:
+                self.set_highlight(self.closest_packet(x, y))
         except ValueError:
             pass
         return 1
@@ -1397,6 +1436,29 @@ class PlotCanvas:
         self._check_tool(widget.window.get_pointer()[2])
         self.grab_focus()
         return 1
+
+    # IDENTIFY tool
+    def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM):
+        try:
+            t = self._itransform(x0, y0)[0]
+            delta = mindist / self.tscale
+            found = None; best_dist = mindist ** 2
+            tscale, toff, sscale, soff = self.tscale, self.toff, self.sscale, self.soff
+            for p in self.conn.packets(self.dir, t - delta, t + delta):
+                x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
+                dist = (x - x0) ** 2
+                if y0 < y1: dist += (y0 - y1) ** 2
+                elif y0 > y2: dist += (y0 - y2) ** 2
+                if dist < best_dist:
+                    found = ('packet', p, self.dir); best_dist = dist
+            for p in self.conn.packets(1 - self.dir, t - delta, t + delta):
+                x, y = p.time * tscale + toff, p.ack * sscale + soff
+                dist = (x - x0) ** 2 + (y - y0) ** 2
+                if dist < best_dist:
+                    found = ('packet', p, 1 - self.dir); best_dist = dist
+            return found
+        except ValueError:
+            return None
 
     # drawing helpers
     def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, layout):
@@ -1491,7 +1553,7 @@ class PlotCanvas:
                 if p.dup_acks > 0 and (p.ack != last_dupack or x < last_dupack_x):
                     text = str(p.dup_acks + 1)
                     extents = drawable.text_extents(small_playout, text, x, y, anchor=ANCHOR_N)
-                    if p.ack != last_dupack or extents[2] < last_dupack_x:
+                    if p.ack != last_dupack or extents[0] + extents[2] < last_dupack_x:
                         drawable.draw_text(border_gc, small_playout, text, x, y, anchor=ANCHOR_N)
                         last_dupack = p.ack
                         last_dupack_x = extents[0] - 4
@@ -1519,6 +1581,64 @@ class PlotCanvas:
             self.plotted = False
 
         drawable.complete()
+
+
+    # higlights
+    def _highlight_bounds(self):
+        if self.highlight is None:
+            return (0, 0, 0, 0)
+        elif self.highlight[0] == 'packet':
+            p, dir = self.highlight[1:]
+            if dir == self.dir:
+                x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+                return (x - 5, y2 - 5, 10, y1 - y2 + 10)
+            elif p.dup_acks > 0:
+                x, y = self._transform(p.time, p.ack)
+                small_playout = drawable.layout("small")
+                
+            else:
+                x, y = self._transform(p.time, p.ack)
+                return (x - 5, y - 5, 10, 10)
+        else:
+            return (0, 0, 0, 0)
+    def draw_highlight(self):
+        if self.highlight is None:
+            return
+        elif self.highlight[0] == 'packet':
+            p, dir = self.highlight[1:]
+            drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+            gc = drawable.gc("highlight")
+
+            if dir == self.dir:
+                x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+                hb = (x - 5, y2 - 5, 10, y1 - y2 + 10)
+                drawable.fill_rectangle(gc, hb)
+                drawable.draw_data(drawable.gc("data.highlight"), x, y1, y2)
+            else:
+                x, y = self._transform(p.time, p.ack)
+                hb = (x - 5, y - 5, 10, 10)
+                if p.dup_acks > 0:
+                    layout = drawable.layout("small")
+                    hb = union_rectangle(hb, expand_rectangle(drawable.text_extents(layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N), 2))
+                drawable.fill_rectangle(gc, hb)
+                if p.pure_ack():
+                    drawable.draw_ack(drawable.gc("ack.highlight"), x, y)
+                else:
+                    drawable.draw_dataack(drawable.gc("dataack.highlight"), x, y)
+                if p.dup_acks > 0:
+                    drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
+            
+            self.highlight_bounds = hb
+            
+    def erase_highlight(self):
+        if self.highlight is not None:
+            self.expose_rectangle(self.highlight_bounds)
+    def set_highlight(self, highlight):
+        if self.highlight is not highlight:
+            self.erase_highlight()
+            self.highlight = highlight
+            self.draw_highlight()
+
 
 class PlotFlowWindow:
     
