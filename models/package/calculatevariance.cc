@@ -38,8 +38,8 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 
     if (bits) {
 	_num_aggregates_bits = naggregates;
-	if (naggregates > 28)
-	    return errh->error("too many aggregates! max 2^28");
+	if (naggregates > 32)
+	    return errh->error("too many aggregates! max 2^32");
 	_num_aggregates = 1 << naggregates;
     } else {
 	_num_aggregates = naggregates;
@@ -92,7 +92,7 @@ CalculateVariance::simple_action(Packet *p)
 	    for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
 		CalculateVariance::CounterEntry e = iter.value();
 		e.pkt_sum += e.pkt_sum_interval;
-		e.pkt_sum_sq += e.pkt_sum_interval * e.pkt_sum_interval;
+		e.pkt_sum_sq += (double)e.pkt_sum_interval * e.pkt_sum_interval;
 		e.pkt_sum_interval = 0;
 	    }
 
@@ -116,7 +116,7 @@ CalculateVariance::simple_action(Packet *p)
 	if(timercmp(&p->timestamp_anno(),&_end_time,>)) {
 	    for (int i=0;i<_counters.size();i++) {
 		_counters[i].pkt_sum += _counters[i].pkt_sum_interval;
-		_counters[i].pkt_sum_sq += _counters[i].pkt_sum_interval * _counters[i].pkt_sum_interval;
+		_counters[i].pkt_sum_sq += (double)_counters[i].pkt_sum_interval * _counters[i].pkt_sum_interval;
 		_counters[i].pkt_sum_interval = 0;
 	    }
 
@@ -163,11 +163,11 @@ CalculateVariance::print_all_variance()
     if (_use_hash) {
 	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
 	    CounterEntry e = iter.value();
-	    printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",iter.key(),variance(iter.key()),_num_intervals,e.pkt_sum,e.pkt_sum_sq,e.pkt_count);
+	    printf("agg no: %d var: %E num intevals: %d pkt_sum %d pkt_sum_sq %f pkt_count %d\n",iter.key(),variance(iter.key()),_num_intervals,e.pkt_sum,e.pkt_sum_sq,e.pkt_count);
 	}
     }else{ 
 	for (int i=0;i<_counters.size();i++) {
-	    printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",i,variance(i),_num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq,_counters[i].pkt_count);
+	    printf("agg no: %d var: %E num intevals: %d pkt_sum %d pkt_sum_sq %f pkt_count %d\n",i,variance(i),_num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq,_counters[i].pkt_count);
 	}
     }
 }
@@ -212,13 +212,10 @@ CalculateVariance::print_edf_function()
 	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
 	    permutation[i] = iter.key();
 	    CounterEntry ent = iter.value();
-	    printf("key %d perm %d val %d\n",iter.key(),permutation[i],ent.pkt_count);
 	    i++;
 	}
 	assert(i < _num_aggregates);
-	printf("perm %d\n",permutation[0]);
 	qsort(permutation,i, sizeof(unsigned), &pktsorter);
-        printf("perm %d\n",permutation[0]);
 
     }else{
 	permutation = new unsigned[_num_aggregates];
@@ -294,7 +291,8 @@ calculatevariance_read_variance_handler(Element *e, void *thunk)
 {
     CalculateVariance *cv = (CalculateVariance *)e;
     int row = (int)thunk;
-    return String(cv->variance(row)) + "\n";
+    return "\n";
+    //return String(cv->variance(row)) + "\n";
 }
 
 static String
