@@ -30,7 +30,6 @@ class TCPCollector : public Element, public AggregateListener { public:
     struct StreamInfo;
     class ConnInfo;
     struct Pkt;
-    enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
@@ -39,6 +38,13 @@ class TCPCollector : public Element, public AggregateListener { public:
     enum WriteFlags { WR_FULLRCVWND = 4, WR_WINDOWPROBE = 16, WR_PACKETS = 32 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
+    // XML writing functions
+    int add_trace_xmlattr(const String &attrname, const String &value);
+    typedef String (*ConnectionXMLAttrHook)(const ConnInfo &, const String &attrname, void *thunk);
+    int add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook, void *thunk);
+    typedef String (*StreamXMLAttrHook)(const ConnInfo &, const StreamInfo &, const String &attrname, void *thunk);
+    int add_stream_xmlattr(const String &attrname, StreamXMLAttrHook, void *thunk);
+    
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
@@ -57,6 +63,21 @@ class TCPCollector : public Element, public AggregateListener { public:
     Element *_packet_source;
     int _write_flags;
 
+    // XML hooks
+    Vector<String> _trace_xmlattr_name;
+    Vector<String> _trace_xmlattr_value;
+
+    struct XMLHook {
+	String name;
+	union {
+	    ConnectionXMLAttrHook connection;
+	    StreamXMLAttrHook stream;
+	} hook;
+	void *thunk;
+    };
+    Vector<XMLHook> _conn_xmlattr;
+    Vector<XMLHook> _stream_xmlattr;
+    
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
     inline void free_pkt_list(Pkt *, Pkt *);
