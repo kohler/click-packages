@@ -11,7 +11,7 @@ class Histogram;
 /*
 =c
 
-MultiQ([I<keyword> TCPCOLLECTOR, RAWTIMESTAMP])
+MultiQ([I<keywords> TCPCOLLECTOR, RAW_TIMESTAMP, MIN_SCALE])
 
 =s
 
@@ -36,10 +36,15 @@ Keywords are:
 
 The name of a TCPCollector element.
 
-=item RAWTIMESTAMP
+=item RAW_TIMESTAMP
 
 Boolean.  If true, then input packet timestamps are used raw (MultiQ will not
 calculate interarrivals).  Default is false.
+
+=item MIN_SCALE
+
+Real number.  The initial scale to use in the MultiQ algorithm.  Default is 10
+microseconds.
 
 =back
 
@@ -47,6 +52,12 @@ calculate interarrivals).  Default is false.
 
 Returns capacities inferred from the current set of packet interarrivals.
 Only available if MultiQ has an input.
+
+=h ack_capacities read-only
+
+Returns capacities inferred from the current set of packet interarrivals,
+assuming that these packet interarrivals are acks.  Only available if MultiQ
+has an input.
 
 =e
 
@@ -74,6 +85,7 @@ class MultiQ : public Element { public:
     Packet *simple_action(Packet *);
 
     // calculate capacities
+    enum MultiQType { MQ_DATA, MQ_ACK };
     struct Capacity {
 	double scale;
 	double ntt;
@@ -86,10 +98,10 @@ class MultiQ : public Element { public:
 	double common_bandwidth52;
 	const char *common_bandwidth52_name;
 
-	Capacity(double scale_, double ntt_);
+	Capacity(MultiQType, double scale_, double ntt_);
     };
-    void run(Vector<double> &interarrivals, Vector<Capacity> &out) const;
-    				// also sorts 'interarrivals'
+    void run(MultiQType, Vector<double> &interarrivals /* sorted on return */,
+	     Vector<Capacity> &out) const;
 
     // common bandwidths
     struct BandwidthSpec {
@@ -120,9 +132,9 @@ class MultiQ : public Element { public:
     enum { NBANDWIDTH_SPEC = 10 };
     static const BandwidthSpec bandwidth_spec[NBANDWIDTH_SPEC];
 
-    double modes2ntt(const Histogram &, const Vector<int> &modes) const;
-    double adjust_max_scale(const double *begin, const double *end, double tallest_mode_min_scale) const;
-    void create_capacities(const double *begin, const double *end, Vector<Capacity> &) const;
+    double modes2ntt(MultiQType, const Histogram &, const Vector<int> &modes) const;
+    double adjust_max_scale(MultiQType, const double *begin, const double *end, double tallest_mode_min_scale) const;
+    void create_capacities(MultiQType, const double *begin, const double *end, Vector<Capacity> &) const;
     void filter_capacities(Vector<Capacity> &) const;
     
     bool significant_flow(const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn) const;

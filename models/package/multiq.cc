@@ -57,10 +57,14 @@ MultiQ::closest_common_bandwidth(double bandwidth)
     return 0;
 }
 
-MultiQ::Capacity::Capacity(double scale_, double ntt_)
-    : scale(scale_), ntt(ntt_),
-      bandwidth(1500*8 / ntt_), bandwidth52(52*8 / ntt_)
+MultiQ::Capacity::Capacity(MultiQType type, double scale_, double ntt_)
+    : scale(scale_), ntt(ntt_)
 {
+    if (type == MQ_DATA)
+	bandwidth = 1500*8 / ntt, bandwidth52 = 52*8 / ntt;
+    else
+	bandwidth = 1552*8 / ntt, bandwidth52 = 52*8 / ntt;
+    
     if (const BandwidthSpec *bw = closest_common_bandwidth(bandwidth)) {
 	common_bandwidth = bw->bandwidth;
 	common_bandwidth_name = bw->name;
@@ -93,13 +97,19 @@ struct ModeProbCompar {
 //                   //
 
 double
-MultiQ::modes2ntt(const Histogram &h, const Vector<int> &modes) const
+MultiQ::modes2ntt(MultiQType type, const Histogram &h, const Vector<int> &modes) const
 {
     Vector<double> gaps;
 
     double last_x = 0;		// insert artificial mode at 0
     double min_gap = 1e15;
-    for (const int *m = modes.begin(); m < modes.end(); m++) {
+
+    // Ignore the leftmost mode if we're looking at acks
+    const int *modes_begin = modes.begin();
+    if (type == MQ_ACK)
+	last_x = h.mode_pos(*modes_begin), modes_begin++;
+    
+    for (const int *m = modes_begin; m < modes.end(); m++) {
 	double x = h.mode_pos(*m);
 	if (x >= 0) {
 	    double gap = x - last_x;
@@ -131,7 +141,7 @@ MultiQ::modes2ntt(const Histogram &h, const Vector<int> &modes) const
 }
 
 double
-MultiQ::adjust_max_scale(const double *begin, const double *end, double tallest_mode_min_scale) const
+MultiQ::adjust_max_scale(MultiQType type, const double *begin, const double *end, double tallest_mode_min_scale) const
 {
     double next_scale = tallest_mode_min_scale / 2.;
     
@@ -141,14 +151,19 @@ MultiQ::adjust_max_scale(const double *begin, const double *end, double tallest_
     Vector<int> next_modes;
     hh.modes(SIGNIFICANCE, MIN_POINTS, next_modes);
 
-    int *tallest_ptr = std::max_element(next_modes.begin(), next_modes.end(), ModeProbCompar(hh));
+    // Ignore the leftmost mode if we're looking at acks.
+    int *next_modes_start = next_modes.begin();
+    if (type == MQ_ACK)
+	next_modes_start++;
+    
+    int *tallest_ptr = std::max_element(next_modes_start, next_modes.end(), ModeProbCompar(hh));
     double tallest_mode_next_scale = (tallest_ptr < next_modes.end() ? hh.mode_pos(*tallest_ptr) : -1);
 
     return std::min(std::max(tallest_mode_min_scale, tallest_mode_next_scale), MAX_SCALE);
 }
 
 void
-MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacity> &capacities) const
+MultiQ::create_capacities(MultiQType type, const double *begin, const double *end, Vector<Capacity> &capacities) const
 {
     // remove too-large values
     while (end > begin && end[-1] >= INTERARRIVAL_CUTOFF)
@@ -184,7 +199,13 @@ MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacit
 
 	    // adjust max_scale
 	    if (!max_scale_adjusted) {
-		max_scale = adjust_max_scale(begin, end, h.mode_pos(max_prob_mode));
+		// If we're looking at acks, then we want to ignore the
+		// leftmost mode when adjusting max_scale.
+		int max_prob_mode2 = max_prob_mode;
+		if (type == MQ_ACK && max_prob_mode == 0)
+		    max_prob_mode2 = *std::max_element(modes.begin() + 1, modes.end(), ModeProbCompar(h));
+		
+		max_scale = adjust_max_scale(type, begin, end, h.mode_pos(max_prob_mode2));
 		max_scale_adjusted = true;
 	    }
 	    
@@ -206,7 +227,7 @@ MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacit
 	    // last capacity mode
 	    double ntt = h.mode_pos(modes[0]);
 	    if ((ntt - last_ntt) / (ntt + last_ntt) > MODES_SIMILAR)
-		capacities.push_back(Capacity(scale, ntt));
+		capacities.push_back(Capacity(type, scale, ntt));
 	    break;
 
 	} else if (modes.size() == 2 && scale < MAX_SCALE/4) {
@@ -222,7 +243,7 @@ MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacit
 	    // first mode if it is pretty large probability
 	    if (h1 > 0.25*h2
 		&& (x1 - last_ntt) / (x1 + last_ntt) > MODES_SIMILAR) {
-		capacities.push_back(Capacity(scale, x1));
+		capacities.push_back(Capacity(type, scale, x1));
 		last_ntt = x1;
 	    }
 
@@ -236,15 +257,15 @@ MultiQ::create_capacities(const double *begin, const double *end, Vector<Capacit
 				// at a distance
 		     && (x2 - x1) < 3*x1)) // not extremely far away
 		&& (x2 - last_ntt) / (x2 + last_ntt) > MODES_SIMILAR) {
-		capacities.push_back(Capacity(scale, x2));
+		capacities.push_back(Capacity(type, scale, x2));
 	    }
 
 	    break;
 
 	} else {
-	    double ntt = modes2ntt(h, modes);
+	    double ntt = modes2ntt(type, h, modes);
 	    if (ntt >= 0 && (ntt - last_ntt) / (ntt + last_ntt) > MODES_SIMILAR) {
-		capacities.push_back(Capacity(scale, ntt));
+		capacities.push_back(Capacity(type, scale, ntt));
 		last_ntt = ntt;
 		scale = std::max(ntt, scale) * SCALE_STEP;
 	    } else
@@ -275,10 +296,10 @@ MultiQ::filter_capacities(Vector<Capacity> &capacities) const
 }
 
 void
-MultiQ::run(Vector<double> &interarrivals, Vector<Capacity> &capacities) const
+MultiQ::run(MultiQType type, Vector<double> &interarrivals, Vector<Capacity> &capacities) const
 {
     std::sort(interarrivals.begin(), interarrivals.end());
-    create_capacities(interarrivals.begin(), interarrivals.end(), capacities);
+    create_capacities(type, interarrivals.begin(), interarrivals.end(), capacities);
     filter_capacities(capacities);
 }
 
@@ -323,7 +344,8 @@ MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
 		    "TCPCOLLECTOR", cpElement, "TCPCollector", &e,
-		    "RAWTIMESTAMP", cpBool, "use raw timestamps?", &raw_timestamp,
+		    "RAW_TIMESTAMP", cpBool, "use raw timestamps?", &raw_timestamp,
+		    "MIN_SCALE", cpDouble, "minimum scale", &MIN_SCALE,
 		    0) < 0)
 	return -1;
     if (e) {
@@ -362,7 +384,7 @@ MultiQ::multiqcapacity_xmltag(FILE *f, const TCPCollector::StreamInfo &stream, c
 
 	// run MultiQ
 	Vector<Capacity> capacities;
-	mq->run(interarrivals, capacities);
+	mq->run(significant ? MQ_DATA : MQ_ACK, interarrivals, capacities);
 
 	// print results
 	for (Capacity *c = capacities.begin(); c < capacities.end(); c++)
@@ -389,14 +411,14 @@ MultiQ::simple_action(Packet *p)
 }
 
 String
-MultiQ::read_capacities(Element *e, void *)
+MultiQ::read_capacities(Element *e, void *thunk)
 {
     MultiQ *mq = static_cast<MultiQ *>(e);
     StringAccum sa;
     sa << "    w     NTT (us)  1500-BW    40-BW (1500-BW) (40-BW)\n";
     
     Vector<Capacity> capacities;
-    mq->run(mq->_thru_interarrivals, capacities);
+    mq->run(thunk ? MQ_ACK : MQ_DATA, mq->_thru_interarrivals, capacities);
 
     for (Capacity *c = capacities.begin(); c < capacities.end(); c++)
 	sa.snprintf(1024, "%6.1f %9.3f  %8.3f %8.3f %8.3f %8.3f\n",
@@ -409,8 +431,10 @@ MultiQ::read_capacities(Element *e, void *)
 void
 MultiQ::add_handlers()
 {
-    if (ninputs() > 0)
+    if (ninputs() > 0) {
 	add_read_handler("capacities", read_capacities, 0);
+	add_read_handler("ack_capacities", read_capacities, (void *)1);
+    }
 }
 
 
