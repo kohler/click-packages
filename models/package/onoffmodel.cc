@@ -10,6 +10,12 @@ OnOffModel::OnOffModel()
     : Element(1,1)
 {
     MOD_INC_USE_COUNT;
+
+    _start_time.tv_sec = 0;
+    _start_time.tv_usec = 0;
+
+    _end_time.tv_sec = 0;
+    _end_time.tv_usec = 0;
 }
 
 OnOffModel::~OnOffModel()
@@ -34,14 +40,27 @@ OnOffModel::simple_action(Packet *p)
 {
 
     IPAddress useraddr;
- 
-    //currently, this ON OFF Model only access web traffic and it assumes the non-80 port corresponds to a user
+
+    if (_start_time.tv_sec == 0) {
+	_start_time = p->timestamp_anno();
+    }
+
+    _end_time = p->timestamp_anno();
+
+    //currently, this ON OFF Model only access web traffic 
+    //and it assumes the non-80 port corresponds to a user
     const click_ip *iph = p->ip_header();
     const click_tcp *tcph = p->tcp_header();
-    if (tcph->th_sport == 80) {
-	useraddr = IPAddress(iph->ip_src);
-    }else{
+    unsigned short sport = ntohs(tcph->th_sport);
+    unsigned short dport = ntohs(tcph->th_dport);
+    
+    if (sport == 80) {
 	useraddr = IPAddress(iph->ip_dst);
+    }else{
+	if (dport!=80) {
+	    printf("source port %d destination port %d\n",sport,dport);
+	}
+	useraddr = IPAddress(iph->ip_src);
     }
 
     OnOffConnCounter *c = _hashed_counters.findp(useraddr);
@@ -49,6 +68,7 @@ OnOffModel::simple_action(Packet *p)
 	OnOffConnCounter newc = OnOffConnCounter(p->timestamp_anno(),1,p->length());
 	_hashed_counters.insert(useraddr,newc);
     }else {
+	c->total_user_bytes += (double)p->length();
 	struct timeval timeexpire;	
 	timeradd( &c->end_time, &_max_silence_int, &timeexpire);
 	if (timercmp(&timeexpire, &p->timestamp_anno(), >)) {
@@ -61,10 +81,13 @@ OnOffModel::simple_action(Packet *p)
 	    timersub(&c->end_time,&c->start_time, &diff);
 	    double duration = diff.tv_sec + 0.000001 * diff.tv_usec;
 	    double on_throughput = c->byte_counts/duration;
-	    
-	    c->total_on_throughput += on_throughput;
-	    c->total_on_transfers++;
-	    c->total_on_throughput_sqr += on_throughput*on_throughput;
+	  
+	    if (duration > 2) {
+		c->total_on_duration += duration;
+		c->total_on_throughput += on_throughput;
+		c->total_on_transfers++;
+		c->total_on_throughput_sqr += on_throughput*on_throughput;
+	    }
 
 	    //collect the previous OFF period statistics
 	    timersub(&p->timestamp_anno(), &c->end_time, &diff);
@@ -102,18 +125,26 @@ OnOffModel::write_file(String where, ErrorHandler *errh) const
     double avg_off_duration;
     double var_off_duration;
 
+    struct timeval diff;
+    timersub(&_end_time, &_start_time, &diff);
+    double total_trace_time = diff.tv_sec + 0.000001 * diff.tv_usec;
+
     for (onoff_countertable::Iterator iter = _hashed_counters.first(); iter; iter++) {
 
 	IPAddress addr = (IPAddress) iter.key();
 	OnOffConnCounter c = iter.value();
+    
+	if ((c.total_on_transfers ==0 ) || (c.total_off_times == 0)) {
+	    continue;
+	}
 
 	avg_on_throughput = c.total_on_throughput/c.total_on_transfers;
 	var_on_throughput = c.total_on_throughput_sqr/c.total_on_transfers - (avg_on_throughput * avg_on_throughput);
 	avg_off_duration = c.total_off_duration/c.total_off_times;
 	var_off_duration = c.total_off_duration_sqr/c.total_off_times - (avg_off_duration * avg_off_duration);
 
-	fprintf(f,"%s %.2f %.2f %.2f %.2f\n", addr.s().cc(),
-		avg_on_throughput,var_on_throughput,avg_off_duration,var_off_duration);
+	fprintf(f,"%s %.2f %.2f %d %.2f %.2f %.2f %d %.2f %.2f\n", addr.s().cc(), c.total_user_bytes, total_trace_time, c.total_on_transfers, c.total_on_duration,
+		avg_on_throughput,var_on_throughput,c.total_off_times, avg_off_duration, var_off_duration);
     }
 }
 

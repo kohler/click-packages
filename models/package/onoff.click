@@ -1,8 +1,8 @@
 require(aggregates);
 
-FromDump("-",STOP true,FORCE_IP true)
+FromTUSummaryLog("-",STOP true)
     -> allpktcount::Counter()
-    -> classifier::IPClassifier(tcp and port 80,-);
+    -> classifier::IPClassifier(tcp port 80,-);
 
 classifier[0]
     -> webpktcount::Counter()

@@ -23,14 +23,15 @@ class OnOffModel : public Element {
 	public:
 	OnOffConnCounter() {}
 	OnOffConnCounter(struct timeval stime, unsigned int pkt_c, unsigned int byte_c)
-	    : total_on_throughput(0.0),total_on_throughput_sqr(0.0),total_on_transfers(0),
-	      total_off_duration(0.0),total_off_duration_sqr(0.0),total_off_times(0) 
+	    : total_on_duration(0.0), total_on_throughput(0.0),total_on_throughput_sqr(0.0),total_on_transfers(0),
+	      total_off_duration(0.0),total_off_duration_sqr(0.0),total_off_times(0)
 	{
 
 	    start_time = stime;
 	    end_time = stime;
 	    pkt_counts = pkt_c;
 	    byte_counts = byte_c;
+	    total_user_bytes = byte_c;
 
 	}
 
@@ -39,6 +40,7 @@ class OnOffModel : public Element {
 	unsigned int pkt_counts;
 	unsigned int byte_counts;
 
+	double total_on_duration;
 	double total_on_throughput;
 	double total_on_throughput_sqr;
 	unsigned int total_on_transfers;
@@ -46,6 +48,7 @@ class OnOffModel : public Element {
 	double total_off_duration;
 	double total_off_duration_sqr;
 	unsigned int total_off_times;
+	double total_user_bytes;
 
     };
 
@@ -56,6 +59,9 @@ class OnOffModel : public Element {
     Packet *simple_action(Packet *);
     int write_file(String,ErrorHandler *) const;
     int write_file_handler(const String &,Element *, void *, ErrorHandler *);
+
+    struct timeval _start_time;
+    struct timeval _end_time;
 
 };
 
