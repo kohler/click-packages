@@ -1599,15 +1599,17 @@ class PlotCanvas_ScreenDrawable:
 
     def fill_rectangle(self, gc, *args):
         if len(args) == 1 and len(args[0]) == 4:
-            area = args[0]
-            self.drawable.draw_rectangle(gc, True, area[0], area[1], area[2], area[3])
+            x, y, w, h = args[0]
         elif len(args) == 4:
-            self.drawable.draw_rectangle(gc, True, args[0], args[1], args[2], args[3])
+            x, y, w, h = args
         else:
             raise TypeError("PlotCanvas_Drawable.fill_rectangle() takes 1 or 4 arguments")
+        if w > 0 and h > 0:
+            self.drawable.draw_rectangle(gc, True, x, y, w, h)
 
-    def draw_rectangle(self, gc, x1, y1, w, h):
-        self.drawable.draw_rectangle(gc, gtk.FALSE, x1, y1, w, h)
+    def draw_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.drawable.draw_rectangle(gc, gtk.FALSE, x, y, w, h)
 
     def anchor_offset(self, anchor):
         return self.ANCHOR_OFFSET[anchor][0:2]
@@ -1847,11 +1849,13 @@ class PlotCanvas_PostScriptDrawable:
 
     def fill_rectangle(self, gc, x, y, w, h):
         if self.cur_gc is not gc: self.select_gc(gc)
-        self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rf\n")
+        if w > 0 and h > 0:
+            self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rf\n")
 
-    def draw_rectangle(self, gc, x1, y1, w, h):
+    def draw_rectangle(self, gc, x, y, w, h):
         if self.cur_gc is not gc: self.select_gc(gc)
-        self.f.write(str(x1) + " " + str(self.top - y1 - h) + " " + str(w) + " " + str(h) + " rd\n")
+        if w > 0 and h > 0:
+            self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rd\n")
 
     def anchor_offset(self, anchor):
         return self.ANCHOR_OFFSET[anchor][0:2]
