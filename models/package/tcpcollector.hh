@@ -148,7 +148,6 @@ class TCPCollector : public Element, public AggregateListener { public:
     struct Pkt;
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
-    HandlerCall *filepos_h() const	{ return _filepos_h; }
 
 #if TCPCOLLECTOR_XML
     // XML writing functions
@@ -160,17 +159,21 @@ class TCPCollector : public Element, public AggregateListener { public:
     typedef void (*StreamXMLTagHook)(FILE *f, const StreamInfo &, const ConnInfo &, const String &tagname, void *thunk);
     int add_stream_xmltag(const String &tagname, StreamXMLTagHook, void *thunk);
 #endif
+
+    // add space for other elements
+    int add_pkt_space(unsigned);
     
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
     
     ConnMap _conn_map;
-
-    bool _ip_id : 1;
-    
     Pkt *_free_pkt;
-    Vector<Pkt *> _pkt_bank;
+    
+    int _pkt_size;
+    bool _ip_id : 1;
+
+    Vector<char *> _pktbuf_bank;
 
     HandlerCall *_filepos_h;
     Element *_packet_source;
@@ -201,6 +204,8 @@ class TCPCollector : public Element, public AggregateListener { public:
     
     int add_xmlattr(Vector<XMLHook> &, const XMLHook &);
 #endif
+    
+    int add_space(unsigned space, int &size);
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);

@@ -42,11 +42,12 @@ TCPCollector::Pkt *
 TCPCollector::new_pkt()
 {
     if (!_free_pkt)
-	if (Pkt *pkts = new Pkt[1024]) {
-	    _pkt_bank.push_back(pkts);
-	    for (int i = 0; i < 1024; i++) {
-		pkts[i].next = _free_pkt;
-		_free_pkt = &pkts[i];
+	if (char *pktbuf = new char[_pkt_size * 1024]) {
+	    _pktbuf_bank.push_back(pktbuf);
+	    for (int i = 0; i < 1024; i++, pktbuf += _pkt_size) {
+		Pkt *p = reinterpret_cast<Pkt *>(pktbuf);
+		p->next = _free_pkt;
+		_free_pkt = p;
 	    }
 	}
     if (!_free_pkt)
@@ -558,7 +559,8 @@ TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream,
 /*******************************/
 
 TCPCollector::TCPCollector()
-    : Element(1, 1), _free_pkt(0), _filepos_h(0), _packet_source(0)
+    : Element(1, 1), _free_pkt(0), _pkt_size(sizeof(Pkt)),
+      _filepos_h(0), _packet_source(0)
 #if TCPCOLLECTOR_XML
     , _traceinfo_file(0)
 #endif
@@ -569,8 +571,8 @@ TCPCollector::TCPCollector()
 TCPCollector::~TCPCollector()
 {
     MOD_DEC_USE_COUNT;
-    for (int i = 0; i < _pkt_bank.size(); i++)
-	delete[] _pkt_bank[i];
+    for (int i = 0; i < _pktbuf_bank.size(); i++)
+	delete[] _pktbuf_bank[i];
     delete _filepos_h;
 }
 
@@ -578,6 +580,26 @@ void
 TCPCollector::notify_noutputs(int n)
 {
     set_noutputs(n <= 1 ? 1 : 2);
+}
+
+int
+TCPCollector::add_space(unsigned space, int &size)
+{
+    if (space == 0)
+	return size;
+    else if (space >= 0x1000000 || (int)(space + size) < 0 || _pktbuf_bank.size())
+	return -1;
+    else {
+	int offset = size;
+	size = (size + space + 7) % 8;
+	return offset;
+    }
+}
+
+int
+TCPCollector::add_pkt_space(unsigned space)
+{
+    return add_space(space, _pkt_size);
 }
 
 int 
@@ -705,7 +727,6 @@ TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const P
 	    kill_conn(conn);
 	}
 }
-
 
 
 
