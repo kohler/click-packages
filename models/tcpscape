@@ -2,7 +2,6 @@
 
 from __future__ import generators
 import sys, os, re, types, string, struct, gzip, array
-sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat, getopt
@@ -1131,7 +1130,8 @@ except KeyError:\n\
     # general reading
     def read_process(self, filename, f=None, filepos=None, endtime=None):
         # open file, get its size
-        if f is None: f = file(filename, "rb")
+        if f is None:
+            f = file(filename, "rb")
         try:
             f.seek(0, 2)
             self.file_size = f.tell()
@@ -1177,6 +1177,7 @@ class FlowSet:
     READ_TRACE = 1
     READ_ACKCAUSALITY = 2
     READ_UNDELIVERED = 3
+    READ_PACKET = 4
 
     def __init__(self):
         self.conns = []
@@ -1284,7 +1285,7 @@ class FlowSet:
                 if "filepos" in attrs: filepos = long(attrs["filepos"])
             if "duration" in attrs and "begin" in attrs:
                 endtime = float(attrs["begin"]) + float(attrs["duration"])
-            self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=True)
+            self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=(self.reading_tracefile is not None))
             self.append(self.reading_connection)
         elif name == 'stream' and self.reading_connection is not None:
             try:
@@ -1299,10 +1300,13 @@ class FlowSet:
                 self.reading_connection.loss[self.reading_direction].append(LossEvent(type, t0, s0, t1, s1))
             except KeyError:
                 pass
-        elif name == 'ackcausality' and self.reading_direction is not None:
+        elif (name == 'ackcausality' or name == 'ackcausation') and self.reading_direction is not None:
             self.reading_state = FlowSet.READ_ACKCAUSALITY
         elif name == 'undelivered' and self.reading_direction is not None:
             self.reading_state = FlowSet.READ_UNDELIVERED
+        elif name == 'packet' and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_PACKET
+            self.reading_connection.available = True
 
     def _end_element(self, name):
         if name == 'trace':
@@ -1311,13 +1315,15 @@ class FlowSet:
             self.reading_connection = None
         elif name == 'flow':
             self.reading_direction = None
-        elif name == 'ackcausality' and self.reading_state == FlowSet.READ_ACKCAUSALITY:
+        elif (name == 'ackcausality' or name == 'ackcausation') and self.reading_state == FlowSet.READ_ACKCAUSALITY:
             self.reading_state = FlowSet.READ_TRACE
         elif name == 'undelivered' and self.reading_state == FlowSet.READ_UNDELIVERED:
             self.reading_state = FlowSet.READ_TRACE
+        elif name == 'packet' and self.reading_state == FlowSet.READ_PACKET:
+            self.reading_state = FlowSet.READ_TRACE
 
     def _char_data(self, data):
-        if self.reading_state != FlowSet.READ_ACKCAUSALITY and self.reading_state != FlowSet.READ_UNDELIVERED:
+        if self.reading_state != FlowSet.READ_ACKCAUSALITY and self.reading_state != FlowSet.READ_UNDELIVERED and self.reading_state != FlowSet.READ_PACKET:
             return
         if self.reading_lastline is not None:
             data = self.reading_lastline + data
@@ -1338,6 +1344,13 @@ class FlowSet:
                 x = line.split()
                 if len(x) >= 2:
                     undelivered.append(float(x[0]))
+        elif self.reading_state == FlowSet.READ_PACKET:
+            c = self.reading_connection
+            dir = self.reading_direction
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 4:
+                    c.append(dir, Packet(float(x[0]), 0, int(x[1]), int(x[2]), int(x[3]), 0))
 
     def _flow_sorter(a, b):
         return int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
