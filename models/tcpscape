@@ -1113,10 +1113,10 @@ class PostScriptFont:
   1 index /FID ne {def} {pop pop} ifelse\n\
 } forall\n\
 /Encoding[StandardEncoding aload pop]dup 45/minus put def\n\
-currentdict end /" + self.name + ".tcpplot exch definefont pop\n")
+currentdict end /" + self.name + ".TCPscape exch definefont pop\n")
 
     def write_select(self, f):
-        f.write("/" + self.name + ".tcpplot " + str(self.size) + " selectfont\n")
+        f.write("/" + self.name + ".TCPscape " + str(self.size) + " selectfont\n")
 
     def height(self):
         return self.capheight
@@ -1205,7 +1205,7 @@ class PlotCanvas_PostScriptDrawable:
             self.top = papersize[1]
         
         f.write("%!PS-Adobe-3.0" + (eps and " EPSF-3.0" or "") + "\n\
-%%Creator: LCDF tcpplot\n\
+%%Creator: LCDF TCPscape\n\
 %%LanguageLevel: 2\n\
 %%Pages: 1\n")
         bbx, bby = int(self.bounds[0]) - 3, int(self.top - self.bounds[1] - self.bounds[3]) - 3
@@ -1219,7 +1219,7 @@ class PlotCanvas_PostScriptDrawable:
             f.write(" " + `papersize[0]` + " " + `papersize[1]` + " 75 white ()\n")
         f.write("%%EndComments\n\
 %%BeginProlog\n\
-%%BeginProcSet: LCDF-tcpplot 1.0 0\n")
+%%BeginProcSet: LCDF-TCPscape 1.0 0\n")
         self.FONT().write_define(f)
         self.LEGEND_FONT().write_define(f)
         f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
@@ -1885,7 +1885,7 @@ class PrintOptionsDialog:
         self.options = options
         self.parent = parent
         
-        self.dialog = dialog = gtk.Dialog(title='tcpplot Print', parent=parentw, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+        self.dialog = dialog = gtk.Dialog(title='TCPscape Print', parent=parentw, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
         self.dialog.set_border_width(10)
         dialog.vbox.set_spacing(10)
         label_group = gtk.SizeGroup(gtk.SIZE_GROUP_HORIZONTAL)
@@ -2037,7 +2037,7 @@ class PlotFlowWindow:
         
         self.window = win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
-        win.set_title("tcpplot")
+        win.set_title("TCPscape")
 
         vbox = gtk.VBox()
         win.add(vbox)
@@ -2116,7 +2116,7 @@ class PlotFlowWindow:
         self.next_flow_button = toolbar.append_item("Next", "Switch to next flow", "", stock_image(gtk.STOCK_GO_FORWARD), self.cmd_next_flow, 0)
         toolbar.append_item("Swap", "Show the other flow of this connection", "", file_image("double_arrow_small.png"), self.cmd_swap_dir, 0)
         toolbar.append_space()
-        toolbar.append_item("Print", "Print to current printer or file", "", stock_image(gtk.STOCK_PRINT), self.cmd_print, 0)
+        toolbar.append_item("Print", "Print using default settings", "", stock_image(gtk.STOCK_PRINT), self.cmd_print, 0)
         vbox.pack_start(toolbar, 0, 0)
         toolbar.show()
 
