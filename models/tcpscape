@@ -61,6 +61,8 @@ _postscript_style = {
     "label": LineDescriptor(0, 0, 0)
     }
 
+_print_options = None
+
 
 def frange(start, stop, step):
     i = 0
@@ -1413,6 +1415,8 @@ class PlotCanvas:
     
     def cmd_press(self, widget, event):
         if event.button == 1:
+            self.press_state = event.state | gtk.gdk.BUTTON1_MASK
+            self._check_tool(self.press_state)
             try:
                 if self.show_tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
                     self.press = self._transform_packet(self.highlight[1], self.highlight[2], top=True)
@@ -1424,8 +1428,6 @@ class PlotCanvas:
             except ValueError:
                 self.press = None
             self.stuck = True
-            self.press_state = event.state | gtk.gdk.BUTTON1_MASK
-            self._check_tool(self.press_state)
         self.grab_focus()
         return 1
     def cmd_motion(self, widget, event):
@@ -1708,6 +1710,58 @@ class PlotCanvas:
         self.highlight_hooks.append(f)
 
 
+class PrintOptionsDialog:
+
+    PRINTER = 0
+    FILE = 1
+    EPSFILE = 2
+
+    def __init__(self, parent):
+        dialog = gtk.Dialog(title='tcpplot Print Options', parent=parent, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+        frame = gtk.Frame(label='Printer')
+        dialog.vbox.pack_start(frame)
+        table = gtk.Table(rows=3, columns=3)
+        table.set_row_spacings(5); table.set_col_spacings(7); table.set_border_width(5)
+        frame.add(table)
+
+        l = gtk.Label("Print To:"); l.set_alignment(1, 0.5)
+        table.attach(l, 0, 1, 0, 1)
+        l = gtk.Label("File:"); l.set_alignment(1, 0.5)
+        table.attach(l, 0, 1, 1, 2)
+        l = gtk.Label("Color:"); l.set_alignment(1, 0.5)
+        table.attach(l, 0, 1, 2, 3)
+
+        b = gtk.HBox(False, 10)
+        table.attach(b, 1, 2, 0, 1)
+        self.w_dest = [gtk.RadioButton(group=None, label='Printer')]
+        b.pack_start(self.w_dest[0], False, False)
+        self.w_dest.append(gtk.RadioButton(group=self.w_dest[0], label='File'))
+        b.pack_start(self.w_dest[1], False, False)
+        self.w_dest.append(gtk.RadioButton(group=self.w_dest[0], label='EPS File'))
+        b.pack_start(self.w_dest[2], False, False)
+        for i in range(3):
+            self.w_dest[i].connect("toggled", self.dest_toggled, i) 
+
+        b = gtk.HBox(False, 10)
+        table.attach(b, 1, 2, 2, 3)
+        r1 = gtk.RadioButton(group=None, label='Color')
+        b.pack_start(r1, False, False)
+        r = gtk.RadioButton(group=r1, label='Grayscale')
+        b.pack_start(r, False, False)
+
+        self.w_file = gtk.Entry()
+        table.attach(self.w_file, 1, 2, 1, 2)
+        
+        dialog.show_all()
+
+    def set_dest(self, where):
+        self.w_file.set_sensitive(where != self.PRINTER)
+
+    def dest_toggled(self, widget, data=None):
+        if widget.get_active():
+            self.set_dest(data)
+
+
 class PlotFlowWindow:
     
     def __init__(self, fset):
@@ -1715,7 +1769,7 @@ class PlotFlowWindow:
         self.flowid = None
         self.flowref = None
         
-        win = gtk.Window()
+        self.window = win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
         win.set_title("tcpplot")
 
@@ -1753,7 +1807,8 @@ class PlotFlowWindow:
             ( "/_File",         None,         None, 0, "<Branch>" ),
    	    ( "/File/_Open",    "<control>O", None, 0, None ),
    	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
-            ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
+            ( "/File/Print",    "<control>P", self.cmd_print, 0, "<StockItem>", gtk.STOCK_PRINT ),
+            ( "/File/Print Options...", "<control><shift>P", self.cmd_print_options, 0, None ),
    	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, "<StockItem>", gtk.STOCK_QUIT ),
             ( "/_Tools",	None,		None, 0, "<Branch>" ),
@@ -1850,10 +1905,13 @@ class PlotFlowWindow:
         self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, f))
         f.close()
         
-    def cmd_zoom_in(self, widget, event):
+    def cmd_print_options(self, widget, event):
+        PrintOptionsDialog(self.window)
+        
+    def cmd_zoom_in(self, widget, event, data=None):
         self.canvas.zoom(factor=0.75)
 
-    def cmd_zoom_out(self, widget, event):
+    def cmd_zoom_out(self, widget, event, data=None):
         self.canvas.zoom(factor=1.25)
 
     def cmd_zoom_fit(self, widget, event):
