@@ -124,24 +124,28 @@ CalculateCapacity::StreamInfo::findpeaks()
     double *logs;
     double *slopes;
     uint32_t j;
-    uint32_t n = pkt_cnt;
+    uint32_t n;
     uint32_t slopelen;
 
     logs = new double[pkt_cnt];
     slopes = new double[pkt_cnt];
     
     //printf("pktcnt %d\n", pkt_cnt);
-    for(j = 0; j < pkt_cnt; j++){
-	struct timeval *t = &(intervals[j].interval);
+    for(j = 0, n = 0; j < pkt_cnt; j++){
+	struct IntervalStream *i = intervals + j;
+	struct timeval *t = &(i->interval);
 	if(t->tv_sec == 0 && t->tv_usec == 0){
-	    n--;
 	    continue;
 	}
-	logs[j - pkt_cnt + n] = log(float_timeval(*t));
+	if(i->size < 500 && i->newack < 500){
+	    continue;
+	}
+	logs[n] = log(float_timeval(*t));
+	n++;
 	//printf("%d %f\n", j - pkt_cnt + n, logs[j - pkt_cnt + n]);
     }
 
-    slopelen = (uint32_t) 0.01 * n;
+    slopelen = (uint32_t) (0.01 * n);
     if(slopelen < 1) {
 	slopelen = 1;
     }
@@ -168,8 +172,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 		//end of peak here
 		peak->right = j-1;
 		uint32_t cint = (peak->right + peak->left)/2;
-		peak->center =
-		    float_timeval(intervals[cint + pkt_cnt - n].interval);
+		peak->center = exp(logs[cint]);
 		peaks.push_back(peak);
 		inpeak = false;
 		peak = new Peak;
@@ -194,8 +197,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	//end peak here
 	peak->right = n-1;
 	uint32_t cint = (peak->right + peak->left)/2;
-	peak->center =
-	    float_timeval(intervals[cint + pkt_cnt - n].interval);
+	peak->center = exp(logs[cint]);
 
 	peaks.push_back(peak);
     } else {
