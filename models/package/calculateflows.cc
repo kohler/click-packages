@@ -105,7 +105,7 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
 }
 
 void
-CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, ToIPFlowDumps *td)
+CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, CalculateFlows *cf)
 {
     assert(direction < 2);
     if (loss_type != NO_LOSS) {
@@ -122,12 +122,18 @@ CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, 
 	    loss_type_str = "floss";
 	    false_loss_events++;
 	}
-	StringAccum sa;
-	sa << loss_type_str << direction_str << loss_time
-	   << ' ' << loss_seq << ' ' << loss_end_time
-	   << ' ' << loss_last_seq << ' ' << '0'; // XXX nacks
-	printf("# %u %s\n", aggregate, sa.cc());
-	td->add_note(aggregate, sa.take_string());
+	if (cf->flow_dumps()) {
+	    StringAccum sa;
+	    sa << loss_type_str << direction_str << loss_time
+	       << ' ' << loss_seq << ' ' << loss_end_time
+	       << ' ' << loss_last_seq << ' ' << '0'; // XXX nacks
+	    cf->flow_dumps()->add_note(aggregate, sa.take_string());
+	}
+	if (cf->loss_file())
+	    fprintf(cf->loss_file(), "%s %u%s%ld.%06ld %u %ld.%06ld %u\n",
+		    loss_type_str, aggregate, direction_str,
+		    loss_time.tv_sec, loss_time.tv_usec, loss_seq,
+		    loss_end_time.tv_sec, loss_end_time.tv_usec, loss_last_seq);
 	loss_type = NO_LOSS;
     }
 }
@@ -135,7 +141,7 @@ CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, 
 
 // LOSSINFO
 
-CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const String *outfilenamep)
+CalculateFlows::LossInfo::LossInfo(const Packet *p)
     : _aggregate(AGGREGATE_ANNO(p))
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
@@ -147,64 +153,26 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const Strin
 	_init_time = p->timestamp_anno() - make_timeval(0, 1);
     else
 	timerclear(&_init_time);
-
-    // plot variables
-    _eventfiles = (eventfiles && outfilenamep[0] && outfilenamep[1]);
-    _outputdir = "./flown" + String(_aggregate);
-    if (_eventfiles)
-	system("mkdir -p ./" + _outputdir);
-
-    // set filenames
-    for (int i = 0; i < 2; i++)
-	_outfilename[i] = _outputdir + "/" + outfilenamep[i];
-
-    // open files if necessary
-    if (_eventfiles)
-	for (int i = 0; i < 2; i++)
-	    if (FILE *f = fopen(_outfilename[i].cc(), "w"))
-		fclose(f);
-	    else {
-		click_chatter("%s: %s", _outfilename[i].cc(), strerror(errno));
-		return;
-	    }
 }
 
 void
-CalculateFlows::LossInfo::kill(CalculateFlows *f)
+CalculateFlows::LossInfo::kill(CalculateFlows *cf)
 {
-    _stream[0].output_loss(_aggregate, 0, f->tipfd());
-    _stream[1].output_loss(_aggregate, 1, f->tipfd());
-    f->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
-    f->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
-    if (_eventfiles)
-	print_stats();
-    delete this;
-}
-
-void
-CalculateFlows::LossInfo::print_stats()
-{
-    if (!_eventfiles)
-	return;
-    for (int i = 0; i < 2; i++) {
-	String outfilenametmp = _outfilename[i] + ".stats";
-	if (FILE *f = fopen(outfilenametmp.cc(), "w")) {
-	    const char *direction = i ? "B->A" : "A->B";
-	    fprintf(f, "Flow %u direction from %s \n", _aggregate, direction);
-	    fprintf(f, "Total Bytes = [%u]\n", total_seq(i));
-	    fprintf(f, "Total Bytes Lost = [%u]\n", lost_seq(i));
-	    fprintf(f, "Total Packets = [%u]  ", total_packets(i));
-	    fprintf(f, "Total Packets Lost = [%u]\n", lost_packets(i));
-	    fprintf(f, "Total Loss Events = [%u]\n", loss_events(i));
-	    fprintf(f, "Total Possible Loss Events = [%u]\n", ploss_events(i));
-	    fprintf(f, "I saw the start(SYN):[%d], I saw the end(FIN):[%d]",
-		    _stream[i].have_syn, _stream[i].have_fin);
-	    fclose(f);
-	} else {
-	    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-	    return;
-	}
+    _stream[0].output_loss(_aggregate, 0, cf);
+    _stream[1].output_loss(_aggregate, 1, cf);
+    cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
+    cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
+    if (cf->stat_file()) {
+	fprintf(cf->stat_file(), "%u 0\t%u\t%u\t%u\t%u\t%u\n",
+		_aggregate, _stream[0].total_packets, _stream[0].total_seq,
+		_stream[0].loss_events, _stream[0].possible_loss_events,
+		_stream[0].false_loss_events);
+	fprintf(cf->stat_file(), "%u 1\t%u\t%u\t%u\t%u\t%u\n",
+		_aggregate, _stream[1].total_packets, _stream[1].total_seq,
+		_stream[1].loss_events, _stream[1].possible_loss_events,
+		_stream[1].false_loss_events);
     }
+    delete this;
 }
 
 CalculateFlows::Pkt *
@@ -242,7 +210,7 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *pare
 
 
 void
-CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, ToIPFlowDumps *tipfd)
+CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, CalculateFlows *parent)
 {
     assert(direction < 2);
     StreamInfo &stream = _stream[direction];
@@ -272,8 +240,8 @@ CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, ToI
     k->event_id = stream.event_id;
 
     // Store information about the loss event
-    if (stream.loss_type != NO_LOSS)
-	stream.output_loss(_aggregate, direction, tipfd);
+    if (stream.loss_type != NO_LOSS) // get rid of the last loss event
+	stream.output_loss(_aggregate, direction, parent);
     if (SEQ_GT(stream.max_ack, seq))
 	stream.loss_type = FALSE_LOSS;
     else if (SEQ_GEQ(last_seq, stream.max_live_seq))
@@ -354,14 +322,14 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		// could have seen the retransmitted packet yet
 		if (k->timestamp - ack_stream.loss_end_time < ack_stream.min_ack_bounce)
 		    ack_stream.loss_type = FALSE_LOSS;
-		ack_stream.output_loss(_aggregate, !direction, cf->tipfd());
+		ack_stream.output_loss(_aggregate, !direction, cf);
 	    }
 	}
     }
 }
 
 void
-CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent, ToIPFlowDumps *flowdumps)
+CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
@@ -372,7 +340,7 @@ CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent,
     int direction = (PAINT_ANNO(p) & 1);
     
     if (k->last_seq != k->seq) {
-	calculate_loss_events2(k, direction, flowdumps); //calculate loss if any
+	calculate_loss_events2(k, direction, parent); //calculate loss if any
 	// XXX calculate_loss(seq, seqlen, direction); //calculate loss if any
     }
 
@@ -384,7 +352,7 @@ CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent,
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1), _tipfd(0), _free_pkt(0)
+    : Element(1, 1), _tipfd(0), _loss_file(0), _stat_file(0), _free_pkt(0)
 {
     MOD_INC_USE_COUNT;
 }
@@ -392,10 +360,6 @@ CalculateFlows::CalculateFlows()
 CalculateFlows::~CalculateFlows()
 {
     MOD_DEC_USE_COUNT;
-    for (MapLoss::Iterator iter = _loss_map.first(); iter; iter++) {
-	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
-	delete losstmp;
-    }
     for (int i = 0; i < _pkt_bank.size(); i++)
 	delete[] _pkt_bank[i];
 }
@@ -411,12 +375,11 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
     if (cp_va_parse(conf, this, errh,
-		    cpOptional,
-		    cpFilename, "filename for output flow1", &_outfilename[0],
-		    cpFilename, "filename for output flow2", &_outfilename[1],
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
+		    "LOSSFILE", cpFilename, "filename for loss info", &_loss_filename,
+		    "STATFILE", cpFilename, "filename for loss statistics", &_stat_filename,
 		    0) < 0)
         return -1;
     
@@ -433,9 +396,40 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-CalculateFlows::initialize(ErrorHandler *)
+CalculateFlows::initialize(ErrorHandler *errh)
 {
+    if (!_loss_filename)
+	/* nada */;
+    else if (_loss_filename == "-")
+	_loss_file = stdout;
+    else if (!(_loss_file = fopen(_loss_filename.cc(), "w")))
+	return errh->error("%s: %s", _loss_filename.cc(), strerror(errno));
+    if (_loss_file)
+	fprintf(_loss_file, "# losstype aggregate direction time seq end_time end_seq\n");
+    
+    if (!_stat_filename)
+	/* nada */;
+    else if (_stat_filename == "-")
+	_stat_file = stdout;
+    else if (!(_stat_file = fopen(_stat_filename.cc(), "w")))
+	return errh->error("%s: %s", _stat_filename.cc(), strerror(errno));
+    if (_stat_file)
+	fprintf(_stat_file, "#agg d\ttot_pkt\ttot_seq\tloss_e\tploss_e\tfloss_e\n");    
     return 0;
+}
+
+void
+CalculateFlows::cleanup(CleanupStage)
+{
+    for (MapLoss::Iterator iter = _loss_map.first(); iter; iter++) {
+	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
+	losstmp->kill(this);
+    }
+    _loss_map.clear();
+    if (_loss_file)
+	fclose(_loss_file);
+    if (_stat_file)
+	fclose(_stat_file);
 }
 
 CalculateFlows::Pkt *
@@ -489,7 +483,7 @@ CalculateFlows::simple_action(Packet *p)
       case IP_PROTO_TCP: {
 	  LossInfo *loss = _loss_map.find(aggregate);
 	  if (!loss) {
-	      if ((loss = new LossInfo(p, true, _outfilename)))
+	      if ((loss = new LossInfo(p)))
 		  _loss_map.insert(aggregate, loss);
 	      else {
 		  click_chatter("out of memory!");
@@ -497,7 +491,7 @@ CalculateFlows::simple_action(Packet *p)
 		  return 0;
 	      }
 	  }
-	  loss->handle_packet(p, this, _tipfd);
+	  loss->handle_packet(p, this);
 	  break;
       }
       

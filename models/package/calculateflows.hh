@@ -10,7 +10,7 @@
 /*
 =c
 
-CalculateFlows([FILENAME1, FILENAME2, I<KEYWORDS>])
+CalculateFlows([I<KEYWORDS>])
 
 =s
 
@@ -30,6 +30,10 @@ An AggregateNotifier element.
 
 A ToIPFlowDumps element. Not optional.
 
+=item LOSSFILE
+
+=item STATFILE
+
 =back
 
 =a
@@ -48,6 +52,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     void notify_noutputs(int);
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
+    void cleanup(CleanupStage);
     
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
     
@@ -59,19 +64,25 @@ class CalculateFlows : public Element, public AggregateListener { public:
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
-    ToIPFlowDumps *tipfd() const	{ return _tipfd; }
+    ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
+    FILE *loss_file() const		{ return _loss_file; }
+    FILE *stat_file() const		{ return _stat_file; }
     
-    typedef BigHashMap<unsigned, LossInfo*> MapLoss;
+    typedef BigHashMap<unsigned, LossInfo *> MapLoss;
     
   private:
     
-    String _outfilename[2];
-    ToIPFlowDumps *_tipfd;
-    
     MapLoss _loss_map;
 
+    ToIPFlowDumps *_tipfd;
+    FILE *_loss_file;
+    FILE *_stat_file;
+    
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
+
+    String _loss_filename;
+    String _stat_filename;
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
@@ -136,32 +147,30 @@ struct CalculateFlows::StreamInfo {
     Pkt *pkt_tail;		// last packet record
 
     // information about the most recent loss event
-    LossType loss_type;
-    tcp_seq_t loss_seq;
-    tcp_seq_t loss_last_seq;
-    struct timeval loss_time; 
-    struct timeval loss_end_time;   
+    LossType loss_type;		// type of loss event
+    tcp_seq_t loss_seq;		// first seqno in loss event
+    tcp_seq_t loss_last_seq;	// last seqno in loss event
+    struct timeval loss_time;	// first time in loss event
+    struct timeval loss_end_time; // last time in loss event
     
     StreamInfo();
 
     void insert(Pkt *insertion);
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
 
-    void output_loss(uint32_t aggregate, unsigned direction, ToIPFlowDumps *);
+    void output_loss(uint32_t aggregate, unsigned direction, CalculateFlows *);
+    
 };
 
 class CalculateFlows::LossInfo {  public:
     
-    LossInfo(const Packet *, bool eventfiles, const String *outfilenames);
+    LossInfo(const Packet *);
     void kill(CalculateFlows *);
 
-    String output_directory() const	{ return _outputdir; }
-    
-    void print_stats();
-
-    void handle_packet(const Packet *, CalculateFlows *, ToIPFlowDumps *);
+    void handle_packet(const Packet *, CalculateFlows *);
     
     Pkt *pre_update_state(const Packet *, CalculateFlows *);
+    void calculate_loss_events2(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
     
     static double timesub(const timeval &end_time, const timeval &start_time) {
@@ -171,8 +180,6 @@ class CalculateFlows::LossInfo {  public:
 	return (end_time.tv_sec + start_time.tv_sec) + 0.000001 * (end_time.tv_usec + start_time.tv_usec);
     }
     
-    void calculate_loss_events2(Pkt *, unsigned dir, ToIPFlowDumps *tipfdp);
-
     unsigned total_seq(unsigned paint) const {
 	assert(paint < 2);
 	return _stream[paint].total_seq;
@@ -205,10 +212,6 @@ class CalculateFlows::LossInfo {  public:
     uint32_t _aggregate;
     struct timeval _init_time;
     StreamInfo _stream[2];
-    
-    bool _eventfiles;
-    String _outputdir;
-    String _outfilename[2];	// Event output files using Jitu format 
     
 };
 
