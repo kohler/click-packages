@@ -183,8 +183,6 @@ struct CalculateCapacity::StreamInfo::IntervalStream {
 
 struct CalculateCapacity::StreamInfo::Peak {
     double center;
-    double width;
-    uint32_t index;
     uint32_t left;
     uint32_t right;
     uint32_t area;

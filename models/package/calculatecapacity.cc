@@ -78,8 +78,8 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
 	iter!= peaks.end(); iter++){
 	p = *iter;
-	fprintf(f, "   <peak center='%lf' index='%d' area='%d' left='%d' right='%d' />\n",
-		p->center, p->index, p->area, p->left, p->right);
+	fprintf(f, "   <peak center='%lf' area='%d' left='%d' right='%d' />\n",
+		p->center, p->area, p->left, p->right);
     }
     
     fprintf(f,"    <interarrival>\n");
@@ -167,8 +167,9 @@ CalculateCapacity::StreamInfo::findpeaks()
 	    } else {
 		//end of peak here
 		peak->right = j-1;
+		uint32_t cint = (peak->right + peak->left)/2;
 		peak->center =
-		    float_timeval(intervals[j + pkt_cnt - n].interval);
+		    float_timeval(intervals[cint + pkt_cnt - n].interval);
 		peaks.push_back(peak);
 		inpeak = false;
 		peak = new Peak;
@@ -182,6 +183,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 		while(k > 0 && slopes[k-1] < peakend)
 		    k--;
 		peak->left = k;
+		peak->area += j-k;
 	    } else {
 		//nothing
 	    }
@@ -190,9 +192,11 @@ CalculateCapacity::StreamInfo::findpeaks()
     }
     if(inpeak){
 	//end peak here
-	peak->center =
-	    float_timeval(intervals[j + pkt_cnt - n].interval);
 	peak->right = n-1;
+	uint32_t cint = (peak->right + peak->left)/2;
+	peak->center =
+	    float_timeval(intervals[cint + pkt_cnt - n].interval);
+
 	peaks.push_back(peak);
     } else {
 	delete peak;
