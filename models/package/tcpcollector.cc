@@ -22,8 +22,7 @@ void
 TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
-	   && IP_FIRSTFRAG(p->ip_header())
-	   && AGGREGATE_ANNO(p) == _aggregate);
+	   && IP_FIRSTFRAG(p->ip_header()));
     
     const click_ip *iph = p->ip_header();
     const click_tcp *tcph = p->tcp_header();
@@ -31,12 +30,12 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
     // set fields appropriately
     k->data_packetno = total_packets - ack_packets;
     k->seq = ntohl(tcph->th_seq) - init_seq;
-    k->end_seq = np->seq + calculate_seqlen(iph, tcph);
+    k->end_seq = k->seq + calculate_seqlen(iph, tcph);
     k->ack = ntohl(tcph->th_ack) - conn->stream(!direction)->init_seq;
     if (!(tcph->th_flags & TH_ACK))
 	k->ack = 0;
     k->ip_id = (parent->_ip_id ? iph->ip_id : 0);
-    k->timestamp = p->timestamp_anno() - _init_time;
+    k->timestamp = p->timestamp_anno() - conn->init_time();
     k->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
     k->flags = 0;
 
@@ -149,7 +148,7 @@ TCPCollector::StreamInfo::attach_packet(Pkt *np)
 	// NB pure acks will not include IP ID check for network duplicates
 	return;
     else
-	stream.pkt_data_tail = np;
+	pkt_data_tail = np;
     
     // exit if there is any new data
     if (SEQ_GT(np->end_seq, max_seq)) {
@@ -264,7 +263,7 @@ TCPCollector::ConnInfo::handle_packet(const Packet *p, TCPCollector *parent)
 TCPCollector::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), different_syn(false),
       have_fin(false), different_fin(false),
-      have_ack_latency(false), filled_rcv_window(false),
+      filled_rcv_window(false),
       sent_window_probe(false), sent_sackok(false), time_confusion(false),
       init_seq(0), max_seq(0), max_ack(0),
       total_packets(0), ack_packets(0), total_seq(0),
@@ -583,7 +582,7 @@ TCPCollector::add_handlers()
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
 }
 
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel false)
 EXPORT_ELEMENT(TCPCollector)
 #include <click/bighashmap.cc>
 CLICK_ENDDECLS
