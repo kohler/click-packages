@@ -127,8 +127,14 @@ def ordinal(n):
     elif abs(n) == 3: return str(n) + "rd"
     else: return str(n) + "th"
 
+def seqadj(seq, adj):
+    if seq < adj:
+        return seq - adj + 4294967296
+    else:
+        return seq - adj
 
-class Packet:
+
+class Packet(object):
     __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
     def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0, window=0):
         self.time = time
@@ -146,6 +152,11 @@ class Packet:
         return self.seq == self.last_seq
     def has_data(self):
         return self.seq != self.last_seq
+    def adjust(self, time_adj, seq_adj, ack_adj):
+        self.time -= time_adj
+        self.seq = seqadj(self.seq, seq_adj)
+        self.last_seq = seqadj(self.last_seq, seq_adj)
+        if self.ack != 0: self.ack = seqadj(self.ack, ack_adj)
     def __cmp__(self, other):
         return self.time.__cmp__(other.time)
     def __str__(self):
@@ -162,8 +173,11 @@ class LossEvent:
                    type, float(begin), float(seq), float(end), float(end_seq)
     def time_overlaps(self, begin, end):
         return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
-    def fillcolor(self):
-        return fill_colors[self.type]
+    def adjust(self, time_adj, seq_adj, ack_adj):
+        self.begin -= time_adj
+        self.end -= time_adj
+        self.seq = seqadj(self.seq, seq_adj)
+        self.end_seq = seqadj(self.end_seq, seq_adj)
 
 
 class ConnectionFormatError(Exception):
@@ -198,220 +212,51 @@ def unparse_tcp_flags(flags):
         + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
            "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
 
-class Connection:
+class Connection(object):
 
-    __slots__ = ['s', 'loss', 'available', 'flowid', 'aggregate', 'loss_count', 'filename']
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'filename', 'has_window']
 
-    _field_unpack_format = {
-        "ts_sec": "L", "ts_usec": "L", "ip_src": "L",
-        "ip_dst": "L", "ip_len": "L", "ip_proto": "B", "ip_id": "H", "sport": "H",
-        "dport": "H", "tcp_seq": "L", "tcp_ack": "L", "tcp_flags": "B", "payload_len": "L",
-        "count": "L", "ip_frag": "B", "ip_fragoff": "H", "direction": "B",
-        "aggregate": "L", "tcp_window": "H", "word_crap": "L"
-        }
-    _binary_size = { "L": 4, "H": 2, "B": 1 }
-    _parse_code = None
-    _parse_code_of = None
-    _parse_code_min_binary_len = 0
-    _parse_code_window = False
-    
-    def __init__(self, f=None, aggregate=-1, src=None, sport=None, dst=None, dport=None):
+    def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
         self.loss = ([], [])
         self.available = False
+        self.dynload = dynload
         if src is not None:
             self.flowid = (src, int(sport), dst, int(dport))
         else:
-            self.flowid = None
+            self.flowid = ('0.0.0.0', -1, '0.0.0.0', -1)
         self.aggregate = aggregate
         self.loss_count = [0, 0]
-        if type(f) == types.FileType:
-            self.read(f)
-        else:
-            self.filename = f
+        self.filename = filename
 
-    class Fileboy:
-        def __init__(self, f):
-            self.f = f
-            self.str = ""
-            self.pos = 0
-        def __iter__(self):
-            return self
-        def next(self):
-            while True:
-                eol = self.str.find("\n", self.pos)
-                if eol >= 0:
-                    p, self.pos = self.pos, eol + 1
-                    return self.str[p:self.pos]
-                if self.pos > 0:
-                    self.str = self.str[self.pos:]
-                    self.pos = 0
-                p = len(self.str)
-                self.str += self.f.read(32768)
-                if len(self.str) == 0:
-                    raise StopIteration
-                elif len(self.str) == p:
-                    self.pos = p
-                    return self.str
-        def read(self):
-            p, self.pos = self.pos, len(self.str)
-            return self.str[p:] + self.f.read()
+    def empty(self):
+        return self.s == ([], []) and self.loss == ([], [])
     
-    def _check_data(self):
-        # exit early if not active
-        if self.read_state != "a" and self.read_state != "b":
-            return
-
-        # replace 'timestamp' with 'ts_sec ts_usec' if necessary
-        line = self.read_data
-        if self.read_state == "b":
-            line = re.sub("\\btimestamp\\b", "ts_sec ts_usec", line)
-            line = re.sub("\\bfirst_timestamp\\b", "word_crap word_crap", line)
-        data = line[5:].split()
-
-        # drop everything after the first field we don't understand 
-        unpack_format = "!"; unpack_size = 0
-        if self.read_state == "b":
-            for i in range(0, len(data)):
-                try:
-                    f = Connection._field_unpack_format[data[i]]
-                    unpack_format += f; unpack_size += Connection._binary_size[f]
-                except KeyError:
-                    data = data[:i]
-                    break
-
-        # exit early if possible
-        if Connection._parse_code_of == (data, self.read_state):
-            self.has_window = Connection._parse_code_window
-            return
-
-        # create mapping
-        m = dict(zip(data, range(len(data))))
-
-        # complain if important fields missing
-        if ("timestamp" not in m and "ts_sec" not in m) or "direction" not in m or "tcp_seq" not in m:
-            raise ConnectionFormatError, "bad !data missing important pieces"
-
-        # create code
-        if self.read_state == "b":
-            code = 'fields = struct.unpack("' + unpack_format + '", data[pos+4:pos+' + str(unpack_size + 4) + '])\n'
-            ifields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
-            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
-        else:
-            code = 'fields = line.split()\n'
-            ifields = dict(map(lambda x: (x[0], 'int(fields[' + `x[1]` + '])'), m.items()))
-            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
-
-        # analyze fragments separately
-        if "timestamp" in m:
-            f_time = ffields["timestamp"]
-        elif "ts_sec" in m and "ts_usec" in m:
-            f_time = ifields["ts_sec"] + ' + ' + ifields["ts_usec"] + '/1000000.'
-        elif "ts_sec" in m:
-            f_time = ffields["ts_sec"]
-        if self.read_state == "b":
-            code += 'dir = ' + ifields["direction"] + '\n'
-        else:
-            code += 'dir = direction(fields[' + `m["direction"]` + '])\n'
-        if "tcp_seq" in m:
-            f_seq = ffields["tcp_seq"]
-        else:
-            f_seq = '0.'
-        if "payload_len" in m:
-            f_len = ifields["payload_len"]
-        else:
-            f_len = '0'
-        if "tcp_ack" in m:
-            code += 'ack = ' + ffields["tcp_ack"] + '\n\
-if ack == last_ack[dir]: dup_acks[dir] += 1\n\
-else: dup_acks[dir] = 0; last_ack[dir] = ack\n'
-            f_ack = 'ack'
-            f_dupacks = 'dup_acks[dir]'
-        else:
-            f_ack = '0.'
-            f_dupacks = '0'
-        if "tcp_flags" in m:
-            if self.read_state == "b":
-                code += 'flag = fields[' + `m["tcp_flags"]` + ']\n\
-if (flag & 24) == flag: flag = "A"\n\
-else: flag = unparse_tcp_flags(flag)\n'
-                f_flags = 'flag'
-            else:
-                f_flags = 'fields[' + `m["tcp_flags"]` + ']'
-        else:
-            f_flags = '"A"'
-        if "tcp_window" in m:
-            f_window = ifields["tcp_window"]
-        else:
-            f_window = '0'
-
-        code += 'self.s[dir].append(Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_dupacks + ', ' + f_window + '))\n'
-
-        Connection._parse_code = compile(code, "<generated function>", "exec")
-        Connection._parse_code_of = (data, self.read_state)
-        Connection._parse_code_min_binary_len = unpack_size + 4
-        Connection._parse_code_window = "tcp_window" in m
-        self.has_window = Connection._parse_code_window
-    
-    def _read_nonpacket(self, line):
-        if re.match('\\#[pf]?loss', line):
-            type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
-            self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
-        elif re.match('!flowid', line):
-            fid = line.split()[1:5]
-            self.flowid = (fid[0], int(fid[1]), fid[2], int(fid[3]))
-        elif re.match('!aggregate', line):
-            self.aggregate = int(line.split()[1])
-        elif re.match('!data ', line):
-            self.read_data = line
-            self._check_data()
-        elif re.match('!eof$', line):
-            return 1
-        elif line[:2] == "\037\235" or line[:2] == "\037\213": # compressed data
-            raise ConnectionFileCompressedError
-        return 0
-
-    def _read_binary(self, f):
-        self.read_state = "b"
-        self._check_data()
-
-        last_ack = [-1, -1]; dup_acks = [0, 0]
-        data = f.read()
-        pos, leng = 0, len(data)
-        while pos + 4 < leng:
-            l, = struct.unpack("!l", data[pos:pos+4])
-            i = l & 0x7FFFFFFF
-            if pos + i > leng:
-                raise ConnectionFormatError, "corrupted file"
-            elif l & 0x80000000:
-                if self._read_nonpacket(data[pos+4:pos+i]):
-                    break
-            elif i >= Connection._parse_code_min_binary_len:
-                exec Connection._parse_code
-            pos += i
-
-    def read(self, f):
-        last_ack = [-1, -1]; dup_acks = [0, 0]
-        read_state = 0; self.read_state = ""; self.read_data = ""
-        f = Connection.Fileboy(f)
-        for line in f:
-            if line and line[0] >= '0':
-                if read_state == 0:
-                    read_state = 1; self.read_state = "a"
-                    self._check_data()
-                exec Connection._parse_code
-            elif re.match('!binary', line):
-                self.read_state = "b"
-                break
-            elif self._read_nonpacket(line):
-                break
-        if self.read_state == "b":
-            self._read_binary(f)
+    def read_complete(self, adjust):
         self.available = True
-        del self.read_state
-        del self.read_data
         self.loss_count = [len(self.loss[0]), len(self.loss[1])]
-        return self
+        if adjust:
+            t0 = s0 = s1 = 99999999999
+            if len(self.s[0]):
+                t0 = min(self.s[0][0].time, t0)
+                s0 = min(self.s[0][0].seq, s0)
+            if len(self.s[1]):
+                t0 = min(self.s[1][0].time, t0)
+                s0 = min(self.s[1][0].ack, s0)
+                s1 = min(self.s[1][0].seq, s1)
+            if len(self.loss[0]):
+                t0 = min(self.loss[0][0].begin, t0)
+            if len(self.loss[1]):
+                t0 = min(self.loss[1][0].begin, t0)
+            t0 -= 0.000001
+            for p in self.s[0]:
+                p.adjust(t0, s0, s1)
+            for p in self.s[1]:
+                p.adjust(t0, s1, s0)
+            for l in self.loss[0]:
+                l.adjust(t0, s0, s1)
+            for l in self.loss[1]:
+                l.adjust(t0, s1, s0)
     
     def first_index_after(self, time, dir=None):
         if not self.available:
@@ -518,25 +363,273 @@ else: flag = unparse_tcp_flags(flag)\n'
         return self.flowid[0] + ":" + str(self.flowid[1]) + " " + dirstr + " " + self.flowid[2] + ":" + str(self.flowid[3])
     
     def load(self):
-        if type(self.filename) != types.StringType:
+        if self.available:
+            return
+        elif not self.dynload:
             raise RuntimeError, "cannot load this Connection " + self.filename
-        elif not self.available:
-            f = file(self.filename, 'rb')
-            try:
-                self.read(f)
-            except ConnectionFileCompressedError:
-                f.seek(0)
-                self.read(gzip.GzipFile(fileobj=f))
-            f.close()
+        else:
+            ConnectionReader(conn=self).read(self.filename)
     
     def unload(self):
-        if type(self.filename) == types.StringType:
+        if self.dynload:
             self.s = ([], [])
             self.loss = ([], [])
             self.available = False
 
+    def __str__(self):
+        fid = self.flowid
+        return "<#%d: %s:%s <> %s:%s %d/%d>" % (self.aggregate, fid[0], fid[1], fid[2], fid[3], len(self.s[0]), len(self.s[1]))
 
-class FlowRef:
+
+class ConnectionReader:
+
+    _field_unpack_format = {
+        "ts_sec": "L", "ts_usec": "L", "ip_src": "L",
+        "ip_dst": "L", "ip_len": "L", "ip_proto": "B", "ip_id": "H", "sport": "H",
+        "dport": "H", "tcp_seq": "L", "tcp_ack": "L", "tcp_flags": "B", "payload_len": "L",
+        "count": "L", "ip_frag": "B", "ip_fragoff": "H", "direction": "B",
+        "aggregate": "L", "tcp_window": "H", "word_crap": "L"
+        }
+    _binary_size = { "L": 4, "H": 2, "B": 1 }
+    _parse_code = None
+    _parse_code_of = None
+    _parse_code_min_binary_len = 0
+    _parse_code_window = False
+
+    def __init__(self, conn=None, flowset=None):
+        self.conn = (conn is None and Connection() or conn)
+        self.flowset = (flowset is None and FlowSet() or flowset)
+        self.fake_conn = conn is None
+        self.fake_flowset = flowset is None
+
+    class Fileboy:
+        def __init__(self, f):
+            self.f = f
+            self.str = ""
+            self.pos = 0
+        def __iter__(self):
+            return self
+        def next(self):
+            while True:
+                eol = self.str.find("\n", self.pos)
+                if eol >= 0:
+                    p, self.pos = self.pos, eol + 1
+                    return self.str[p:self.pos]
+                if self.pos > 0:
+                    self.str = self.str[self.pos:]
+                    self.pos = 0
+                p = len(self.str)
+                self.str += self.f.read(32768)
+                if len(self.str) == 0:
+                    raise StopIteration
+                elif len(self.str) == p:
+                    self.pos = p
+                    return self.str
+        def read(self):
+            p, self.pos = self.pos, len(self.str)
+            return self.str[p:] + self.f.read()
+
+    def connmap(self, aggregate):
+        try:
+            return self.cmap[aggregate]
+        except KeyError:
+            self.cmap[aggregate] = c = Connection(filename=self.filename, aggregate=aggregate)
+            self.flowset.append(c)
+            return c
+    
+    def _check_data(self):
+        # exit early if not active
+        if self.read_state != "a" and self.read_state != "b":
+            return
+
+        # replace 'timestamp' with 'ts_sec ts_usec' if necessary
+        line = self.read_data
+        if self.read_state == "b":
+            line = re.sub("\\btimestamp\\b", "ts_sec ts_usec", line)
+            line = re.sub("\\bfirst_timestamp\\b", "word_crap word_crap", line)
+        data = line[5:].split()
+
+        # drop everything after the first field we don't understand 
+        unpack_format = "!"; unpack_size = 0
+        if self.read_state == "b":
+            for i in range(0, len(data)):
+                try:
+                    f = self._field_unpack_format[data[i]]
+                    unpack_format += f; unpack_size += self._binary_size[f]
+                except KeyError:
+                    data = data[:i]
+                    break
+
+        # exit early if possible
+        if self._parse_code_of == (data, self.read_state):
+            self.conn.has_window = self._parse_code_window
+            return
+
+        # create mapping
+        m = dict(zip(data, range(len(data))))
+
+        # complain if important fields missing
+        if ("timestamp" not in m and "ts_sec" not in m) or "direction" not in m or "tcp_seq" not in m:
+            raise ConnectionFormatError, "bad !data missing important pieces"
+
+        # create code
+        if self.read_state == "b":
+            code = 'fields = struct.unpack("' + unpack_format + '", data[pos+4:pos+' + str(unpack_size + 4) + '])\n'
+            ifields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+            ipfields = dict(map(lambda x: (x[0], 'join(".", struct.unpack("BBBB", fields[' + `x[1]` + ']))'), m.items()))
+        else:
+            code = 'fields = line.split()\n'
+            ifields = dict(map(lambda x: (x[0], 'int(fields[' + `x[1]` + '])'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+            ipfields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
+
+        # analyze fragments separately
+        if "timestamp" in m:
+            f_time = ffields["timestamp"]
+        elif "ts_sec" in m and "ts_usec" in m:
+            f_time = ifields["ts_sec"] + ' + ' + ifields["ts_usec"] + '/1000000.'
+        elif "ts_sec" in m:
+            f_time = ffields["ts_sec"]
+        if self.read_state == "b":
+            code += 'dir = ' + ifields["direction"] + '\n'
+        else:
+            code += 'dir = direction(fields[' + `m["direction"]` + '])\n'
+        if "tcp_seq" in m:
+            f_seq = ffields["tcp_seq"]
+        else:
+            f_seq = '0.'
+        if "payload_len" in m:
+            f_len = ifields["payload_len"]
+        else:
+            f_len = '0'
+        if "tcp_ack" in m:
+            code += 'ack = ' + ffields["tcp_ack"] + '\n\
+if ack == last_ack[dir]: dup_acks[dir] += 1\n\
+else: dup_acks[dir] = 0; last_ack[dir] = ack\n'
+            f_ack = 'ack'
+            f_dupacks = 'dup_acks[dir]'
+        else:
+            f_ack = '0.'
+            f_dupacks = '0'
+        if "tcp_flags" in m:
+            if self.read_state == "b":
+                code += 'flag = fields[' + `m["tcp_flags"]` + ']\n\
+if (flag & 24) == flag: flag = "A"\n\
+else: flag = unparse_tcp_flags(flag)\n'
+                f_flags = 'flag'
+            else:
+                f_flags = 'fields[' + `m["tcp_flags"]` + ']'
+        else:
+            f_flags = '"A"'
+        if "tcp_window" in m:
+            f_window = ifields["tcp_window"]
+        else:
+            f_window = '0'
+
+        # fetch connection
+        if "aggregate" in m:
+            code += 'try:\n\
+    c = self.cmap[' + ifields["aggregate"] + ']\n\
+except KeyError:\n\
+    c = Connection(filename=self.filename, aggregate=' + ifields["aggregate"]
+            if "ip_src" in m: code += ', src=' + ipfields["ip_src"]
+            if "ip_dst" in m: code += ', dst=' + ipfields["ip_dst"]
+            if "sport" in m: code += ', sport=' + ipfields["sport"]
+            if "dport" in m: code += ', dport=' + ipfields["dport"]
+            code += ')\n\
+    c.has_window = self._parse_code_window\n\
+    self.cmap[' + ifields["aggregate"] + '] = c\n\
+    self.flowset.append(c)\n'
+            f_conn = 'c'
+        else:
+            f_conn = 'self.conn'
+
+        code += f_conn + '.s[dir].append(Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_dupacks + ', ' + f_window + '))\n'
+
+        self._parse_code = compile(code, "<generated function>", "exec")
+        self._parse_code_of = (data, self.read_state)
+        self._parse_code_min_binary_len = unpack_size + 4
+        self._parse_code_window = "tcp_window" in m
+
+        # remember whether or not we have a window
+        self.conn.has_window = self._parse_code_window
+    
+    def _read_nonpacket(self, line):
+        if re.match('\\#[pf]?loss', line):
+            type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
+            self.conn.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+        elif re.match('\\#a[pf]?loss', line):
+            type, agg, dir, time, seq, end_time, end_seq = line[2:].split()[:7]
+            self.connmap(agg).loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+        elif re.match('!flowid', line):
+            fid = line.split()[1:5]
+            self.conn.flowid = (fid[0], int(fid[1]), fid[2], int(fid[3]))
+        elif re.match('!aggregate', line):
+            self.conn.aggregate = int(line.split()[1])
+        elif re.match('!data ', line):
+            self.read_data = line
+            self._check_data()
+        elif re.match('!eof$', line):
+            return 1
+        elif line[:2] == "\037\235" or line[:2] == "\037\213": # compressed data
+            raise ConnectionFileCompressedError
+        return 0
+
+    def _read_binary(self, f):
+        self.read_state = "b"
+        self._check_data()
+
+        last_ack = [-1, -1]; dup_acks = [0, 0]
+        data = f.read()
+        pos, leng = 0, len(data)
+        while pos + 4 < leng:
+            l, = struct.unpack("!l", data[pos:pos+4])
+            i = l & 0x7FFFFFFF
+            if pos + i > leng:
+                raise ConnectionFormatError, "corrupted file"
+            elif l & 0x80000000:
+                if self._read_nonpacket(data[pos+4:pos+i]):
+                    break
+            elif i >= self._parse_code_min_binary_len:
+                exec self._parse_code
+            pos += i
+
+    def read(self, filename, f=None):
+        if f is None:
+            f = uncompressed_file(filename)
+        self.filename = filename
+        self.cmap = { }
+
+        # actually read file
+        last_ack = [-1, -1]; dup_acks = [0, 0]
+        read_state = 0; self.read_state = ""; self.read_data = ""
+        f = ConnectionReader.Fileboy(f)
+        for line in f:
+            if line and line[0] >= '0':
+                if read_state == 0:
+                    read_state = 1; self.read_state = "a"
+                    self._check_data()
+                exec self._parse_code
+            elif re.match('!binary', line):
+                self.read_state = "b"
+                break
+            elif self._read_nonpacket(line):
+                break
+        if self.read_state == "b":
+            self._read_binary(f)
+
+        # complete connections
+        self.conn.read_complete(False)
+        for c in self.cmap.values():
+            c.read_complete(True)
+        if not self.fake_flowset and self.fake_conn and not self.conn.empty():
+            self.flowset.append(self.conn)
+        
+        return self
+
+
+class FlowRef(object):
 
     __slots__ = ['conn', 'dir']
 
@@ -668,7 +761,7 @@ class FlowSet:
             self.reading_state = 1
         elif name == 'connection' and self.reading_state == 1:
             agg, src, sport, dst, dport = int(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
-            self.reading_connection = Connection(self._expand_filename(agg, src, sport, dst, dport), aggregate=agg, src=src, sport=sport, dst=dst, dport=dport)
+            self.reading_connection = Connection(filename=self._expand_filename(agg, src, sport, dst, dport), aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, dynload=True)
             self.conns.append(self.reading_connection)
             self.flows.append(FlowRef(self.reading_connection, 0))
             self.flows.append(FlowRef(self.reading_connection, 1))
@@ -699,7 +792,6 @@ class FlowSet:
         return len(self.flows)
 
     def append(self, conn):
-        conn.load()
         self.conns.append(conn)
         self.flows.append(FlowRef(conn, 0))
         self.flows.append(FlowRef(conn, 1))
@@ -795,6 +887,7 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
     
     def on_get_value(self, n, column):
 	'''returns the value stored in a particular column for the node'''
+        #print n
         if len(n) == 1:
             if column == 1:
                 return self.gn[n[0]]
@@ -816,6 +909,7 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
             
     def on_iter_next(self, n):
 	'''returns the next node at this level of the tree'''
+        #print "on_iter_next", n
         if len(n) == 1 and n[0] < len(self.cg) - 1:
             return n[0]+1,
         elif len(n) == 2 and n[1] < len(self.cg[n[0]]) - 1:
@@ -824,6 +918,7 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
             return None
     def on_iter_children(self, n):
 	'''returns the first child of this node'''
+        #print "on_iter_children", n
         if n is None:
             if len(self.cg) > 0:
                 return 0,
@@ -832,12 +927,14 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
         return None
     def on_iter_has_child(self, n):
 	'''returns true if this node has children'''
+        #print "on_iter_has_child", n
         if n is None:
             return len(self.cg) > 0
         else:
             return len(n) == 1
     def on_iter_n_children(self, n):
 	'''returns the number of children of this node'''
+        #print "on_iter_n_children", n
         if n is None:
             return len(self.cg)
         elif len(n) == 1:
@@ -846,8 +943,9 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
             return 0
     def on_iter_nth_child(self, n, i):
 	'''returns the nth child of this node'''
+        #print "on_iter_nth_child", n
         if n is None:
-            return i,
+            return len(self.cg) and (i,) or None
         elif len(n) == 1 and i < len(self.cg[n[0]]):
             return n + (i,)
         else:
@@ -2290,9 +2388,9 @@ if __name__ == "__main__":
             if c == '<':
                 all_connections.read(f)
             else:
-                all_connections.append(Connection(sys.argv[1]))
+                ConnectionReader(flowset=all_connections).read(sys.argv[1])
         else:
-            all_connections.append(Connection(sys.stdin))
+            ConnectionReader(flowset=all_connections).read("<stdin>", sys.stdin)
         all_connections.sort_by_loss_count()
         window = PlotFlowWindow(all_connections)
         gtk.main()
