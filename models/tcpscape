@@ -1030,6 +1030,7 @@ except KeyError:\n\
                 c, dir = flowmap[flowid]
             except KeyError:
                 c = Connection(filename=self.filename, dynload=False, aggregate=self.read_aggregate, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
+                self.read_aggregate += 1
                 self.flowset.append(c)
                 dir = 0
                 flowmap[flowid] = (c, 0)
