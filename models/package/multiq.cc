@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4 -*-
 #include <click/config.h>
-#include "avh.hh"
+#include "multiq.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include <float.h>

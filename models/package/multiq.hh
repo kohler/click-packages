@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4 -*-
-#ifndef CLICK_MODELS_AVH_HH
-#define CLICK_MODELS_AVH_HH
+#ifndef CLICK_MODELS_MULTIQ_HH
+#define CLICK_MODELS_MULTIQ_HH
 #include <click/vector.hh>
 #include <click/pair.hh>
 #include <math.h>
