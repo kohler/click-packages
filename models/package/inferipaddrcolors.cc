@@ -40,14 +40,18 @@ int
 InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     bool active = true;
+    String seed_filename;
     
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
 		    "ACTIVE", cpBool, "active on startup?", &active,
+		    "SEED", cpFilename, "seed color file", &seed_filename,
 		    0) < 0)
 	return -1;
     
     _active = active;
+    if (seed_filename && read_file(seed_filename, errh) < 0)
+	return -1;
     return 0;
 }
 
@@ -86,14 +90,16 @@ InferIPAddrColors::update(Packet *p)
     assert(snode == find_node(saddr) && dnode == find_node(daddr));
 
     // resolve colors
-    if (snode->color != NULLCOLOR)
+    if (snode->color <= MAXCOLOR)
 	while (snode->color != _color_mapping[snode->color])
 	    snode->color = _color_mapping[snode->color];
-    if (dnode->color != NULLCOLOR)
+    if (dnode->color <= MAXCOLOR)
 	while (dnode->color != _color_mapping[dnode->color])
 	    dnode->color = _color_mapping[dnode->color];
-    
-    if (snode->color == NULLCOLOR && dnode->color == NULLCOLOR) {
+
+    if (snode->color == BADCOLOR || dnode->color == BADCOLOR)
+	snode->color = dnode->color = BADCOLOR;
+    else if (snode->color == NULLCOLOR && dnode->color == NULLCOLOR) {
 	// allocate two colors
 	snode->color = _next_color;
 	dnode->color = _next_color + 1;
@@ -114,8 +120,10 @@ InferIPAddrColors::update(Packet *p)
 	_color_mapping[snode->color ^ 1] = dnode->color;
 	snode->color = (dnode->color ^ 1);
 	_compacted = false;
-    } else if (snode->color == dnode->color)
+    } else if (snode->color == dnode->color) {
 	click_chatter("color conflict: src %s same color as dst %s", IPAddress(iph->ip_src).s().cc(), IPAddress(iph->ip_dst).s().cc());
+	snode->color = dnode->color = BADCOLOR;
+    }
 
     return true;
 }

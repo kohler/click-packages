@@ -116,10 +116,10 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
     } else if (n->child[0] || n->child[1])
 	return errh->error("%x: only one live child", n->aggregate);
 
-    else if (n->color != NULLCOLOR && n->color >= _next_color)
+    else if (n->color <= MAXCOLOR && n->color >= _next_color)
 	return errh->error("%x: bad color %d", n->aggregate, n->color);
 
-    else if (n->color != NULLCOLOR && n->color < _n_fixed_colors
+    else if (n->color <= MAXCOLOR && n->color < _n_fixed_colors
 	     && above_color < _n_fixed_colors && n->color != above_color)
 	return errh->error("%x: an ancestor said children colored %d, but this child colored %d", n->aggregate, above_color, n->color);
     

@@ -30,8 +30,9 @@ class IPAddrColors { public:
     int write_file(String filename, bool binary, ErrorHandler *);
     
     static const color_t NULLCOLOR = 0xFFFFFFFFU;
-    static const color_t BADCOLOR = 0xFFFFFFFEU;
+    static const color_t MIXEDCOLOR = 0xFFFFFFFEU;
     static const color_t SUBTREECOLOR = 0xFFFFFFFDU;
+    static const color_t BADCOLOR = 0xFFFFFFFCU; // MAXCOLOR + 1
     static const color_t MAXCOLOR = 0xFFFFFFFBU;
     
     struct Node {

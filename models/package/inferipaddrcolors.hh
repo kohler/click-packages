@@ -35,6 +35,10 @@ Keyword arguments are:
 Boolean. If false, packets are passed through without affecting the coloring.
 Default is true.
 
+=item SEED
+
+Filename. Read this color file for seed colors.
+
 =back
 
 =h write_ascii_file write-only
