@@ -768,7 +768,7 @@ class FlowSet:
             self.flows.append(FlowRef(self.reading_connection, 1))
         elif name == 'flow' and self.reading_connection is not None:
             try:
-                d, l, pl, fl = int(attrs["dir"]), int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
+                d, l, pl, fl = int(attrs["dir"]), int(attrs["nloss"]), int(attrs["nploss"]), int(attrs["nfloss"])
                 self.reading_connection.loss_count[d] += l + pl + fl
             except KeyError:
                 pass
