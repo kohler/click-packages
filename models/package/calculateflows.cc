@@ -61,7 +61,10 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     // Find the most relevant previous transmission of overlapping data.
     Pkt *rexmit = 0;
     Pkt *x;
+    int sequence = 0;
     for (x = np->prev; x; x = x->prev) {
+
+	sequence++;
 	
 	if ((x->flags & Pkt::F_NEW)
 	    && SEQ_LEQ(x->end_seq, np->seq)) {
@@ -71,11 +74,16 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 
 	    // If the trace point is close to the receiver, we may have a
 	    // retransmission where we did not see the earlier transmission.
-	    // Assume we have a retransmission if np->ts >= x->ts + rtt.
-	    if (!rexmit
-		&& np->timestamp >= x->timestamp + conn->rtt()) {
-		rexmit = (x->next == np ? x : x->next);
-		np->flags |= Pkt::F_REXMIT;
+	    // Assume we have a retransmission if np->ts >= x->ts + FAC * rtt.
+	    // FAC depends on how many packets have passed.
+	    if (!rexmit) {
+		double rtt = timeval2double(conn->rtt());
+		double factor = timeval2double(np->timestamp - x->timestamp) / (rtt ? rtt : 0.1);
+		if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
+		    for (rexmit = x; rexmit->next != np && SEQ_LEQ(rexmit->end_seq, np->seq); rexmit = rexmit->next)
+			/* nada */;
+		    np->flags |= Pkt::F_REXMIT;
+		}
 	    }
 	    
 	    break;
@@ -133,6 +141,9 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     // either way, intervening packets are in a non-ordered event
     for (x = (x ? x->next : pkt_head); x; x = x->next)
 	x->flags |= Pkt::F_NONORDERED;
+
+    if (timeval2double(np->timestamp) >= 73.9 && timeval2double(np->timestamp) < 74.2)
+	fprintf(stderr, "%ld.%06ld %u %x\n", np->timestamp.tv_sec, np->timestamp.tv_usec, np->end_seq, np->flags);
 }
 
 void

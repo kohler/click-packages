@@ -171,8 +171,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4, WR_UNDELIVERED = 8, WR_WINDOWPROBE = 16, WR_PACKETS = 32, WR_REORDERED = 64 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
-    static double float_timeval(const struct timeval &);
-    
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
@@ -405,12 +403,6 @@ CalculateFlows::free_pkt_list(Pkt *head, Pkt *tail)
 	tail->next = _free_pkt;
 	_free_pkt = head;
     }
-}
-
-inline double
-CalculateFlows::float_timeval(const struct timeval &tv)
-{
-    return tv.tv_sec + tv.tv_usec / 1e6;
 }
 
 CLICK_ENDDECLS
