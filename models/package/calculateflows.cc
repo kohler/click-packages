@@ -59,8 +59,9 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     }
 
     // Otherwise, it is a reordering, or possibly a retransmission.
-    // Find the most recent retransmission of overlapping data.
+    // Find the most relevant previous transmission of overlapping data.
     Pkt *x = np->prev;
+    Pkt *partial = 0;
     while (x) {
 	if (np->seq == x->seq) {
 	    np->flags |= Pkt::F_REXMIT;
@@ -80,13 +81,18 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    return;
 	} else if (x->flags == Pkt::F_NEW && SEQ_LEQ(x->last_seq, np->seq)) {
 	    // reordering
-	    np->flags |= Pkt::F_REORDER;
+	    if (partial) {
+		np->flags |= Pkt::F_REXMIT | Pkt::F_STRANGE;
+		register_loss_event(x, np, conn, parent);
+	    } else
+		np->flags |= Pkt::F_REORDER;
 	    return;
 	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->last_seq))
 		   || (SEQ_LT(x->seq, np->last_seq) && SEQ_LEQ(np->last_seq, x->last_seq))) {
-	    // odd partial retransmission
-	    np->flags |= Pkt::F_REXMIT | Pkt::F_STRANGE;
-	    return;
+	    // Odd partial retransmission. There might be a more relevant
+	    // preceding retransmission, so keep searching for one.
+	    partial = x;
+	    x = x->prev;
 	} else
 	    x = x->prev;
     }
