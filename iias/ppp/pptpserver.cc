@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.cc,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: pptpserver.cc,v 1.2 2004/12/31 21:57:31 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -504,6 +504,9 @@ PPTPServer::handle_gre(Connection *c)
 
   // pull IP and GRE headers
   p->pull(header_len);
+
+  // set timestamp
+  p->timestamp_anno() = Timestamp::now();
 
   // probably GRE acknowledgement
   if (p->length() < sizeof(struct ppp_header))

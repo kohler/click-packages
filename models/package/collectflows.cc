@@ -50,7 +50,7 @@ CollectTCPFlows::Flow::update(const Packet *p, CollectTCPFlows *cf)
     _packet_count++;
     _byte_count += p->length() + EXTRA_LENGTH_ANNO(p);
     _last_ts = p->timestamp_anno();
-    if (!_first_ts.tv_sec)	// XXX
+    if (!_first_ts._sec)	// XXX
 	_first_ts = _last_ts;
 }
 
@@ -106,7 +106,7 @@ CollectTCPFlows::initialize(ErrorHandler *errh)
     }
     
     _last_flow = _done_head = _done_tail = 0;
-    timerclear(&_done_timestamp);
+    _done_timestamp = Timestamp();
     return 0;
 }
 
@@ -182,16 +182,16 @@ CollectTCPFlows::Flow::free_from_free(Map &map)
 }
 
 void
-CollectTCPFlows::pass_over_done(const struct timeval &ts)
+CollectTCPFlows::pass_over_done(const Timestamp &ts)
 {
-    if (!_done_timestamp.tv_sec) {
+    if (!_done_timestamp._sec) {
 	_done_timestamp = ts;
 	return;
     }
 
     // determine left boundary for dead flows
-    struct timeval kill_dead_since = _done_timestamp;
-    kill_dead_since.tv_sec -= 120; // 2 minutes
+    Timestamp kill_dead_since = _done_timestamp;
+    kill_dead_since._sec -= 120; // 2 minutes
 
     // pass over flows
     Flow *free_list = _done_head;
@@ -231,7 +231,7 @@ CollectTCPFlows::pass_over_done(const struct timeval &ts)
 
     if (_done_head)
 	_done_timestamp = _done_head->last_session_timestamp();
-    _done_timestamp.tv_sec += 120;
+    _done_timestamp._sec += 120;
 }
 
 Packet *
@@ -252,7 +252,7 @@ CollectTCPFlows::handle_packet(Packet *p)
 	    flow->add_to_free_tracked_tail(_done_head, _done_tail);
     }
 
-    if (timercmp(&p->timestamp_anno(), &_done_timestamp, >))
+    if (p->timestamp_anno() > _done_timestamp)
 	pass_over_done(p->timestamp_anno());
     
     return p;

@@ -45,10 +45,8 @@ CalculateCapacity::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepo
     _flowid = IPFlowID(p);
     
     // set initial timestamp
-    if (timerisset(&p->timestamp_anno()))
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
-    else
-	timerclear(&_init_time);
+    if (p->timestamp_anno())
+	_init_time = p->timestamp_anno() - Timestamp::epsilon();
 
     // set file position
     if (filepos_call)
@@ -79,12 +77,12 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     
     fprintf(f,"    <interarrival>\n");
     for(unsigned int i=0; i < pkt_cnt; i++){
-	fprintf(f, "%d %ld.%06ld %d %ld.%06ld\n", intervals[i].size,
-		intervals[i].interval.tv_sec,
-		intervals[i].interval.tv_usec,
+	fprintf(f, "%d " PRITIMESTAMP " %d " PRITIMESTAMP "\n", intervals[i].size,
+		intervals[i].interval._sec,
+		intervals[i].interval._subsec,
 		intervals[i].newack,
-		intervals[i].time.tv_sec,
-		intervals[i].time.tv_usec);
+		intervals[i].time._sec,
+		intervals[i].time._subsec);
     }
     fprintf(f,"    </interarrival>\n");
     fprintf(f, " </stream>\n");
@@ -98,10 +96,8 @@ static int compare(const void *a, const void *b){
     ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
     bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
     
-    iratea = (ac->interval.tv_sec + ac->interval.tv_usec/1.0e6)
-	/ ((ac->size)*8.0);
-    irateb = (bc->interval.tv_sec + bc->interval.tv_usec/1.0e6)
-	/ ((bc->size)*8.0);
+    iratea = ac->interval.to_double() / ((ac->size)*8.0);
+    irateb = bc->interval.to_double() / ((bc->size)*8.0);
 
     if(ac->interval < bc->interval) return -1;
     if(ac->interval == bc->interval) return -1;
@@ -143,14 +139,14 @@ CalculateCapacity::StreamInfo::findpeaks()
     //printf("pktcnt %d\n", pkt_cnt);
     for(j = 0, n = 0; j < pkt_cnt; j++){
 	struct IntervalStream *i = intervals + j;
-	struct timeval *t = &(i->interval);
-	if(t->tv_sec == 0 && t->tv_usec == 0){
+	Timestamp *t = &(i->interval);
+	if (t->_sec == 0 && t->_subsec == 0){
 	    continue;
 	}
 	if(i->size < 500 && i->newack < 500){
 	    continue;
 	}
-	logs[n] = log(float_timeval(*t));
+	logs[n] = log(t->to_double());
 	n++;
 	//printf("%d %f\n", j - pkt_cnt + n, logs[j - pkt_cnt + n]);
     }
@@ -238,8 +234,8 @@ CalculateCapacity::StreamInfo::findpeaks()
 	uint32_t more = 0;
 	for(uint32_t j = 0 ; j < pkt_cnt; j++){
 	    struct IntervalStream *i = intervals + j;
-	    struct timeval *t = &(i->interval);
-	    double ft = float_timeval(*t);
+	    Timestamp *t = &(i->interval);
+	    double ft = t->to_double();
 	    if(cnt == 0 && ft < p->left)
 		continue;
 	    if(cnt > 0 && ft > p->right)
@@ -300,8 +296,7 @@ CalculateCapacity::StreamInfo::histogram()
 	valid[i] = 1;
 	
 	while(j < pkt_cnt &&
-	      (intervals[j].interval.tv_sec +
-	       intervals[j].interval.tv_usec * 1.0e-6) < curr){
+	      intervals[j].interval.to_double() < curr){
 	    if(mss == intervals[j].size ||
 	       (intervals[j].size < 100 &&
 		intervals[j].newack > 500)){
@@ -391,12 +386,11 @@ CalculateCapacity::StreamInfo::fill_shortrate()
     uint32_t ackbytes=0;
     uint32_t databytes=0;
     double time_windowsize = 3.0;
-    timeval start;
 
     datarate = 0;
     ackrate = 0;
-    ackstart = make_timeval(0,0);
-    datastart = make_timeval(0,0);
+    ackstart = Timestamp();
+    datastart = Timestamp();
 
     click_qsort(intervals, pkt_cnt, sizeof(struct IntervalStream),
     		&compare_time);
@@ -404,9 +398,9 @@ CalculateCapacity::StreamInfo::fill_shortrate()
     for(i=0;i<pkt_cnt;i++){
 	ackbytes = intervals[i].newack;
 	databytes = intervals[i].size;
-	start = intervals[i].time;
+	Timestamp start = intervals[i].time;
 	for(j=i+1 ; j<pkt_cnt ; j++){
-	    if(float_timeval(intervals[j].time - start) < time_windowsize){
+	    if((intervals[j].time - start).to_double() < time_windowsize){
 		ackbytes += intervals[j].newack;
 		databytes += intervals[j].size;
 	    } else {
@@ -421,7 +415,7 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 	//printf("j-1: %d\n", j-i);
 	//must be larger than any single flight
 	double timetmp = j - i > 20 ?
-	    float_timeval(intervals[j].time - start) : time_windowsize;
+	    (intervals[j].time - start).to_double() : time_windowsize;
 	double tmp = ackbytes / timetmp;
 	if(tmp > ackrate){
 	    ackrate = tmp;
@@ -456,15 +450,15 @@ void
 CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 {
     if (FILE *f = cf->traceinfo_file()) {
-	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
+	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
-	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
 		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
-		_init_time.tv_sec, _init_time.tv_usec,
-		end_time.tv_sec, end_time.tv_usec);
+		_init_time.sec(), _init_time.subsec(),
+		end_time.sec(), end_time.subsec());
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
@@ -490,8 +484,8 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 
 	drate = _stream[bigger].datarate;
 	arate = _stream[!bigger].ackrate;
-	struct timeval atime = _stream[!bigger].ackstart;
-	struct timeval dtime = _stream[bigger].datastart;
+	Timestamp atime = _stream[!bigger].ackstart;
+	Timestamp dtime = _stream[bigger].datastart;
 	uint32_t abytes = _stream[!bigger].abytes;
 	uint32_t dbytes = _stream[bigger].dbytes;
 
@@ -506,9 +500,9 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 // 	}
 
 	fprintf(f, "  <rate data='%lf' ack='%lf' dir='%u' "
-		"dtime='%d.%06d' atime='%d.%06d' db='%d' ab='%d' />\n",
-		drate, arate, bigger, (int)dtime.tv_sec, (int)dtime.tv_usec,
-		(int)atime.tv_sec, (int)atime.tv_usec, dbytes, abytes);
+		"dtime='" PRITIMESTAMP "' atime='" PRITIMESTAMP "' db='%d' ab='%d' />\n",
+		drate, arate, bigger, dtime.sec(), dtime.subsec(),
+		atime.sec(), atime.subsec(), dbytes, abytes);
 	
 
 	_stream[0].write_xml(f);

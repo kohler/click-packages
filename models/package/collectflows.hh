@@ -46,7 +46,7 @@ class CollectTCPFlows : public Element { public:
 
     Flow *_done_head;
     Flow *_done_tail;
-    struct timeval _done_timestamp;
+    Timestamp _done_timestamp;
 
     FILE *_f;
     String _filename;
@@ -54,7 +54,7 @@ class CollectTCPFlows : public Element { public:
     
     Packet *bad_packet(Packet *);
     Flow *add_flow(const IPFlowID &, Packet *);
-    void pass_over_done(const struct timeval &);
+    void pass_over_done(const Timestamp &);
 
     void clear(bool write);
     void write_flow(const Flow *);
@@ -77,8 +77,8 @@ class CollectTCPFlows::Flow { public:
 
     int protocol() const	{ return 6; }
     
-    const struct timeval &first_session_timestamp() const;
-    const struct timeval &last_session_timestamp() const;
+    const Timestamp &first_session_timestamp() const;
+    const Timestamp &last_session_timestamp() const;
 
     uint32_t packet_count() const	{ return _packet_count; }
     
@@ -95,7 +95,7 @@ class CollectTCPFlows::Flow { public:
     inline Flow *free_from_free(Map &);
     void clear_free_tracked()	{ _free_tracked = _reverse->_free_tracked = false; _free_next = 0; assert(_reverse->_free_next == 0); }
 
-    inline bool used_since(const struct timeval &) const;
+    inline bool used_since(const Timestamp &) const;
     
     inline void update(const Packet *, CollectTCPFlows *);
     
@@ -107,8 +107,8 @@ class CollectTCPFlows::Flow { public:
     uint32_t _packet_count;
     uint64_t _byte_count;
     
-    struct timeval _first_ts;
-    struct timeval _last_ts;
+    Timestamp _first_ts;
+    Timestamp _last_ts;
     
     bool _is_primary : 1;
     bool _flow_over : 1;
@@ -128,8 +128,6 @@ CollectTCPFlows::Flow::Flow(const IPFlowID &flowid, bool is_primary)
       _is_primary(is_primary), _flow_over(false), _free_tracked(false),
       _free_next(0)
 {
-    timerclear(&_first_ts);
-    timerclear(&_last_ts);
 }
 
 inline void
@@ -139,8 +137,7 @@ CollectTCPFlows::Flow::clear(bool is_primary)
     _byte_count = 0;
     _is_primary = is_primary;
     _flow_over = false;
-    timerclear(&_first_ts);
-    timerclear(&_last_ts);
+    _first_ts = _last_ts = Timestamp();
 }
 
 inline void
@@ -164,22 +161,22 @@ CollectTCPFlows::Flow::add_to_free_tracked_tail(Flow *&head, Flow *&tail)
 }
 
 inline bool
-CollectTCPFlows::Flow::used_since(const struct timeval &when) const
+CollectTCPFlows::Flow::used_since(const Timestamp &when) const
 {
-    return timercmp(&_last_ts, &when, >) || timercmp(&_reverse->_last_ts, &when, >);
+    return _last_ts > when || _reverse->_last_ts > when;
 }
 
-inline const struct timeval &
+inline const Timestamp &
 CollectTCPFlows::Flow::first_session_timestamp() const
 {
     // by definition, primary's first timestamp is first
     return primary()->_first_ts;
 }
 
-inline const struct timeval &
+inline const Timestamp &
 CollectTCPFlows::Flow::last_session_timestamp() const
 {
-    if (timercmp(&_last_ts, &_reverse->_last_ts, >))
+    if (_last_ts > _reverse->_last_ts)
 	return _last_ts;
     else
 	return _reverse->_last_ts;

@@ -149,7 +149,7 @@ TCPMystery::calculate_semirtt(Stream* s, Conn* c)
     for (Pkt* k = s->pkt_head; k; k = k->next) {
 	MyPkt* mk = mypkt(k);
 	if (mk->flags & MyPkt::F_TRUE_CAUSED_ACK) {
-	    double semirtt = timeval2double(mk->caused_ack->timestamp - k->timestamp);
+	    double semirtt = (mk->caused_ack->timestamp - k->timestamp).to_double();
 	    if (k == s->pkt_head)
 		ms->semirtt_syn = semirtt;
 	    ms->semirtt_min = std::min(ms->semirtt_min, semirtt);
@@ -222,8 +222,8 @@ TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCol
     for (Pkt* k = s->pkt_head; k; k = k->next) {
 	MyPkt* mk = my->mypkt(k);
 	if (Pkt* ackk = mk->caused_ack) {
-	    struct timeval latency = ackk->timestamp - k->timestamp;
-	    fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ackk->max_ack(), latency.tv_sec, latency.tv_usec);
+	    Timestamp latency = ackk->timestamp - k->timestamp;
+	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, ackk->max_ack(), latency._sec, latency._subsec);
 	}
     }
     
@@ -281,7 +281,7 @@ TCPMystery::mystery_undelivered_xmltag(FILE* f, TCPCollector::Stream* s, TCPColl
 		fprintf(f, ">\n");
 		any = true;
 	    }
-	    fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	}
 
     if (any)
@@ -303,7 +303,7 @@ TCPMystery::find_min_ack_latency(Stream* s, Conn* c)
 	    while (ackk && SEQ_LT(ackk->ack, k->end_seq))
 		ackk = ackk->next;
 	    if (ackk) {
-		timeval diff = ackk->timestamp - k->timestamp;
+		Timestamp diff = ackk->timestamp - k->timestamp;
 		if (!ms->have_ack_latency || diff < ms->min_ack_latency) {
 		    ms->min_ack_latency = diff;
 		    ms->have_ack_latency = true;
@@ -362,8 +362,8 @@ TCPMystery::find_loss_events(Stream* s, Conn* c)
 		    // than our oldest data.  Assume we have a retransmission
 		    // if k->ts >= x->ts + FAC * rtt.  FAC depends on how many
 		    // packets have passed.
-		    double rtt = timeval2double(c->rtt());
-		    double factor = timeval2double(k->timestamp - x->timestamp) / rtt;
+		    double rtt = c->rtt().to_double();
+		    double factor = (k->timestamp - x->timestamp).to_double() / rtt;
 		    if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
 			mk->flags |= MyPkt::F_REXMIT;
 			for (mk->rexmit = x; mk->rexmit->next != k && SEQ_LEQ(mk->rexmit->end_seq, k->seq); mk->rexmit = mk->rexmit->next)
@@ -401,7 +401,7 @@ TCPMystery::MStreamInfo::MStreamInfo()
     : have_ack_latency(false),
       max_live_seq(0), max_loss_seq(0),
       loss_events(0), false_loss_events(0),
-      event_id(0), min_ack_latency(make_timeval(0, 0)),
+      event_id(0), min_ack_latency(),
       acked_pkt_hint(0), nreordered(0), nundelivered(0),
       loss_trail(0)
 {
@@ -598,13 +598,13 @@ TCPMystery::MStreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) const
     // retransmission
     if ((result->flags & Pkt::F_NONORDERED)
 	&& have_ack_latency) {
-	struct timeval result_delta = (ackk->timestamp - result->timestamp) - min_ack_latency;
+	Timestamp result_delta = (ackk->timestamp - result->timestamp) - min_ack_latency;
 	for (Pkt *k = result->next; k && k->timestamp <= ackk->timestamp; k = k->next)
 	    if (SEQ_LT(k->end_seq, ackk->ack)) {
-		struct timeval delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
+		Timestamp delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
 		// XXX apply some fudge factor to this comparison?
 		if (delta < result_delta
-		    && (delta.tv_sec > 0 || delta.tv_usec > 0)) {
+		    && (delta._sec > 0 || delta._subsec > 0)) {
 		    result = k;
 		    result_delta = delta;
 		}
@@ -618,7 +618,7 @@ TCPMystery::MStreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) const
 
 #if 0
 void
-TCPMystery::MStreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
+TCPMystery::MStreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_latency, Timestamp &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
 {
     // find the relevant RTT
     bool refind_min_ack_latency = false;
@@ -749,10 +749,10 @@ TCPMystery::MStreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_se
 bool
 TCPMystery::MStreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const
 {
-    //click_chatter("mark_delivered at %{timeval}: %u  CA %{timeval}:%u  TH %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
+    //click_chatter("mark_delivered at %{timestamp}: %u  CA %{timestamp}:%u  TH %{timestamp}:%u  %{timestamp}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
     
     // update current RTT
-    struct timeval cur_min_ack_latency = min_ack_latency;
+    Timestamp cur_min_ack_latency = min_ack_latency;
     
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
@@ -966,10 +966,8 @@ TCPMystery::MConnInfo::MConnInfo()
     _flowid = IPFlowID(p);
     
     // set initial timestamp
-    if (timerisset(&p->timestamp_anno()))
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
-    else
-	timerclear(&_init_time);
+    if (p->timestamp_anno())
+	_init_time = p->timestamp_anno() - Timestamp::epsilon();
 
     // set file position
     if (filepos_call)
@@ -980,7 +978,7 @@ TCPMystery::MConnInfo::MConnInfo()
     _stream[1].direction = 1;
 }
 
-timeval
+Timestamp
 TCPMystery::MConnInfo::rtt() const
 {
     if (_stream[0].have_ack_latency && _stream[1].have_ack_latency)
@@ -990,7 +988,7 @@ TCPMystery::MConnInfo::rtt() const
     else if (_stream[1].have_ack_latency)
 	return _stream[1].min_ack_latency;
     else
-	return make_timeval(10000, 0);
+	return Timestamp(10000, 0);
 }
 
 
@@ -1124,7 +1122,7 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
     if (FILE *f = cf->traceinfo_file()) {
-	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
+	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
@@ -1138,8 +1136,8 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 	fprintf(f, ">\n");
 
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
-	    timeval min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
-	    fprintf(f, "  <rtt source='minacklatency' value='%ld.%06ld' />\n", min_rtt.tv_sec, min_rtt.tv_usec);
+	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
+	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt._sec, min_rtt._subsec);
 	}
 	
 	_stream[0].write_xml(this, f, cf->write_flags());
@@ -1174,7 +1172,7 @@ TCPMystery::MConnInfo::create_pkt(const Packet *p, TCPMystery *parent)
     }
 
     // check for timestamp confusion
-    struct timeval timestamp = p->timestamp_anno() - _init_time;
+    Timestamp timestamp = p->timestamp_anno() - _init_time;
     if (stream.pkt_tail && timestamp < stream.pkt_tail->timestamp) {
 	stream.time_confusion = true;
 	return 0;
@@ -1236,7 +1234,7 @@ TCPMystery::MConnInfo::post_update_state(const Packet *p, Pkt *k, TCPMystery *cf
 	if (!k->prev || k->ack != k->prev->ack)
 	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k, ack_stream.acked_pkt_hint)) {
 		ack_stream.acked_pkt_hint = acked_pkt;
-		struct timeval latency = k->timestamp - acked_pkt->timestamp;
+		Timestamp latency = k->timestamp - acked_pkt->timestamp;
 		if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
 		    ack_stream.have_ack_latency = true;
 		    ack_stream.min_ack_latency = latency;

@@ -18,6 +18,7 @@ distdir = $(PACKAGE)-$(VERSION)
 
 dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)
+	-rm -rf $(distdir)
 distdir:
 	for d in $(SUBDIRS); do \
 	  if [ -d $$d/m4 ]; then cp $(CLICKDIR)/m4/click.m4 $$d/m4; \

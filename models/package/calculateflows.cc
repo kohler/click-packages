@@ -23,7 +23,7 @@ CalculateFlows::StreamInfo::StreamInfo()
       max_live_seq(0), max_loss_seq(0),
       total_packets(0), ack_packets(0), total_seq(0),
       loss_events(0), false_loss_events(0),
-      event_id(0), min_ack_latency(make_timeval(0, 0)),
+      event_id(0), min_ack_latency(),
       end_rcv_window(0), rcv_window_scale(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0),
       acked_pkt_hint(0),
@@ -79,8 +79,8 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    // Assume we have a retransmission if np->ts >= x->ts + FAC * rtt.
 	    // FAC depends on how many packets have passed.
 	    if (!rexmit) {
-		double rtt = timeval2double(conn->rtt());
-		double factor = timeval2double(np->timestamp - x->timestamp) / (rtt ? rtt : 0.1);
+		double rtt = conn->rtt().to_double();
+		double factor = (np->timestamp - x->timestamp).to_double() / (rtt ? rtt : 0.1);
 		if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
 		    for (rexmit = x; rexmit->next != np && SEQ_LEQ(rexmit->end_seq, np->seq); rexmit = rexmit->next)
 			/* nada */;
@@ -327,13 +327,13 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
     // retransmission
     if ((result->flags & Pkt::F_NONORDERED)
 	&& have_ack_latency) {
-	struct timeval result_delta = (ackk->timestamp - result->timestamp) - min_ack_latency;
+	Timestamp result_delta = (ackk->timestamp - result->timestamp) - min_ack_latency;
 	for (Pkt *k = result->next; k && k->timestamp <= ackk->timestamp; k = k->next)
 	    if (SEQ_LT(k->end_seq, ackk->ack)) {
-		struct timeval delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
+		Timestamp delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
 		// XXX apply some fudge factor to this comparison?
 		if (delta < result_delta
-		    && (delta.tv_sec > 0 || delta.tv_usec > 0)) {
+		    && (delta._sec > 0 || delta._subsec > 0)) {
 		    result = k;
 		    result_delta = delta;
 		}
@@ -347,7 +347,7 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 
 #if 0
 void
-CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
+CalculateFlows::StreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_latency, Timestamp &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
 {
     // find the relevant RTT
     bool refind_min_ack_latency = false;
@@ -357,7 +357,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_a
     }
     
     while (ackwindow_begin
-	   && (cur_ack->timestamp - ackwindow_begin->timestamp).tv_sec > 5) {
+	   && (cur_ack->timestamp - ackwindow_begin->timestamp)._sec > 5) {
 	if (ackwindow_begin->cumack_pkt
 	    && ackwindow_begin->timestamp - ackwindow_begin->cumack_pkt->timestamp <= running_min_ack_latency)
 	    refind_min_ack_latency = true;
@@ -365,19 +365,19 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_a
     }
 
     if (refind_min_ack_latency) {
-	running_min_ack_latency.tv_sec = 10000;	
+	running_min_ack_latency._sec = 10000;	
 	ackwindow_end = ackwindow_begin;
     }
     
     while (ackwindow_end
-	   && (ackwindow_end->timestamp - cur_ack->timestamp).tv_sec < 5) {
+	   && (ackwindow_end->timestamp - cur_ack->timestamp)._sec < 5) {
 	if (ackwindow_end->cumack_pkt
 	    && ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp < running_min_ack_latency)
 	    running_min_ack_latency = ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp;
 	ackwindow_end = ackwindow_end->next;
     }
 
-    if (running_min_ack_latency.tv_sec >= 10000)
+    if (running_min_ack_latency._sec >= 10000)
 	cur_min_ack_latency = min_ack_latency;
     else
 	cur_min_ack_latency = running_min_ack_latency;
@@ -478,10 +478,10 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const
 {
-    //click_chatter("mark_delivered at %{timeval}: %u  CA %{timeval}:%u  TH %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
+    //click_chatter("mark_delivered at %{timestamp}: %u  CA %{timestamp}:%u  TH %{timestamp}:%u  %{timestamp}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
     
     // update current RTT
-    struct timeval cur_min_ack_latency = min_ack_latency;
+    Timestamp cur_min_ack_latency = min_ack_latency;
     
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
@@ -695,10 +695,8 @@ CalculateFlows::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_c
     _flowid = IPFlowID(p);
     
     // set initial timestamp
-    if (timerisset(&p->timestamp_anno()))
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
-    else
-	timerclear(&_init_time);
+    if (p->timestamp_anno())
+	_init_time = p->timestamp_anno() - Timestamp::epsilon();
 
     // set file position
     if (filepos_call)
@@ -709,7 +707,7 @@ CalculateFlows::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_c
     _stream[1].direction = 1;
 }
 
-struct timeval
+Timestamp
 CalculateFlows::ConnInfo::rtt() const
 {
     if (_stream[0].have_ack_latency && _stream[1].have_ack_latency)
@@ -719,7 +717,7 @@ CalculateFlows::ConnInfo::rtt() const
     else if (_stream[1].have_ack_latency)
 	return _stream[1].min_ack_latency;
     else
-	return make_timeval(10000, 0);
+	return Timestamp(10000, 0);
 }
 
 void
@@ -757,7 +755,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 {
     fprintf(f, "    <acklatency");
     if (have_ack_latency)
-	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
     fprintf(f, ">\n");
 
     const StreamInfo *acks = conn->stream(!direction);
@@ -767,8 +765,8 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 	if (ack->ack != last_ack) {
 	    last_ack = ack->ack;
 	    if (Pkt *k = find_acked_pkt(ack, hint)) {
-		struct timeval latency = ack->timestamp - k->timestamp;
-		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq, latency.tv_sec, latency.tv_usec);
+		Timestamp latency = ack->timestamp - k->timestamp;
+		fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq, latency._sec, latency._subsec);
 		hint = k;
 	    }
 	}
@@ -781,14 +779,14 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *, FILE *f) const
 {
     fprintf(f, "    <ackcausality");
     if (have_ack_latency)
-	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
     fprintf(f, ">\n");
     
     for (Pkt *k = pkt_head; k; k = k->next)
 	if (k->caused_ack) {
 	    Pkt *ack = k->caused_ack;
-	    struct timeval latency = ack->timestamp - k->timestamp;
-	    fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec);
+	    Timestamp latency = ack->timestamp - k->timestamp;
+	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, ack->ack, latency._sec, latency._subsec);
 	}
     
     fprintf(f, "    </ackcausality>\n");
@@ -803,7 +801,7 @@ CalculateFlows::StreamInfo::write_reordered_xml(FILE *f, WriteFlags write_flags,
 	    if ((k->flags & Pkt::F_REORDER)
 		|| (k->caused_ack && k->next && k->next->caused_ack
 		    && k->caused_ack->timestamp > k->next->caused_ack->timestamp)) {
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	    }
 	fprintf(f, "    </reordered>\n");
     } else
@@ -817,7 +815,7 @@ CalculateFlows::StreamInfo::write_full_rcv_window_xml(FILE *f) const
 	fprintf(f, "    <fullrcvwindow>\n");
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	fprintf(f, "    </fullrcvwindow>\n");
     }
 }
@@ -829,7 +827,7 @@ CalculateFlows::StreamInfo::write_window_probe_xml(FILE *f) const
 	fprintf(f, "    <windowprobe>\n");
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_WINDOW_PROBE)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	fprintf(f, "    </windowprobe>\n");
     }
 }
@@ -841,7 +839,7 @@ CalculateFlows::StreamInfo::write_undelivered_xml(FILE *f, WriteFlags write_flag
 	fprintf(f, "    <undelivered n='%d'>\n", nundelivered);
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (!(k->flags & Pkt::F_DELIVERED) && k->seq != k->end_seq)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	fprintf(f, "    </undelivered>\n");
     } else
 	fprintf(f, "    <undelivered n='%d' />\n", nundelivered);
@@ -852,7 +850,7 @@ CalculateFlows::StreamInfo::write_packets_xml(FILE *f) const
 {
     fprintf(f, "    <packet>\n");
     for (Pkt *k = pkt_head; k; k = k->next)
-	fprintf(f, "%ld.%06ld %u %u %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
+	fprintf(f, PRITIMESTAMP " %u %u %u\n", k->timestamp._sec, k->timestamp._subsec, k->seq, k->end_seq - k->seq, k->ack);
     fprintf(f, "    </packet>\n");
 }
 
@@ -863,7 +861,7 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	    direction, total_packets - ack_packets, ack_packets,
 	    init_seq, total_seq, loss_events, false_loss_events);
     if (have_ack_latency)
-	fprintf(f, " minacklatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " minacklatency='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
     if (sent_sackok)
 	fprintf(f, " sentsackok='yes'");
     if (different_syn)
@@ -930,22 +928,22 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
     _stream[0].output_loss(this, cf);
     _stream[1].output_loss(this, cf);
     if (FILE *f = cf->traceinfo_file()) {
-	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
+	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
-	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
 		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
-		_init_time.tv_sec, _init_time.tv_usec,
-		end_time.tv_sec, end_time.tv_usec);
+		_init_time._sec, _init_time._subsec,
+		end_time._sec, end_time._subsec);
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
 
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
-	    timeval min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
-	    fprintf(f, "  <rtt source='minacklatency' value='%ld.%06ld' />\n", min_rtt.tv_sec, min_rtt.tv_usec);
+	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
+	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt._sec, min_rtt._subsec);
 	}
 	
 	_stream[0].write_xml(this, f, cf->write_flags());
@@ -980,7 +978,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
     }
 
     // check for timestamp confusion
-    struct timeval timestamp = p->timestamp_anno() - _init_time;
+    Timestamp timestamp = p->timestamp_anno() - _init_time;
     if (stream.pkt_tail && timestamp < stream.pkt_tail->timestamp) {
 	stream.time_confusion = true;
 	return 0;
@@ -1042,7 +1040,7 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	if (!k->prev || k->ack != k->prev->ack)
 	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k, ack_stream.acked_pkt_hint)) {
 		ack_stream.acked_pkt_hint = acked_pkt;
-		struct timeval latency = k->timestamp - acked_pkt->timestamp;
+		Timestamp latency = k->timestamp - acked_pkt->timestamp;
 		if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
 		    ack_stream.have_ack_latency = true;
 		    ack_stream.min_ack_latency = latency;

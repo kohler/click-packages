@@ -210,7 +210,7 @@ struct CalculateFlows::Pkt {
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
-    struct timeval timestamp;	// timestamp of this packet
+    Timestamp timestamp;	// timestamp of this packet
     uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
 
@@ -246,8 +246,8 @@ struct CalculateFlows::LossInfo {
     uint32_t end_data_packetno;
     tcp_seq_t seq;
     tcp_seq_t top_seq;
-    struct timeval time;
-    struct timeval end_time;
+    Timestamp time;
+    Timestamp end_time;
 
     bool unparse(StringAccum &, const StreamInfo *, const ConnInfo *, bool include_aggregate, bool absolute_time = true, bool absolute_seq = true) const;
     void unparse_xml(StringAccum &) const;
@@ -298,7 +298,7 @@ struct CalculateFlows::StreamInfo {
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
 
-    struct timeval min_ack_latency; // minimum time between packet and ACK
+    Timestamp min_ack_latency;	// minimum time between packet and ACK
 
     tcp_seq_t end_rcv_window;	// end of receive window
     int rcv_window_scale;	// window scaling option
@@ -350,8 +350,8 @@ class CalculateFlows::ConnInfo {  public:
     void kill(CalculateFlows *);
 
     uint32_t aggregate() const		{ return _aggregate; }
-    const struct timeval &init_time() const { return _init_time; }
-    struct timeval rtt() const;
+    const Timestamp &init_time() const	{ return _init_time; }
+    Timestamp rtt() const;
     const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
 
     void handle_packet(const Packet *, CalculateFlows *);
@@ -366,7 +366,7 @@ class CalculateFlows::ConnInfo {  public:
 
     uint32_t _aggregate;	// aggregate number
     IPFlowID _flowid;		// flow identifier for _stream[0]
-    struct timeval _init_time;	// first time seen in stream
+    Timestamp _init_time;	// first time seen in stream
     String _filepos;		// file position of first packet
     bool _finished : 1;		// have we finished the flow?
     bool _clean : 1;		// have packets been added since we finished?

@@ -98,8 +98,6 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    static double float_timeval(const struct timeval &);
-    
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
@@ -132,7 +130,7 @@ struct CalculateCapacity::Pkt {
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t last_seq;		// last sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
-    struct timeval timestamp;	// timestamp of this packet
+    Timestamp timestamp;	// timestamp of this packet
     uint32_t hsize;             // ip+tcp header size
 
     int flags;			// packet flags
@@ -154,8 +152,8 @@ struct CalculateCapacity::StreamInfo {
 
     double datarate;
     double ackrate;
-    struct timeval ackstart;
-    struct timeval datastart;
+    Timestamp ackstart;
+    Timestamp datastart;
     uint32_t dbytes;
     uint32_t abytes;
 
@@ -186,8 +184,8 @@ struct CalculateCapacity::StreamInfo {
 struct CalculateCapacity::StreamInfo::IntervalStream {
     tcp_seq_t size; //packet size (incl headers)
     tcp_seq_t newack; //new ack data
-    struct timeval interval; //time since previous packet
-    struct timeval time; //flow-relative
+    Timestamp interval; //time since previous packet
+    Timestamp time; //flow-relative
 };
 
 struct CalculateCapacity::StreamInfo::Peak {
@@ -209,7 +207,7 @@ class CalculateCapacity::ConnInfo {  public:
     void kill(CalculateCapacity *);
 
     uint32_t aggregate() const		{ return _aggregate; }
-    const struct timeval &init_time() const { return _init_time; }
+    const Timestamp &init_time() const	{ return _init_time; }
 
     void handle_packet(const Packet *, CalculateCapacity *);
     
@@ -219,7 +217,7 @@ class CalculateCapacity::ConnInfo {  public:
 
     uint32_t _aggregate;	// aggregate number
     IPFlowID _flowid;		// flow identifier for _stream[0]
-    struct timeval _init_time;	// first time seen in stream
+    Timestamp _init_time;	// first time seen in stream
     String _filepos;		// file position of first packet
     StreamInfo _stream[2];
     
@@ -247,12 +245,6 @@ CalculateCapacity::free_pkt_list(Pkt *head, Pkt *tail)
 	tail->next = _free_pkt;
 	_free_pkt = head;
     }
-}
-
-inline double
-CalculateCapacity::float_timeval(const struct timeval &tv)
-{
-    return tv.tv_sec + tv.tv_usec / 1e6;
 }
 
 CLICK_ENDDECLS

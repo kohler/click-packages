@@ -244,7 +244,7 @@ struct TCPCollector::Pkt {
     tcp_seq_t ack;		// ack sequence number of this packet
     uint32_t* sack;		// pointer to sack information
     tcp_seq_t max_ack() const;	// either ack or latest sack
-    struct timeval timestamp;	// timestamp of this packet
+    Timestamp timestamp;	// timestamp of this packet
     uint32_t packetno_anno;	// packet number annotation of this packet
     uint16_t ip_id;		// IP ID of this packet
     uint16_t th_flags;		// TCP flags
@@ -333,8 +333,8 @@ class TCPCollector::Conn {  public:
 
     uint32_t aggregate() const		{ return _aggregate; }
     bool ip_id() const			{ return _ip_id; }
-    const timeval &init_time() const	{ return _init_time; }
-    timeval duration() const;
+    const Timestamp &init_time() const	{ return _init_time; }
+    Timestamp duration() const;
     Stream* stream(int i) const	{ assert(i==0||i==1); return _stream[i]; }
     Stream* ack_stream(int i) const	{ return stream(1 - i); }
     Stream* ack_stream(Stream* s) const	{ return stream(1 - s->direction); }
@@ -350,7 +350,7 @@ class TCPCollector::Conn {  public:
 
     uint32_t _aggregate;	// aggregate number
     IPFlowID _flowid;		// flow identifier for _stream[0]
-    struct timeval _init_time;	// first time seen in stream
+    Timestamp _init_time;	// first time seen in stream
     String _filepos;		// file position of first packet
     bool _ip_id : 1;		// use IP ID to distinguish duplicates?
     bool _clean : 1;		// have packets been added since we finished?

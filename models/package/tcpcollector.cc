@@ -23,10 +23,10 @@ CLICK_DECLS
 /*                             */
 /*******************************/
 
-timeval
+Timestamp
 TCPCollector::Conn::duration() const
 {
-    timeval d = (_stream[0]->pkt_tail ? _stream[0]->pkt_tail->timestamp : _init_time);
+    Timestamp d = (_stream[0]->pkt_tail ? _stream[0]->pkt_tail->timestamp : _init_time);
     if (_stream[1]->pkt_tail && _stream[1]->pkt_tail->timestamp > d)
 	d = _stream[1]->pkt_tail->timestamp;
     return d;
@@ -300,8 +300,8 @@ TCPCollector::Conn::handle_packet(const Packet *p, TCPCollector *parent)
     Stream* ack_stream = _stream[!direction];
 
     // set initial timestamp
-    if (!timerisset(&_init_time))
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
+    if (!_init_time)
+	_init_time = p->timestamp_anno() - Timestamp::epsilon();
 
     // set initial sequence numbers
     if (!stream->have_init_seq) {
@@ -314,7 +314,7 @@ TCPCollector::Conn::handle_packet(const Packet *p, TCPCollector *parent)
     }
 
     // check for timestamp confusion
-    struct timeval timestamp = p->timestamp_anno() - _init_time;
+    Timestamp timestamp = p->timestamp_anno() - _init_time;
     if (stream->pkt_tail && timestamp < stream->pkt_tail->timestamp) {
 	stream->time_confusion = true;
 	return;
@@ -383,10 +383,8 @@ TCPCollector::Conn::Conn(const Packet* p, const HandlerCall* filepos_call, bool 
     _flowid = IPFlowID(p);
     
     // set initial timestamp
-    if (timerisset(&p->timestamp_anno()))
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
-    else
-	timerclear(&_init_time);
+    if (p->timestamp_anno())
+	_init_time = p->timestamp_anno() - Timestamp::epsilon();
 
     // set file position
     if (filepos_call)
@@ -557,14 +555,14 @@ xmlprotect(const String &str)
 void
 TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
 {
-    timeval duration = this->duration();
+    Timestamp duration = this->duration();
     
-    fprintf(f, "\n<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+    fprintf(f, "\n<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 	    _aggregate,
 	    _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 	    _flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
-	    _init_time.tv_sec, _init_time.tv_usec,
-	    duration.tv_sec, duration.tv_usec);
+	    _init_time._sec, _init_time._subsec,
+	    duration._sec, duration._subsec);
 
     if (_filepos)
 	fprintf(f, " filepos='%s'", String(_filepos).cc());
@@ -620,7 +618,7 @@ TCPCollector::Stream::packet_xmltag(FILE* f, Stream* stream, Conn*, const String
     if (stream->pkt_head) {
 	fprintf(f, "    <%s>", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next) {
-	    fprintf(f, "\n%ld.%06ld %u %u %u", k->timestamp.tv_sec, k->timestamp.tv_usec, k->seq, k->end_seq - k->seq, k->ack);
+	    fprintf(f, "\n" PRITIMESTAMP " %u %u %u", k->timestamp._sec, k->timestamp._subsec, k->seq, k->end_seq - k->seq, k->ack);
 	    if (const uint32_t* sack = k->sack) {
 		const uint32_t* end_sack = sack + *sack + 1;
 		char sep = ' ';
@@ -639,7 +637,7 @@ TCPCollector::Stream::fullrcvwindow_xmltag(FILE* f, Stream* stream, Conn*, const
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
 }
@@ -651,7 +649,7 @@ TCPCollector::Stream::windowprobe_xmltag(FILE* f, Stream* stream, Conn*, const S
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_WINDOW_PROBE)
-		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
 }
@@ -662,8 +660,8 @@ TCPCollector::Stream::interarrival_xmltag(FILE* f, Stream* stream, Conn*, const 
     if (stream->pkt_head) {
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head->next; k; k = k->next) {
-	    timeval diff = k->timestamp - k->prev->timestamp;
-	    fprintf(f, "%.0f\n", diff.tv_sec*1.0e6 + diff.tv_usec);
+	    Timestamp diff = k->timestamp - k->prev->timestamp;
+	    fprintf(f, "%.0f\n", diff.to_double() * 1e6);
 	}
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
