@@ -2,9 +2,9 @@
 #ifndef CLICK_CALCULATEFLOWS_HH
 #define CLICK_CALCULATEFLOWS_HH
 #include <click/element.hh>
-#include <click/ipflowid.hh>
+#include <click/integerid.hh>
 #include <click/bighashmap.hh>
-
+#include <math.h>
 /*
 =c
 
@@ -71,253 +71,271 @@ class CalculateFlows : public Element { public:
     const char *processing() const	{ return "a/ah"; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
-
-    Packet *simple_action(Packet *);
+	void print_ack_event(unsigned, int,  timeval, unsigned);
+	void print_send_event(unsigned, timeval, unsigned , unsigned);
+	Packet *simple_action(Packet *);
+	struct TimeInterval {
+		timeval	time;
+		uint32_t start_byte;
+		uint32_t end_byte;
+		TimeInterval():start_byte(0), end_byte(0){ };
+	};
+	typedef BigHashMap<unsigned, short int> MapS;
+	typedef BigHashMap<unsigned, timeval> MapT;
+	typedef BigHashMap <unsigned, TimeInterval> MapInterval;
+   
+		
 	class LossInfo {
 
 	private:	
-		unsigned 	_src_last_seq;
-		unsigned 	_src_last_ack;
-		unsigned 	_src_num_of_bytes;
-		unsigned	 _src_total_bytes_lost;
-		unsigned	 _src_total_packets;
-		
-		unsigned 	_dst_last_seq;
-		unsigned 	_dst_last_ack;
-		unsigned 	_dst_num_of_bytes;
-		unsigned	_dst_total_bytes_lost;
-		unsigned	_dst_total_packets;
 
+		unsigned  _last_seq[2];
+		unsigned  _last_ack[2];
+		unsigned  _max_seq[2];
+		unsigned  _total_bytes[2];
+		unsigned  _bytes_lost[2];
+		unsigned  _packets[2];
+		unsigned  _loss_events[2];
+		   
 	public:	
-		LossInfo() { 
-			_src_last_seq = 0;
-			_src_last_ack = 0;
-			_src_num_of_bytes = 0;
-			_src_total_bytes_lost = 0;
-			_src_total_packets = 0;
-			_dst_last_seq = 0;
-			_dst_last_ack = 0;
-			_dst_num_of_bytes = 0;
-			_dst_total_bytes_lost = 0;
-			_dst_total_packets = 0;
-		};
 
-		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
-		switch (paint) {
-				case 0 : {
-					if (_src_last_seq > seq ){  // we do a retransmission  (Bytes are lost...)
-						if (seq + block_size < _src_last_seq){ // are we transmiting new bytes also?
-							_src_total_bytes_lost = _src_total_bytes_lost + block_size;
-						}
-						else{ // we retransmit something old
-							_src_total_bytes_lost = _src_total_bytes_lost + (_src_last_seq-seq);
-							_src_last_seq = seq + block_size; // increase our last sequence to cover new data
-						}
+		MapT time_by_firstseq[2];
+		MapT time_by_lastseq[2];
+		MapInterval inter_by_time[2];
+		MapS acks[2];
+		unsigned  rel_seq[2];
+		double prev_diff[2];
+		short int doubling[2];
+		short int prev_doubling[2];
+			
+		LossInfo() { 
+			
+			rel_seq[0] = 0;
+			prev_diff[0] = 0;
+			doubling[0] = -1;
+			prev_doubling[0] = 0;
+			_last_seq[0] = 0;
+			_last_ack[0] = 0;
+			_max_seq[0] = 0;
+			_total_bytes[0] = 0;
+			_bytes_lost[0] = 0;
+			_packets[0] = 0;
+			_loss_events[0] = 0;
+			
+			
+			rel_seq[1] = 0;
+			prev_diff[1]=0;
+			doubling[1] = -1;
+			prev_doubling[1] = 0;
+			_last_seq[1] = 0;
+			_last_ack[1] = 0;
+			_max_seq[1] = 0;
+			_total_bytes[1] = 0;
+			_bytes_lost[1] = 0;
+			_packets[1] = 0;
+			_loss_events[1] = 0;
+		};
+		
+		
+		timeval Search_seq_interval(unsigned start_seq, unsigned end_seq, unsigned paint){
+		
+			timeval tbstart = time_by_firstseq[paint].find(start_seq);
+			timeval tbend = time_by_lastseq[paint].find(end_seq);
+			MapInterval &ibtime = inter_by_time[paint];
+
+				if (!tbend.tv_sec){ 
+					if (!tbstart.tv_sec){ // We have a partial retransmission ...
+						for (MapInterval::Iterator iter = ibtime.first(); iter; iter++){
+	   						TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
+						   	if (tinter->start_byte < start_seq && tinter->end_byte > start_seq){
+								return tinter->time;
+							}  
+							//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
+	    				}
+						// nothing matches (that cannot be possible ERROR)
+						click_chatter("Error cannot find packet in flow history!");
+						timeval tv = timeval();
+						return tv;
 					}
-					else { // no loss normal data transfer
-						_src_last_seq = seq+block_size; 
+					else{
+						//printf("Found in Start Byte Hash\n");
+						return tbstart;
 					}
-					break;
+					
+				}		
+				else{
+					//printf("Found in End Byte Hash\n");
+					return tbend;
 				}
-				case 1: {
-					if (_dst_last_seq > seq ){  // we do a retransmission  (Bytes are lost...)
-						if (seq + block_size < _dst_last_seq){ // are we transmiting new bytes also?
-							_dst_total_bytes_lost = _dst_total_bytes_lost + block_size;
+			
+		};
+		
+		double timesub (timeval end_time , timeval start_time){
+			return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
+		}
+				
+		void calculate_loss_events(unsigned seq, unsigned seqlen, timeval time, unsigned paint){
+			double curr_diff;
+			short int num_of_acks = acks[paint].find(seq);
+								
+			if ( seq < _max_seq[paint]){ // then we may have a new event.
+				if ( seq < _last_seq[paint]){  //We have a new event ...
+					timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
+						if (prev_diff[paint] == 0){ //first time
+				            prev_diff[paint] = timesub(time, time_last_sent);
+							curr_diff = prev_diff[paint];
 						}
-						else{ // we retransmit something old
-							_dst_total_bytes_lost = _dst_total_bytes_lost + ( _src_last_seq - seq );
-							_dst_last_seq = seq + block_size; // increase our last sequence to cover new data
+						else{
+							prev_diff[paint] = prev_diff[paint] < 0.000001 ? 0.000001 : prev_diff[paint];															
+							curr_diff = timesub(time,time_last_sent);
+							if (( doubling[paint] == 32) && (fabs(1-curr_diff/prev_diff[paint]) < 0.1)){
+								printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
+							}
+							else{
+								if ((fabs(2.-curr_diff/prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))){
+									if (doubling[paint] < 1){
+										doubling[paint] = prev_doubling[paint];
+									}
+									doubling[paint] = 2*doubling[paint];
+								}
+								if ((fabs(2.-curr_diff/prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))){
+									prev_doubling[paint] = doubling[paint];
+									doubling[paint] = 0;
+								}
+							}
+						}					
+						
+						if (num_of_acks > 3){ //triple dup.
+							printf("We have a triple dup in time: [%ld.%06ld] seq:[%u]"
+																,time.tv_sec, time.tv_usec, seq);
+								acks[paint].insert(seq, -10000);
 						}
-					}
-				else { // no loss normal data transfer
-						_dst_last_seq = seq+block_size; 
-					}
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
+						else{ 					
+							acks[paint].insert(seq, -10000);
+							doubling[paint] = doubling[paint] < 1 ? 1 : doubling[paint] ;
+							printf ("We have a timeout of %f, in time: [%ld.%06ld] seq:[%u]",
+								(log(doubling[paint])/log(2)), time.tv_sec, time.tv_usec, seq); 
+							prev_diff[paint] = curr_diff;
+						}
 				}
 			}
+			else{ // this is a first time send event
+				
+				if (_max_seq[paint] < _last_seq[paint]){
+					_max_seq[paint] = _last_seq[paint];
+				}
+			}	
+			
 		};
+
+		
+		void calculate_loss(unsigned seq, unsigned block_size, unsigned paint){
+			if (seq < _last_seq[paint] ){  // we do a retransmission  (Bytes are lost...)
+				if (seq + block_size < _last_seq[paint]){ // are we transmiting new bytes also?
+					_bytes_lost[paint] = _bytes_lost[paint] + block_size;
+				}
+				else{ // we retransmit something old
+					_bytes_lost[paint] = _bytes_lost[paint] + (_last_seq[paint]-seq);
+					_last_seq[paint] = seq + block_size; // increase our last sequence to cover new data
+				}
+			}
+			else { // no loss normal data transfer
+				_last_seq[paint] = seq+block_size; 
+			}
+			
+		};
+		void set_rel_seq(unsigned seq, unsigned paint){
+		
+			rel_seq[paint] = seq;
+		
+		};
+
 
 		void set_last_seq(unsigned seq, unsigned paint){
-			
-			switch (paint) {
-				case 0 : {
-					_src_last_seq = seq;
-					break;
-				}
-				case 1: {
-					_dst_last_seq = seq;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
-				}
-			}
+		
+			_last_seq[paint] = seq;
+		
 		};
 		
 		void set_last_ack(unsigned ack, unsigned paint){
-			switch (paint) {
-				case 0 : {
-					_src_last_ack = ack;
-					break;
-				}
-				case 1: {
-					_dst_last_ack = ack;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
-	
-				}
-			}
+		
+			_last_ack[paint] = ack;
+		
 		};
 	
-		void set_num_of_bytes(unsigned bytes, unsigned paint){
-			switch (paint) {
-				case 0 : {
-					_src_num_of_bytes = bytes;
-					break;
-				}
-				case 1: {
-					_dst_num_of_bytes = bytes;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
-				}
-			}
+		void set_total_bytes(unsigned bytes, unsigned paint){
+	
+			_total_bytes[paint] = bytes;
+	
 		};
 	
-		void set_total_packets(unsigned packets, unsigned paint){
-			switch (paint) {
-				case 0 : {
-					_src_total_packets = packets;
-					break;
-				}
-				case 1: {
-					_dst_total_packets = packets;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
-				}
-			}
+		void set_packets(unsigned packets, unsigned paint){
+	
+			_packets[paint] = packets;
+	
 		};
 
-		void inc_total_packets(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					_src_total_packets++;
-					break;
-				}
-				case 1: {
-					_dst_total_packets++;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					break;
-				}
-			}
+		void inc_packets(unsigned paint){
+	
+			_packets[paint]++;
+	
 		};
 
 		unsigned last_seq(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					return _src_last_seq;
-					break;
-				}
-				case 1: {
-					return _dst_last_seq;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					return 0;
-					break;
-				}
-			}
+		
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+
+			return _last_seq[paint];
 		};
 		
 		unsigned last_ack(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					return _src_last_ack;
-					break;
-				}
-				case 1: {
-					return _dst_last_ack;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					return 0;		
-					break;
-				}
-			}
+		
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+		
+			return _last_ack[paint];
 		};
 	
-		unsigned num_of_bytes(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					return _src_num_of_bytes;
-					break;
-				}
-				case 1: {
-					return _dst_num_of_bytes;
-					break;
-				}
-				default: {
-					printf("Error overflow Paint\n");		
-					return 0;		
-					break;
-				}
-			}
+		unsigned total_bytes(unsigned paint){
+	
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+	
+			return _total_bytes[paint];
 		};
 	
-		unsigned total_packets(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					return _src_total_packets;
-					break;
-				}
-				case 1: {
-					return _dst_total_packets;
-				}
-				default: {
-					printf("Error overflow Paint\n");
-					return 0;		 
-				}
-			}
-		};
-
-		unsigned total_bytes_lost(unsigned paint){
-			switch (paint) {
-				case 0 : {
-					return _src_total_bytes_lost;
-					break;
-				}
-				case 1: {
-					return _dst_total_bytes_lost;
-				}
-				default: {
-					printf("Error overflow Paint\n");
-					return 0;		 
-				}
-			}
-		};
 	
+		unsigned packets(unsigned paint){
+			
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+	
+			return _packets[paint];
+		};
+		
+		unsigned bytes_lost(unsigned paint){
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+	
+			return _bytes_lost[paint];
+		};
 		
 		
 	};
 	LossInfo loss;
+	String _outfilename[2];
+	
     
 };
 
