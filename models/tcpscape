@@ -37,7 +37,7 @@ _screen_style = {
 
     "border": LineDescriptor(0.66, 0.66, 0.66),
     "bg": LineDescriptor(1, 1, 1),
-    "label": LineDescriptor(0.66, 0.66, 0.66),
+    "label": LineDescriptor(0.4, 0.4, 0.4),
 
     "highlight": LineDescriptor(1, 0.9, 0, linewidth=2)
     }
@@ -83,6 +83,41 @@ def frange(start, stop, step):
             break
         yield pos
         i += 1
+
+def fix_range(a, b, min_step_frac):
+    d = b - a
+    step = 10 ** floor(log10(d))
+
+    # make step bigger if required
+    if step / d > 0.5 and step / d >= min_step_frac:
+        if step/5 / d >= min_step_frac:
+            step /= 5
+        elif step/2.5 / d >= min_step_frac:
+            step /= 2.5
+        elif step/2 / d >= min_step_frac:
+            step /= 2
+    while step < d and step / d < min_step_frac:
+        if 2*step / d >= min_step_frac:
+            step *= 2
+        elif 2.5*step / d >= min_step_frac:
+            step *= 2.5
+        elif 5*step / d >= min_step_frac:
+            step *= 5
+        else:
+            step *= 10
+    if step >= d:
+        step = d
+
+    # bound a and b to multiples of step, if appropriate
+    a_try = floor(a / step) * step
+    if a - a_try < 0.1*d:
+        a = a_try; d = b - a
+    b_try = ceil(b / step) * step
+    if b_try - b < 0.1*d:
+        b = b_try
+    
+    # return a dictionary
+    return { "low": a, "high": b, "step": step }
 
 def uncompressed_file(filename):
     f = file(filename, "rb")
@@ -161,6 +196,10 @@ def remove_duplicates(l):
     del l[len(l) - delta:]
 
 
+####################
+# packets and loss events
+#
+
 class Packet(object):
     __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
     def __init__(self, time, flags, seq, payloadlen, ack, window=0):
@@ -207,6 +246,10 @@ class LossEvent:
         self.end_seq = seqadj(self.end_seq, seq_adj)
 
 
+####################
+# connections and flowrefs
+#
+
 class ConnectionFormatError(Exception):
     def __init__(self, s=""):
         self.str = s
@@ -231,7 +274,6 @@ def direction(dir):
         return int(dir)
     else:
         raise ConnectionFormatError, "bad direction " + `dir`
-
 
 class Connection(object):
 
@@ -282,6 +324,7 @@ class Connection(object):
                 t0 = min(self.s[1][0].time, t0)
                 s0 = min(self.s[1][0].ack, s0)
                 s1 = min(self.s[1][0].seq, s1)
+            # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXxx
             #if len(self.loss[0]):
             #    t0 = min(self.loss[0][0].begin, t0)
             #if len(self.loss[1]):
@@ -426,6 +469,57 @@ class Connection(object):
         return "<#%d: %s:%s <> %s:%s %d/%d>" % (self.aggregate, fid[0], fid[1], fid[2], fid[3], len(self.s[0]), len(self.s[1]))
 
 
+class FlowRef(object):
+
+    __slots__ = ['conn', 'dir']
+
+    def __init__(self, conn, dir):
+        self.conn, self.dir = conn, dir
+
+    def loss_count(self):
+        return self.conn.loss_count[self.dir]
+
+    def aggregate(self):
+        return self.conn.aggregate
+
+    def direction(self):
+        return self.dir
+
+    def has_window(self):
+        return self.conn.has_window
+
+    def get_flowid_text(self):
+        return self.conn.get_flowid_text(self.dir)
+
+    def get_description(self):
+        s = self.conn.get_description()
+        if self.dir:
+            s = re.sub(" > ", " < ", s)
+        return s
+
+    def get_filename(self):
+        return self.conn.get_filename()
+    
+    def opposite(self):
+        return FlowRef(self.conn, 1 - self.dir)
+    
+    def unload(self):
+        self.conn.unload()
+
+    def __cmp__(self, other):
+        if self.conn is other.conn:
+            return self.dir - other.dir
+        elif self.conn < other.conn:
+            return -1
+        else:
+            return 1
+
+    def __str__(self):
+        fid = self.conn.flowid
+        return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
+
+
+
 ####################
 # Connection readers
 #
@@ -456,6 +550,124 @@ class SafeFile:
     def read(self):
         p, self.pos = self.pos, len(self.str)
         return self.str[p:] + self.f.read()
+
+
+class TCPPacket(object):
+
+    __slots__ = ['time', 'iph', 'tpch', 'src', 'dst', 'sport', 'dport', 'ack', 'flags', 'win', 'payload_len']
+
+    def __init__(self, time, s, hl):
+        self.time = time
+        self.iph = iph = s[0:hl]
+        self.tcph = tcph = s[hl:]
+        self.src, self.dst = struct.unpack('!LL', self.iph[12:20])
+        self.sport, self.dport, self.seq, self.ack, crap, flags, self.win = \
+                    struct.unpack('!HHLLBBH', self.tcph[0:16])
+        self.flags = unparse_tcp_flags(flags)
+        tcp_off = ((crap >> 4) & 15) << 2
+        self.payload_len = struct.unpack('!H', self.iph[2:4])[0] - hl - tcp_off
+        
+
+class TCPDumpFile:
+
+    MAGIC = 0xA1B2C3D4L
+    MODIFIED_MAGIC = 0xA1B2CD34L
+    VMAJOR = 2
+    DLT_EN10MB = 1
+    DLT_RAW = 12
+
+    class Error(Exception):
+        def __init__(self, s=""):
+            self.str = s
+        def __str__(self):
+            return `self.str`
+
+    def __init__(self, f):
+        self.f = f
+        self.endian = '<'
+        try:
+            s = f.read(24)
+            magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                   struct.unpack('<LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                self.endian = '>'
+                magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                       struct.unpack('>LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                raise TCPDumpFile.Error("bad magic number " + `magic`)
+            if vmajor != self.VMAJOR:
+                raise TCPDumpFile.Error("bad major version")
+            
+            self.vminor = vminor
+            self.snaplen = snaplen
+            self.header = self.endian + 'LLLL'
+            self.header_size = 16
+            if magic == self.MODIFIED_MAGIC:
+                self.header_size += 8
+            self.s = ''
+            self.pos = 0
+
+            self.ip_filter = self.tcp_filter
+            if linktype == self.DLT_EN10MB:
+                self.dltfilter = self.ether_dltfilter
+            elif linktype == self.DLT_RAW:
+                self.dltfilter = self.ip_filter
+            else:
+                raise TCPDumpFile.Error("bad DLT")
+        except struct.error:
+            raise TCPDumpFile.Error("bad header length")
+
+    def seek(self, n):
+        self.s = ""
+        self.pos = 0
+        self.f.seek(n)
+
+    def tcp_filter(self, tsec, tusec, s):
+        vhl, p = ord(s[0:1]), ord(s[9:10])
+        v, hl = (vhl >> 4) & 0xF, (vhl & 0xF) << 2
+        if v == 4 and len(s) >= hl + 8 and p == 6:
+            return TCPPacket(tsec + tusec/1000000., s, hl)
+        else:
+            return None
+    
+    def ether_dltfilter(self, tsec, tusec, s):
+        if len(s) >= 14 + 20 and s[12:14] == "\x08\x00":
+            return self.ip_filter(tsec, tusec, s[14:])
+        else:
+            return None
+
+    def packets(self):
+        header_size, header, snaplen, vminor = self.header_size, self.header, self.snaplen, self.vminor
+        pos, s = self.pos, self.s
+        try:
+            while 1:
+                if pos + header_size > len(s):
+                    s = s[pos:] + self.f.read(32768)
+                    pos = 0
+                tsec, tusec, caplen, plen = struct.unpack(header, s[pos:pos+16])
+                if vminor < 3 or (vminor == 3 and caplen > len):
+                    caplen, plen = plen, caplen
+                if caplen > 65535:
+                    return
+                
+                skiplen = 0
+                if caplen > plen:
+                    skiplen = caplen - plen
+                
+                pos += header_size
+                if pos + caplen > len(s):
+                    s, pos = s[pos:], 0
+                    while caplen > len(s):
+                        oldlen = len(s)
+                        s += self.f.read(32768)
+                        if len(s) == oldlen: return
+                p = self.dltfilter(tsec, tusec, s[pos:pos + caplen - skiplen])
+                if p is not None:
+                    yield p
+                pos += caplen
+        except struct.error:
+            return
+
 
 class ConnectionReader:
 
@@ -718,172 +930,9 @@ except KeyError:\n\
             self.read_tcpdump(filename, f, filepos, endtime)
 
 
-
-class FlowRef(object):
-
-    __slots__ = ['conn', 'dir']
-
-    def __init__(self, conn, dir):
-        self.conn, self.dir = conn, dir
-
-    def loss_count(self):
-        return self.conn.loss_count[self.dir]
-
-    def aggregate(self):
-        return self.conn.aggregate
-
-    def direction(self):
-        return self.dir
-
-    def has_window(self):
-        return self.conn.has_window
-
-    def get_flowid_text(self):
-        return self.conn.get_flowid_text(self.dir)
-
-    def get_description(self):
-        s = self.conn.get_description()
-        if self.dir:
-            s = re.sub(" > ", " < ", s)
-        return s
-
-    def get_filename(self):
-        return self.conn.get_filename()
-    
-    def opposite(self):
-        return FlowRef(self.conn, 1 - self.dir)
-    
-    def unload(self):
-        self.conn.unload()
-
-    def __cmp__(self, other):
-        if self.conn is other.conn:
-            return self.dir - other.dir
-        elif self.conn < other.conn:
-            return -1
-        else:
-            return 1
-
-    def __str__(self):
-        fid = self.conn.flowid
-        return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
-
-
-
-class TCPPacket:
-
-    def __init__(self, time, s, hl):
-        self.time = time
-        self.iph = iph = s[0:hl]
-        self.tcph = tcph = s[hl:]
-        self.src, self.dst = struct.unpack('!LL', self.iph[12:20])
-        self.sport, self.dport, self.seq, self.ack, crap, flags, self.win = \
-                    struct.unpack('!HHLLBBH', self.tcph[0:16])
-        self.flags = unparse_tcp_flags(flags)
-        tcp_off = ((crap >> 4) & 15) << 2
-        self.payload_len = struct.unpack('!H', self.iph[2:4])[0] - hl - tcp_off
-        
-
-class TCPDumpFile:
-
-    MAGIC = 0xA1B2C3D4L
-    MODIFIED_MAGIC = 0xA1B2CD34L
-    VMAJOR = 2
-    DLT_EN10MB = 1
-    DLT_RAW = 12
-
-    class Error(Exception):
-        def __init__(self, s=""):
-            self.str = s
-        def __str__(self):
-            return `self.str`
-
-    def __init__(self, f):
-        self.f = f
-        self.endian = '<'
-        try:
-            s = f.read(24)
-            magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
-                   struct.unpack('<LHHLLLL', s)
-            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
-                self.endian = '>'
-                magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
-                       struct.unpack('>LHHLLLL', s)
-            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
-                raise TCPDumpFile.Error("bad magic number " + `magic`)
-            if vmajor != self.VMAJOR:
-                raise TCPDumpFile.Error("bad major version")
-            
-            self.vminor = vminor
-            self.snaplen = snaplen
-            self.header = self.endian + 'LLLL'
-            self.header_size = 16
-            if magic == self.MODIFIED_MAGIC:
-                self.header_size += 8
-            self.s = ''
-            self.pos = 0
-
-            self.ip_filter = self.tcp_filter
-            if linktype == self.DLT_EN10MB:
-                self.dltfilter = self.ether_dltfilter
-            elif linktype == self.DLT_RAW:
-                self.dltfilter = self.ip_filter
-            else:
-                raise TCPDumpFile.Error("bad DLT")
-        except struct.error:
-            raise TCPDumpFile.Error("bad header length")
-
-    def seek(self, n):
-        self.s = ""
-        self.pos = 0
-        self.f.seek(n)
-
-    def tcp_filter(self, tsec, tusec, s):
-        vhl, p = ord(s[0:1]), ord(s[9:10])
-        v, hl = (vhl >> 4) & 0xF, (vhl & 0xF) << 2
-        if v == 4 and len(s) >= hl + 8 and p == 6:
-            return TCPPacket(tsec + tusec/1000000., s, hl)
-        else:
-            return None
-    
-    def ether_dltfilter(self, tsec, tusec, s):
-        if len(s) >= 14 + 20 and s[12:14] == "\x08\x00":
-            return self.ip_filter(tsec, tusec, s[14:])
-        else:
-            return None
-
-    def packets(self):
-        header_size, header, snaplen, vminor = self.header_size, self.header, self.snaplen, self.vminor
-        pos, s = self.pos, self.s
-        try:
-            while 1:
-                if pos + header_size > len(s):
-                    s = s[pos:] + self.f.read(32768)
-                    pos = 0
-                tsec, tusec, caplen, plen = struct.unpack(header, s[pos:pos+16])
-                if vminor < 3 or (vminor == 3 and caplen > len):
-                    caplen, plen = plen, caplen
-                if caplen > 65535:
-                    return
-                
-                skiplen = 0
-                if caplen > plen:
-                    skiplen = caplen - plen
-                
-                pos += header_size
-                if pos + caplen > len(s):
-                    s, pos = s[pos:], 0
-                    while caplen > len(s):
-                        oldlen = len(s)
-                        s += self.f.read(32768)
-                        if len(s) == oldlen: return
-                p = self.dltfilter(tsec, tusec, s[pos:pos + caplen - skiplen])
-                if p is not None:
-                    yield p
-                pos += caplen
-        except struct.error:
-            return
-
+####################
+# FlowSet
+#
 
 class FlowSet:
 
@@ -957,7 +1006,7 @@ class FlowSet:
             ss += q
             s = s[pos+1:]
             pos = s.find('%')
-        return self.reading_directory + ss + s
+        return ss + s
 
     def fix_directory(self, fn):
         if fn is not None and fn[0] != '/' and self.reading_directory != '':
@@ -1188,42 +1237,9 @@ class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
 	    return n[:-1]
 
 
-
-def fix_range(a, b, min_step_frac):
-    d = b - a
-    step = 10 ** floor(log10(d))
-
-    # make step bigger if required
-    if step / d > 0.5 and step / d >= min_step_frac:
-        if step/5 / d >= min_step_frac:
-            step /= 5
-        elif step/2.5 / d >= min_step_frac:
-            step /= 2.5
-        elif step/2 / d >= min_step_frac:
-            step /= 2
-    while step < d and step / d < min_step_frac:
-        if 2*step / d >= min_step_frac:
-            step *= 2
-        elif 2.5*step / d >= min_step_frac:
-            step *= 2.5
-        elif 5*step / d >= min_step_frac:
-            step *= 5
-        else:
-            step *= 10
-    if step >= d:
-        step = d
-
-    # bound a and b to multiples of step, if appropriate
-    a_try = floor(a / step) * step
-    if a - a_try < 0.1*d:
-        a = a_try; d = b - a
-    b_try = ceil(b / step) * step
-    if b_try - b < 0.1*d:
-        b = b_try
-    
-    # return a dictionary
-    return { "low": a, "high": b, "step": step }
-
+####################
+# PlotCanvas helpers and Drawables
+#
 
 class PlotCursors:
 
@@ -1670,6 +1686,10 @@ class PlotCanvas_PostScriptDrawable:
         self.f.write(str(x) + " " + str(self.top - y) + " Pda\n")
 
 
+####################
+# PlotCanvas
+#
+
 class PlotCanvas:
 
     TOOL_NONE = 0
@@ -1719,7 +1739,10 @@ class PlotCanvas:
         self.backing_store = None
         self.backing_store_updated = False
 
+        self.lit_packets = [None, None]
+        self._draw_lit_packets = [None, None]
         self.highlight = [None]
+        self._draw_highlight = [None]
         self.highlight_bounds = None
         self.highlight_hooks = []
         
@@ -1745,7 +1768,9 @@ class PlotCanvas:
     # setting properties
     def set_flowref(self, fref, keeptime=False):
         self.conn, self.dir = fref.conn, fref.dir
+        self.lit_packets = [None, None]
         self.highlight = [None]
+        self.highlight_bounds = None
         if keeptime:
             self.plot()
         else:
@@ -1839,7 +1864,9 @@ class PlotCanvas:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff
         else:
             return xx * self.tscale + self.toff, yy * self.sscale + self.soff, yy2 * self.sscale + self.soff
-    def _transform_packet(self, p, dir, top=False):
+    def _transform_packet(self, p, dir=None, top=False):
+        if type(p) == types.TupleType:
+            p, dir = p
         if dir == self.dir:
             if top:
                 return self._transform(p.time, p.last_seq)
@@ -1853,13 +1880,8 @@ class PlotCanvas:
             self.press_state = event.state | gtk.gdk.BUTTON1_MASK
             self._check_tool(self.press_state)
             try:
-                if self.show_tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
-                    self.press = self._transform_packet(self.highlight[1], self.highlight[2], top=True)
-                else:
-                    self._itransform(event.x, event.y) # for signal
-                    self.press = (event.x, event.y)
-                if self.tool == PlotCanvas.TOOL_IDENTIFY:
-                    self.set_highlight(["bandwidth", 0, event.x, event.y, self.highlight])
+                self._itransform(event.x, event.y) # for signal
+                self.press = (event.x, event.y)
             except ValueError:
                 self.press = None
             self.stuck = True
@@ -1868,6 +1890,15 @@ class PlotCanvas:
     def cmd_motion(self, widget, event):
         x, y, state = widget.window.get_pointer()
         try:
+            # locate and light up closest packet
+            # prefer current direction during a drag
+            dir = None
+            button1 = (state & gtk.gdk.BUTTON1_MASK) != 0 and self.show_tool == PlotCanvas.TOOL_IDENTIFY
+            if button1 and self.lit_packets[0] is not None:
+                dir = self.lit_packets[0][1]
+            self.lit_packets[button1] = self.closest_packet(x, y, mindist=(button1 and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
+            self.highlight = ['lit_packet']
+            
             if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
                 if self.stuck and (abs(self.press[0] - x) > PlotCanvas.DRAG_STICKINESS):
                     self.stuck = False
@@ -1878,18 +1909,18 @@ class PlotCanvas:
                     self.set_time_range(self.drag_t0 - shift_x)
             elif self.tool == PlotCanvas.TOOL_IDENTIFY:
                 if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None and self.show_tool == PlotCanvas.TOOL_IDENTIFY:
-                    dir = None
-                    if self.highlight[4][0] == 'packet': dir = self.highlight[4][2]
-                    cp = self.closest_packet(x, y, mindist=PlotCanvas.DRAG_MAGNETISM, dir=dir)
-                    if cp is not None: x, y = self._transform_packet(cp[1], cp[2], top=True)
+                    x0, y0 = self.press
+                    if self.lit_packets[0] is not None:
+                        x0, y0 = self._transform_packet(self.lit_packets[0], top=True)
+                    if self.lit_packets[1] is not None:
+                        x, y = self._transform_packet(self.lit_packets[1], top=True)
+                    t0, s0 = self._itransform(x0, y0)
                     t, s = self._itransform(x, y, constrain=False)
-                    tt, ss = self._itransform(self.press[0], self.press[1])
-                    h = ["bandwidth", 0, x, y, self.highlight[4]]
-                    if cp is not None: h.append(cp)
-                    if t != tt: h[1] = (s - ss) / (t - tt)
-                    self.set_highlight(h)
-                else:
-                    self.set_highlight(self.closest_packet(x, y))
+                    h = ["bandwidth", 0, t0, s0, t, s]
+                    if t0 != t: h[1] = (s - s0) / (t - t0)
+                    self.highlight = h
+            
+            self.highlight_changed()
         except ValueError:
             pass
         return 1
@@ -1897,14 +1928,19 @@ class PlotCanvas:
         try:
             if event.button != 1 or self.press is None:
                 pass
-            elif self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
-                when = self._itransform(event.x, event.y)[0]
-                self.zoom(when, 4)
-            elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
-                when = self._itransform(event.x, event.y)[0]
-                self.zoom(when, 0.25)
-            elif self.show_tool == PlotCanvas.TOOL_IDENTIFY:
-                self.set_highlight(None)
+            else:
+                self.lit_packets[0] = self.lit_packets[1]
+                self.lit_packets[1] = None
+                self.highlight = ['lit_packet']
+                
+                if self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
+                    when = self._itransform(event.x, event.y)[0]
+                    self.zoom(when, 4)
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
+                    when = self._itransform(event.x, event.y)[0]
+                    self.zoom(when, 0.25)
+
+                self.highlight_changed()
         except ValueError:
             pass
         self._check_tool(self.canvas.window.get_pointer()[2])
@@ -1938,23 +1974,32 @@ class PlotCanvas:
             t0, t1 = self.get_plotted_time_range()
             t = self._itransform(x0, y0, constrain=False)[0]
             delta = mindist / self.tscale
-            found = None; best_dist = mindist ** 2
             tscale, toff, sscale, soff = self.tscale, self.toff, self.sscale, self.soff
-            if dir is None or dir == self.dir:
-                for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
-                    x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
-                    dist = (x - x0) ** 2
-                    if y0 > y1: dist += (y0 - y1) ** 2
-                    elif y0 < y2: dist += (y0 - y2) ** 2
-                    if dist < best_dist:
-                        found = ('packet', p, self.dir); best_dist = dist
-            if dir is None or dir == 1 - self.dir:
-                for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
-                    x, y = p.time * tscale + toff, p.ack * sscale + soff
-                    dist = (x - x0) ** 2 + (y - y0) ** 2
-                    if dist < best_dist:
-                        found = ('packet', p, 1 - self.dir); best_dist = dist
-            return found
+            
+            found_data = found_ack = None
+            best_dist_data = best_dist_ack = mindist ** 2
+            for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
+                x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
+                dist = (x - x0) ** 2
+                if y0 > y1: dist += (y0 - y1) ** 2
+                elif y0 < y2: dist += (y0 - y2) ** 2
+                if dist < best_dist_data:
+                    found_data = p; best_dist_data = dist
+
+            for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
+                x, y = p.time * tscale + toff, p.ack * sscale + soff
+                dist = (x - x0) ** 2 + (y - y0) ** 2
+                if dist < best_dist_ack:
+                    found_ack = p; best_dist_ack = dist
+
+            if dir == self.dir: best_dist_ack *= 2.75
+            elif dir == 1 - self.dir: best_dist_data *= 2.75
+            if found_data is not None and best_dist_data < best_dist_ack:
+                return (found_data, self.dir)
+            elif found_ack is not None:
+                return (found_ack, 1 - self.dir)
+            else:
+                return None
         except ValueError:
             return None
 
@@ -2105,7 +2150,7 @@ class PlotCanvas:
                     text = str(p.dup_acks + 1)
                     w = drawable.text_size(small_playout, text)[0]
                     if p.ack != last_dupack or x + w/2 < last_dupack_x:
-                        drawable.draw_text(border_gc, small_playout, text, x, y, anchor=ANCHOR_N)
+                        drawable.draw_text(label_gc, small_playout, text, x, y, anchor=ANCHOR_N)
                         last_dupack = p.ack
                         last_dupack_x = x - w/2 - 4
                 if p.pure_ack():
@@ -2162,40 +2207,56 @@ class PlotCanvas:
         return bounds
     
     def draw_highlight(self):
+        bounds = None
+
         h = self.highlight
-        if h[0] is None:
-            self.highlight_bounds = None
-        elif h[0] == 'packet':
-            self.highlight_bounds = self._highlight_packet(h[1], h[2])
+        if h is None:
+            self.highlight = [None]
+        elif h[0] == 'lit_packet':
+            if self.lit_packets[0] is not None:
+                self.highlight = ['packet', self.lit_packets[0][0], self.lit_packets[0][1]]
+            else:
+                self.highlight = [None]
         elif h[0] == 'bandwidth':
-            x, y = h[2], h[3]
-            bounds = None
-            if abs(x - self.press[0]) > PlotCanvas.DRAG_STICKINESS or abs(y - self.press[1]) > self.DRAG_STICKINESS:
-                bounds = (min(x, self.press[0]), min(y, self.press[1]), abs(x - self.press[0]) + 1, abs(y - self.press[1]) + 1)
+            t0, s0, t1, s1 = h[2:6]
+            x0, y0 = self._transform(t0, s0)
+            x1, y1 = self._transform(t1, s1)
+            if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
+                b = (min(x0, x1) - 2, min(y0, y1), abs(x0 - x1) + 2, abs(y0 - y1) + 2)
                 drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
                 gc = drawable.gc("highlight")
-                drawable.draw_line(gc, x, y, self.press[0], self.press[1])
-            for old_h in h[4:]:
-                if old_h[0] == 'packet':
-                    bounds = union_rectangle(bounds, self._highlight_packet(old_h[1], old_h[2]))
-            self.highlight_bounds = expand_rectangle(bounds, 2)
-            
+                drawable.draw_line(gc, x0, y0, x1, y1)
+                bounds = union_rectangle(bounds, b)
+
+        for pd in self.lit_packets:
+            if pd is not None:
+                bounds = union_rectangle(bounds, self._highlight_packet(pd[0], pd[1]))
+        
+        self.highlight_bounds = expand_rectangle(bounds, 3)
+    
     def erase_highlight(self):
         if self.highlight_bounds is not None:
             self.expose_rectangle(self.highlight_bounds)
-    def set_highlight(self, highlight):
-        if highlight is None:
-            highlight = [None]
-        if self.highlight != highlight:
+            self.highlight_bounds = None
+    def highlight_changed(self):
+        new_lit = self._draw_lit_packets != self.lit_packets
+        new_high = self._draw_highlight != self.highlight
+        if new_lit or new_high:
             self.erase_highlight()
-            self.highlight = highlight
             self.draw_highlight()
-            for f in self.highlight_hooks:
-                f(self, self.highlight)
+            self._draw_lit_packets = list(self.lit_packets)
+            self._draw_highlight = list(self.highlight)
+            if new_high:
+                for f in self.highlight_hooks:
+                    f(self, self.highlight)
 
     def add_highlight_hook(self, f):
         self.highlight_hooks.append(f)
 
+
+####################
+# printing
+#
 
 class PrintOptionsDialog:
 
@@ -2355,6 +2416,10 @@ class PrintOptionsDialog:
                 return
         self.dialog.destroy()
 
+
+####################
+# main window
+#
 
 class PlotFlowWindow:
     
@@ -2585,9 +2650,9 @@ class PlotFlowWindow:
         self.canvas.set_show_window(not self.canvas.get_show_window())
         self.item_factory.get_item("/View/Hide Receive Window").get_child().set_label(["Show Receive Window", "Hide Receive Window"][self.canvas.get_show_window()])
 
-    def highlight_hook(self, plotcanvas, highlight):
-    	if highlight[0] == "packet":
-            p, dir = highlight[1:]
+    def highlight_hook(self, plotcanvas, h):
+    	if h[0] == "packet":
+            p, dir = h[1:]
             if dir == self.flowref.dir:
                 desc = "%.06fs: <b>Data</b> at %d:%d (+%d)" % (p.time, int(p.seq), int(p.last_seq), int(p.last_seq - p.seq))
             else:
@@ -2597,13 +2662,23 @@ class PlotFlowWindow:
                 if not p.pure_ack():
                     desc += " with data (+%d)" % (p.last_seq - p.seq)
             self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
-        elif highlight[0] == "bandwidth":
-            bw = highlight[1]
+        elif h[0] == "bandwidth":
+            bw = h[1]
+            
             if bw <= 0: desc = "-"
             elif bw < 1024: desc = "%d B/s" % bw
             elif bw < 1048576: desc = "%.3f KB/s" % (bw/1024.)
             else: desc = "%.3f MB/s" % (bw/1048576.)
-            self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b></span>")
+            
+            bw *= 8
+            if bw <= 0: pass
+            elif bw < 1000: desc += " = %d b/s" % bw
+            elif bw < 1000000: desc += " = %.3f Kb/s" % (bw/1000.)
+            else: desc += " = %.3f Mb/s" % (bw/1000000.)
+
+            desc2 = "%+d in %.6fs" % (h[5] - h[3], h[4] - h[2])
+            
+            self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b> (" + desc2 + ")</span>")
         else:
             self.statusbar_description()
 
@@ -2628,6 +2703,3 @@ if __name__ == "__main__":
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
-
-# 1752 >
-# 1
