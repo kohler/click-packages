@@ -52,10 +52,10 @@ _screen_style = {
 _postscript_style = {
     "bg": None,
     
-    "data": LineDescriptor(1, 0, 0, linewidth=0.5),
-    "data.undelivered": LineDescriptor(0, 0, 0, linewidth=0.5),
-    "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
-    "dataack": LineDescriptor(0, 0, 1, linewidth=0.5),
+    "data": LineDescriptor(1, 0, 0, linewidth=0.5, mpstyle=" Sdata"),
+    "data.undelivered": LineDescriptor(0, 0, 0, linewidth=0.5, mpstyle=" Sdataundelivered"),
+    "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5, mpstyle=" Sack"),
+    "dataack": LineDescriptor(0, 0, 1, linewidth=0.5, mpstyle=" Sdataack"),
     "window": LineDescriptor(0.8, 0.8, 1, linewidth=1.5),
     
     "loss": LineDescriptor(1, 0.84, 0),
@@ -2077,6 +2077,11 @@ datawid = 3; ackwid = 2;
 labeloffset := 5;
 picture clipper;
 
+def Sdata = withcolor (1, 0, 0) withpen pencircle scaled 0.5 enddef;
+def Sdataundelivered = withcolor (0.8, 0.8, 0.8) withpen pencircle scaled 0.5 dashed evenly enddef;
+def Sack = withcolor (0.42, 0.56, 0.14) withpen pencircle scaled 0.5 enddef;
+def Sdataack = withcolor (0, 0, 1) withpen pencircle scaled 0.5 enddef;
+
 def datapath(expr x, y, yy) =
   (x-datawid,y) -- (x+datawid,y) -- (x, y) -- (x, yy) -- (x-datawid,yy) -- (x+datawid,yy)
 enddef;
@@ -2118,14 +2123,15 @@ beginfig(1);
         self.f.close()
         
     def clip(self, gc, rectangle):
-        if self.clipped is not None:
+        if self.clipped is None:
+            self.clipped = rectangle
+            self.f.write("  clipper := currentpicture; currentpicture := nullpicture;\n")
+        elif self.clipped != rectangle:
             raise ValueError
-        self.clipped = rectangle
-        self.f.write("  clipper := currentpicture; currentpicture := nullpicture;\n")
 
     def unclip(self, gc):
         if self.clipped is None:
-            raise ValueError
+            return
         x, y, w, h = self.clipped
         self.clipped = None
         self.f.write("  clip currentpicture to (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle;\n")
@@ -2138,6 +2144,8 @@ beginfig(1);
         return "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
     
     def mp_style(self, gc):
+        if gc.mpstyle is not None:
+            return gc.mpstyle
         s = "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
         if len(gc.dash):
             pass
@@ -2767,7 +2775,9 @@ class PlotCanvas:
                 drawable.draw_text(label_gc, lt, tt, initial_left_margin + initial_width/2, top_margin - 2*anchor_n - es[1] - es[2], ANCHOR_S)
 
             # ack packets
+            glyphrect = (left_margin-2, top_margin-2, plot_width+4, plot_height+4)
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
+            drawable.clip(gc1, glyphrect); drawable.clip(gc2, glyphrect)
             last_dupack, last_dupack_x = -1, None
             for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
@@ -2782,6 +2792,7 @@ class PlotCanvas:
                     drawable.draw_ack(gc1, x, y)
                 else:
                     drawable.draw_dataack(gc2, x, y)
+            drawable.unclip(gc1); drawable.unclip(gc2)
 
             # window line, if enabled
             gc = drawable.gc("window")
@@ -2796,6 +2807,7 @@ class PlotCanvas:
 
             # data packets
             gc1, gc2 = drawable.gc("data"), drawable.gc("data.undelivered")
+            drawable.clip(gc1, glyphrect); drawable.clip(gc2, glyphrect)
             for p in self.conn.packets(self.dir, t0, t1):
                 if p.flags & TH_UNDELIVERED: gc = gc2
                 else: gc = gc1
@@ -2803,6 +2815,7 @@ class PlotCanvas:
                 if p.flags & (TH_SYN | TH_FIN | TH_RST):
                     s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
                     drawable.draw_text(label_gc, flags_playout, s, p.time * tscale + toff, p.last_seq * sscale + soff, anchor=ANCHOR_S)
+            drawable.unclip(gc1); drawable.unclip(gc2)
             
         else:
             self.plotted = False
