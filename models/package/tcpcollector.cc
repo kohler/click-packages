@@ -106,10 +106,6 @@ TCPCollector::StreamInfo::process_data(Pkt *k, const Packet *p, ConnInfo *conn)
 	}
     }
 
-    // update max_seq
-    if (SEQ_GT(k->end_seq, max_seq))
-	max_seq = k->end_seq;
-
     // process options, if there are any
     // (do this before end_rcv_window, to get any rcv_window_scale)
     process_options(tcph, p->transport_length());
@@ -298,6 +294,10 @@ TCPCollector::ConnInfo::handle_packet(const Packet *p, TCPCollector *parent)
 
     // attach packet to stream
     stream.attach_packet(k);
+
+    // update max_seq
+    if (SEQ_GT(k->end_seq, stream.max_seq))
+	stream.max_seq = k->end_seq;
 }
 
 
