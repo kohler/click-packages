@@ -4,7 +4,7 @@ from __future__ import generators
 from bisect import bisect
 import sys, re, types, string, struct, gzip
 from math import *
-import gtk, pango
+import gtk, pango, xml.parsers.expat
 
 fill_colors = {
     "data": "red", "ack": "green", "dataack": "blue",
@@ -24,6 +24,16 @@ def frange(start, stop, step):
             break
         yield pos
         i += 1
+
+def uncompressed_file(filename):
+    f = file(filename, "rb")
+    twochars = f.read(2)
+    f.seek(0)
+    if twochars == "\037\235" or twochars == "\037\213":
+        return gzip.GzipFile(fileobj=f)
+    else:
+        return f
+
 
 class Packet:
     def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0):
@@ -95,12 +105,13 @@ def unparse_tcp_flags(flags):
 
 class Connection:
     
-    def __init__(self, f=None):
+    def __init__(self, f=None, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
         self.loss = ([], [])
-        self.flow_id = []
-        self.aggregate = -1
+        self.flow_id = [src, sport, dst, dport]
+        self.aggregate = aggregate
         self.available = False
+        self.all_loss_count = 0
         if type(f) == types.FileType:
             self.read(f)
         else:
@@ -301,7 +312,7 @@ class Connection:
     
     def load(self):
         if type(self.filename) != types.StringType:
-            raise RuntimeError, "cannot load this Connection"
+            raise RuntimeError, "cannot load this Connection " + self.filename
         elif not self.available:
             f = file(self.filename, 'rb')
             try:
@@ -314,6 +325,109 @@ class Connection:
     def unload(self):
         if type(self.filename) == types.StringType:
             self.__init__(self.filename)
+
+
+class ConnectionGroup:
+    
+    def __init__(self, f=None):
+        self.conns = []
+        if type(f) == types.StringType:
+            slash = f.rfind('/')
+            if slash >= 0: dir = f[:slash+1]
+            else: dir = ''
+            self.read(file(f), dir=dir)
+        elif f is not None:
+            self.read(f)
+
+    def read(self, f, dir=''):
+        self.reading_directory = dir
+        p = xml.parsers.expat.ParserCreate()
+        p.returns_unicode = 0
+        p.StartElementHandler = self._start_element
+        p.EndElementHandler = self._end_element
+        self.reading_state = 0
+        self.reading_connection = None
+        p.ParseFile(f)
+
+    def _read_number_from_string(self, s, pos):
+        n = 0
+        while s[pos:pos+1] >= '0' and s[pos:pos+1] <= '9':
+            n = 10*n + ord(s[pos:pos+1]) - ord('0')
+            pos += 1
+        return n, pos
+
+    def _handle_number(self, x, format, precision):
+        if precision >= 0 and precision <= 3:
+            x = (self >> ((3 - precision) * 8)) & 255
+        elif precision >= 4 and precision <= 5:
+            x = (self >> ((5 - precision) * 16)) & 65535
+        if format == 'n':
+            return str(x)
+        else:
+            return ('%' + format) % x
+
+    def _handle_ip(self, x, precision):
+        if precision >= 0 and precision <= 3:
+            return x.split('.')[precision]
+        else:
+            return x
+
+    def _expand_filename(self, aggregate, src, sport, dst, dport):
+        s = self.reading_output_pattern
+        ss = ''
+        pos = s.find('%')
+        while pos >= 0:
+            ss += s[:pos]; pos += 1
+            pad, field_width, precision = ' ', 0, -1
+            if s[pos:pos+1] == '0': pad = '0'; pos += 1
+            while s[pos:pos+1] >= '0' and s[pos:pos+1] <= '9': field_width = (field_width * 10) + ord(s[pos:pos+1]) - ord('0'); pos += 1
+            if s[pos:pos+1] == '.': precision = int(s[pos+1:pos+2]); pos += 2
+            x = s[pos:pos+1]
+            if x in ['n', 'x', 'X']:
+                q = self._handle_number(aggregate, x, precision)
+            elif x == 's':
+                q = self._handle_ip(src, precision)
+            elif x == 'd':
+                q = self._handle_ip(dst, precision)
+            elif x == 'S':
+                q = self._handle_number(sport, 'n', precision)
+            elif x == 'D':
+                q = self._handle_number(dport, 'n', precision)
+            elif x == 'p':
+                q = 'T'
+            else:
+                q = x
+            if field_width > len(q): q = (pad * (field_width - len(q))) + q
+            ss += q
+            s = s[pos+1:]
+            pos = s.find('%')
+        return self.reading_directory + ss + s
+
+    def _start_element(self, name, attrs):
+        if name == 'connections':
+            if self.reading_state != 0:
+                raise ConnectionFormatError, "nested <connections>"
+            self.reading_output_pattern = attrs["filepattern"]
+            self.reading_state = 1
+        elif name == 'connection' and self.reading_state == 1:
+            agg, src, sport, dst, dport = int(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
+            self.reading_connection = Connection(self._expand_filename(agg, src, sport, dst, dport), aggregate=agg, src=src, sport=sport, dst=dst, dport=dport)
+            self.conns.append(self.reading_connection)
+        elif name == 'flow' and self.reading_connection is not None:
+            l, pl, fl = int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
+            self.reading_connection.all_loss_count += l + pl + fl
+
+    def _end_element(self, name):
+        if name == 'connections':
+            self.reading_state = 0
+        elif name == 'connection':
+            self.reading_connection = None
+
+    def sort_by_loss_count(self):
+        self.conns.sort(lambda a, b: b.all_loss_count.__cmp__(a.all_loss_count))
+
+    def __getitem__(self, key):
+        return self.conns[key]
 
 
 def fix_range(a, b, min_step_frac):
@@ -412,6 +526,8 @@ class PlotCursors:
             white = self.window.get_style().white
             _plot_cursors[name + ".cur"] = gtk.gdk.Cursor(_plot_cursors[data + ".pix"], _plot_cursors[mask + ".pix"], black, white, hotx, hoty)
         return _plot_cursors[name + ".cur"]
+
+
 
 
 class PlotCanvas:
@@ -728,7 +844,7 @@ class PlotBox:
 
 
 class PlotFlowWindow:
-    def __init__(self, f):
+    def __init__(self, conn):
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
         win.set_title("PlotFlow")
@@ -740,8 +856,7 @@ class PlotFlowWindow:
         self._init_menus(win, vbox)
         self.plotbox = PlotBox(vbox)
 
-        c = Connection(f)
-        self.plotbox.set_connection(c, '<')
+        self.plotbox.set_connection(conn, '<')
 
         win.show()
 
@@ -778,11 +893,20 @@ class PlotFlowWindow:
 
 
 if __name__ == "__main__":
+    all_connections = ConnectionGroup()
     try:
         if len(sys.argv) >= 2:
-            window = PlotFlowWindow(sys.argv[1])
+            f = uncompressed_file(sys.argv[1])
+            c = f.read(1)
+            f.seek(0)
+            if c == '<':
+                all_connections.read(f)
+            else:
+                all_connections.append(Connection(sys.argv[1]))
         else:
-            window = PlotFlowWindow(sys.stdin)
+            all_connections.append(Connection(sys.stdin))
+        all_connections.sort_by_loss_count()
+        window = PlotFlowWindow(all_connections[0])
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
