@@ -214,7 +214,7 @@ def unparse_tcp_flags(flags):
 
 class Connection(object):
 
-    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'filename', 'has_window']
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename']
 
     def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
@@ -227,6 +227,7 @@ class Connection(object):
             self.flowid = ('0.0.0.0', -1, '0.0.0.0', -1)
         self.aggregate = aggregate
         self.loss_count = [0, 0]
+        self.has_window = False
         self.filename = filename
 
     def empty(self):
