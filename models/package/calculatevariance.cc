@@ -43,7 +43,7 @@ CalculateVariance::reset()
 
    for (int i=0;i<_counters.size();i++) {
        _counters[i].init();
-    }
+   }
 }
 
 int
