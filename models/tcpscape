@@ -1160,13 +1160,14 @@ class PlotCanvas:
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
     def cmd_expose(self, widget, event):
-        self.plot()
+        self.plot(area=event.area)
 
     def _itransform(self, x, y, constrain=True):
         if self.plotted and (not constrain or (x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height)):
             return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
         else:
             raise ValueError
+    
     def cmd_press(self, widget, event):
         try:
             if event.button == 1:
@@ -1266,7 +1267,7 @@ class PlotCanvas:
                 if mpos >= pos1:
                     ticer(mpix, edge1, edge2, 2, drawable, gc_tic)
 
-    def plot(self, drawable=None):
+    def plot(self, drawable=None, area=None):
         if drawable is None: drawable = PlotCanvas_ScreenDrawable(self)
         drawable.prepare()
         drawable.clear()
@@ -1290,6 +1291,9 @@ class PlotCanvas:
             soff = top_margin - (s1 * sscale)
             self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
 
+            # mark that self.tscale, self.sscale, etc. are available
+            self.plotted = True
+            
             # variables
             playout = drawable.layout()
             small_playout = drawable.layout("small")
@@ -1317,6 +1321,11 @@ class PlotCanvas:
             label_gc = drawable.gc("label")
             self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, label_gc, playout)
             self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
+
+            # recalculate t0 and t1 if we're given a limited area
+            if area is not None:
+                t0 = max(t0, self._itransform(area.x, area.y, constrain=False)[0])
+                t1 = min(t1, self._itransform(area.x + area.width, area.y, constrain=False)[0])
             
             # data packets
             gc = drawable.gc("data")
@@ -1339,8 +1348,6 @@ class PlotCanvas:
                     drawable.draw_ack(gc1, x, y)
                 else:
                     drawable.draw_dataack(gc2, x, y)
-
-            self.plotted = True
 
         else:
             self.plotted = False
