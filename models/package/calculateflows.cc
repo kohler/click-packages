@@ -25,6 +25,7 @@ CalculateFlows::StreamInfo::StreamInfo()
       event_id(0), min_ack_latency(make_timeval(0, 0)),
       end_rcv_window(0), rcv_window_scale(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0),
+      acked_pkt_hint(0),
       loss_trail(0)
 {
     loss.type = NO_LOSS;
@@ -253,18 +254,19 @@ CalculateFlows::StreamInfo::find_acked_pkt(const Pkt *ackk, Pkt *search_hint) co
     // part of a reordered block
 
     tcp_seq_t ack = ackk->ack;
-
+    
     // move search_hint forward to right edge
     while (search_hint && !(SEQ_GEQ(search_hint->seq, ack)
 			    && !(search_hint->flags & Pkt::F_NONORDERED)))
 	search_hint = search_hint->next;
-
+    
     // move backwards to left edge
     Pkt *possible = 0;
     int possible_goodness = -1;
     for (Pkt *k = (search_hint ? search_hint->prev : pkt_data_tail);
 	 k && (SEQ_GEQ(k->end_seq, ack)
-	       || (k->flags & (Pkt::F_REORDER | Pkt::F_REXMIT)));
+	       || (k->flags & (Pkt::F_REORDER | Pkt::F_REXMIT)))
+	     && possible_goodness < 2;
 	 k = k->prev) {
 
 	// a packet with end_seq == ack is definitely the right answer
@@ -796,7 +798,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
     if (have_ack_latency)
 	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
     fprintf(f, ">\n");
-    
+
     const StreamInfo *acks = conn->stream(!direction);
     Pkt *hint = pkt_head;
     tcp_seq_t last_ack = (hint ? hint->seq - 1 : 0);
@@ -1063,8 +1065,8 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	
 	// find acked packet
 	if (!k->prev || k->ack != k->prev->ack)
-	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
-		//k->cumack_pkt = acked_pkt;
+	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k, ack_stream.acked_pkt_hint)) {
+		ack_stream.acked_pkt_hint = acked_pkt;
 		struct timeval latency = k->timestamp - acked_pkt->timestamp;
 		if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
 		    ack_stream.have_ack_latency = true;

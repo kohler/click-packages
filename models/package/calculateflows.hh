@@ -305,6 +305,8 @@ struct CalculateFlows::StreamInfo {
     Pkt *pkt_tail;		// last packet record
     Pkt *pkt_data_tail;		// last packet record with data
 
+    Pkt *acked_pkt_hint;	// hint to find_acked_pkt
+
     // information about the most recent loss event
     LossInfo loss;		// most recent loss event
     LossBlock *loss_trail;	// previous loss events
