@@ -39,7 +39,10 @@ _screen_style = {
     "bg": LineDescriptor(1, 1, 1),
     "label": LineDescriptor(0.4, 0.4, 0.4),
 
-    "highlight": LineDescriptor(1, 0.9, 0, linewidth=2)
+    "H": LineDescriptor(1, 0.9, 0, linewidth=2),
+    "H.cause": LineDescriptor(1, 200/255., 200/255.),
+    "H.effect": LineDescriptor(200/255., 1, 200/255.),
+    "H.dup": LineDescriptor(1, 1, 0.6)
     }
 
 _postscript_style = {
@@ -912,10 +915,10 @@ except KeyError:\n\
                 flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (c, 1)
             c.append(dir, Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, p.win))
 
-        for c in flowmap.values():
-            if c[1] == 0:
-                c[0].has_window = True
-                c[0].read_complete(True)
+        for c, d in flowmap.values():
+            if d == 0:
+                c.has_window = True
+                c.read_complete(True)
 
         return self
 
@@ -1567,8 +1570,7 @@ class PlotCanvas_PostScriptDrawable:
         self.FONT().write_define(f)
         self.LEGEND_FONT().write_define(f)
         f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
-        for key in _postscript_style:
-            s = _postscript_style[key]
+        for key, s in _postscript_style:
             f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
             if len(s.dash):
                 f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
@@ -1642,8 +1644,8 @@ class PlotCanvas_PostScriptDrawable:
         if len(l) > 1:
             if self.cur_gc is not gc: self.select_gc(gc)
             s = " m\n"
-            for p in l:
-                self.f.write(str(p[0]) + " " + str(self.top - p[1]) + s)
+            for x, y in l:
+                self.f.write(str(x) + " " + str(self.top - y) + s)
                 s = " L\n"
             self.f.write("stroke\n")
 
@@ -1739,8 +1741,10 @@ class PlotCanvas:
         self.backing_store = None
         self.backing_store_updated = False
 
-        self.lit_packets = [None, None]
-        self._draw_lit_packets = [None, None]
+        self.lit_main = [None, None]
+        self._draw_lit_main = [None, None]
+        self.lit = {}
+        self._draw_lit = {}
         self.highlight = [None]
         self._draw_highlight = [None]
         self.highlight_bounds = None
@@ -1768,7 +1772,8 @@ class PlotCanvas:
     # setting properties
     def set_flowref(self, fref, keeptime=False):
         self.conn, self.dir = fref.conn, fref.dir
-        self.lit_packets = [None, None]
+        self.lit_main = [None, None]
+        self.lit = {}
         self.highlight = [None]
         self.highlight_bounds = None
         if keeptime:
@@ -1894,10 +1899,12 @@ class PlotCanvas:
             # prefer current direction during a drag
             dir = None
             button1 = (state & gtk.gdk.BUTTON1_MASK) != 0 and self.show_tool == PlotCanvas.TOOL_IDENTIFY
-            if button1 and self.lit_packets[0] is not None:
-                dir = self.lit_packets[0][1]
-            self.lit_packets[button1] = self.closest_packet(x, y, mindist=(button1 and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
+            if button1 and self.lit_main[0] is not None:
+                dir = self.lit_main[0][1]
+            self.lit_main[button1] = self.closest_packet(x, y, mindist=(button1 and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
             self.highlight = ['lit_packet']
+            if not button1 and self.lit_main[0] != self._draw_lit_main[0]:
+                self.sublight_matchers()
             
             if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
                 if self.stuck and (abs(self.press[0] - x) > PlotCanvas.DRAG_STICKINESS):
@@ -1910,10 +1917,10 @@ class PlotCanvas:
             elif self.tool == PlotCanvas.TOOL_IDENTIFY:
                 if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None and self.show_tool == PlotCanvas.TOOL_IDENTIFY:
                     x0, y0 = self.press
-                    if self.lit_packets[0] is not None:
-                        x0, y0 = self._transform_packet(self.lit_packets[0], top=True)
-                    if self.lit_packets[1] is not None:
-                        x, y = self._transform_packet(self.lit_packets[1], top=True)
+                    if self.lit_main[0] is not None:
+                        x0, y0 = self._transform_packet(self.lit_main[0], top=True)
+                    if self.lit_main[1] is not None:
+                        x, y = self._transform_packet(self.lit_main[1], top=True)
                     t0, s0 = self._itransform(x0, y0)
                     t, s = self._itransform(x, y, constrain=False)
                     h = ["bandwidth", 0, t0, s0, t, s]
@@ -1929,8 +1936,8 @@ class PlotCanvas:
             if event.button != 1 or self.press is None:
                 pass
             else:
-                self.lit_packets[0] = self.lit_packets[1]
-                self.lit_packets[1] = None
+                self.lit_main[0] = self.lit_main[1]
+                self.lit_main[1] = None
                 self.highlight = ['lit_packet']
                 
                 if self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
@@ -2002,6 +2009,39 @@ class PlotCanvas:
                 return None
         except ValueError:
             return None
+
+    def _add_lit(self, name, pd):
+        self.lit.setdefault(name, []).append(pd)
+    
+    def sublight_matchers(self):
+        self.lit = {}
+        self.lit_packets_effect = []
+        if self.lit_main[0] == None: return
+        p, dir = self.lit_main[0]
+        t0, t1 = self.get_plotted_time_range()
+        if dir == self.dir:
+            for pp in self.conn.packets(dir, t0, t1):
+                if pp.seq <= p.seq and pp.last_seq >= p.last_seq and pp is not p:
+                    self._add_lit("H.dup", (pp, dir))
+            for pp in self.conn.packets(1 - dir, t0, t1):
+                if pp.time <= p.time:
+                    if pp.ack == p.seq:
+                        self._add_lit("H.cause", (pp, 1 - dir))
+                else:
+                    if pp.ack == p.last_seq:
+                        self._add_lit("H.effect", (pp, 1 - dir))
+        else:
+            for pp in self.conn.packets(self.dir, t0, t1):
+                if pp.time <= p.time:
+                    if pp.last_seq == p.ack:
+                        self._add_lit("H.cause", (pp, self.dir))
+                else:
+                    if pp.seq == p.ack:
+                        self._add_lit("H.effect", (pp, self.dir))
+            for pp in self.conn.packets(1 - self.dir, t0, t1):
+                if pp.ack == p.ack and pp is not p:
+                    self._add_lit("H.dup", (pp, 1 - self.dir))
+    
 
     # drawing helpers
     def _format_y_label(text):
@@ -2180,31 +2220,39 @@ class PlotCanvas:
 
 
     # higlights
-    def _highlight_packet(self, p, dir):
+    def _highlight_packet_bg(self, pd, gctype="H"):
+        p, dir = pd
         drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
-        gc = drawable.gc("highlight")
-
+        gc = drawable.gc(gctype)
         if dir == self.dir:
             x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
             bounds = (x - 5, y2 - 5, 10, y1 - y2 + 10)
             drawable.fill_rectangle(gc, bounds)
-            drawable.draw_data(drawable.gc("data.highlight"), x, y1, y2)
         else:
             x, y = self._transform(p.time, p.ack)
             bounds = (x - 5, y - 5, 10, 10)
-            if p.dup_acks > 0:
+            if p.dup_acks > 0 and gctype == "H":
                 layout = drawable.layout("small")
                 w, h = drawable.text_size(layout, str(p.dup_acks + 1))[:2]
                 bounds = union_rectangle(bounds, (x - w/2 - 2, y + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
             drawable.fill_rectangle(gc, bounds)
-            if p.pure_ack():
-                drawable.draw_ack(drawable.gc("ack.highlight"), x, y)
-            else:
-                drawable.draw_dataack(drawable.gc("dataack.highlight"), x, y)
-            if p.dup_acks > 0:
-                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
-
         return bounds
+        
+    def _highlight_packet_fg(self, pd, gctype="H"):
+        p, dir = pd
+        drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
+        if dir == self.dir:
+            x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+            drawable.draw_data(drawable.gc("data." + gctype), x, y1, y2)
+        else:
+            x, y = self._transform(p.time, p.ack)
+            if p.pure_ack():
+                drawable.draw_ack(drawable.gc("ack." + gctype), x, y)
+            else:
+                drawable.draw_dataack(drawable.gc("dataack." + gctype), x, y)
+            if p.dup_acks > 0 and gctype == "H":
+                layout = drawable.layout("small")
+                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y, anchor=ANCHOR_N)
     
     def draw_highlight(self):
         bounds = None
@@ -2213,8 +2261,8 @@ class PlotCanvas:
         if h is None:
             self.highlight = [None]
         elif h[0] == 'lit_packet':
-            if self.lit_packets[0] is not None:
-                self.highlight = ['packet', self.lit_packets[0][0], self.lit_packets[0][1]]
+            if self.lit_main[0] is not None:
+                self.highlight = ['packet', self.lit_main[0][0], self.lit_main[0][1]]
             else:
                 self.highlight = [None]
         elif h[0] == 'bandwidth':
@@ -2224,13 +2272,25 @@ class PlotCanvas:
             if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
                 b = (min(x0, x1) - 2, min(y0, y1), abs(x0 - x1) + 2, abs(y0 - y1) + 2)
                 drawable = PlotCanvas_ScreenDrawable(self, immediate=True)
-                gc = drawable.gc("highlight")
+                gc = drawable.gc("H")
                 drawable.draw_line(gc, x0, y0, x1, y1)
                 bounds = union_rectangle(bounds, b)
 
-        for pd in self.lit_packets:
+        # highlight packets
+        for name in ("H.cause", "H.dup", "H.effect"):
+            for pd in self.lit.get(name, []):
+                bounds = union_rectangle(bounds, self._highlight_packet_bg(pd, name))
+        for name in ("H.cause", "H.dup", "H.effect"):
+            for pd in self.lit.get(name, []):
+                self._highlight_packet_fg(pd, name)
+
+        # fill in highlights
+        for pd in self.lit_main:
             if pd is not None:
-                bounds = union_rectangle(bounds, self._highlight_packet(pd[0], pd[1]))
+                bounds = union_rectangle(bounds, self._highlight_packet_bg(pd))
+        for pd in self.lit_main:
+            if pd is not None:
+                self._highlight_packet_fg(pd)
         
         self.highlight_bounds = expand_rectangle(bounds, 3)
     
@@ -2238,13 +2298,16 @@ class PlotCanvas:
         if self.highlight_bounds is not None:
             self.expose_rectangle(self.highlight_bounds)
             self.highlight_bounds = None
+    
     def highlight_changed(self):
-        new_lit = self._draw_lit_packets != self.lit_packets
+        new_lit = self._draw_lit_main != self.lit_main
+        new_sublit = self._draw_lit != self.lit
         new_high = self._draw_highlight != self.highlight
-        if new_lit or new_high:
+        if new_lit or new_sublit or new_high:
             self.erase_highlight()
             self.draw_highlight()
-            self._draw_lit_packets = list(self.lit_packets)
+            self._draw_lit_main = list(self.lit_main)
+            self._draw_lit = dict(self.lit)
             self._draw_highlight = list(self.highlight)
             if new_high:
                 for f in self.highlight_hooks:
