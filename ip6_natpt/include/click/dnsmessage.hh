@@ -7,9 +7,11 @@
 #include <click/router.hh>
 #include <click/elemfilter.hh>
 #include <click/error.hh>
-#include <linux/slab.h>
+#ifdef CLICK_LINUXMODULE
+# include <linux/slab.h>
+#endif
 #ifndef CLICK_LINUXMODULE
-  #include <string.h>
+# include <string.h>
 #endif
 
 CLICK_DECLS

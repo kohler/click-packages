@@ -621,5 +621,5 @@ TCPAddressTranslator::Mapping6::s() const
 
 
 CLICK_ENDDECLS
-ELEMENT_REQUIRES(ip6)
+ELEMENT_REQUIRES(AddressTranslator)
 EXPORT_ELEMENT(TCPAddressTranslator)
