@@ -351,10 +351,12 @@ TCPCollector::kill_conn(ConnInfo *conn)
     if (_traceinfo_file)
 	conn->write_xml(_traceinfo_file, this);
 #endif
-    
     free_pkt_list(conn->stream(0).pkt_head, conn->stream(0).pkt_tail);
     free_pkt_list(conn->stream(1).pkt_head, conn->stream(1).pkt_tail);
-    delete conn;
+    for (ConnAttachment **ca = _conn_attachments.end(); ca > _conn_attachments.begin(); )
+	(*--ca)->kill_conn_hook(conn);
+    conn->~ConnInfo();
+    delete[] ((char*)conn);
 }
 
 
@@ -445,7 +447,7 @@ xmlprotect(const String &str)
 }
 
 void
-TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner) const
+TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner)
 {
     timeval duration = this->duration();
     
@@ -472,7 +474,7 @@ TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner) const
 }
 
 void
-TCPCollector::StreamInfo::write_xml(FILE *f, const ConnInfo &conn, const TCPCollector *owner) const
+TCPCollector::StreamInfo::write_xml(FILE *f, ConnInfo &conn, const TCPCollector *owner)
 {
     fprintf(f, "  <stream dir='%d' ndata='%u' nack='%u' beginseq='%u' seqlen='%u' mtu='%u'",
 	    direction, total_packets - ack_packets, ack_packets,
@@ -502,7 +504,7 @@ TCPCollector::StreamInfo::write_xml(FILE *f, const ConnInfo &conn, const TCPColl
 // OPTIONAL STREAM XML TAGS
 
 void
-TCPCollector::StreamInfo::packet_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+TCPCollector::StreamInfo::packet_xmltag(FILE *f, StreamInfo &stream, ConnInfo &, const String &tagname, void *)
 {
     if (stream.pkt_head) {
 	fprintf(f, "    <%s>\n", tagname.c_str());
@@ -513,7 +515,7 @@ TCPCollector::StreamInfo::packet_xmltag(FILE *f, const StreamInfo &stream, const
 }
 
 void
-TCPCollector::StreamInfo::fullrcvwindow_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+TCPCollector::StreamInfo::fullrcvwindow_xmltag(FILE *f, StreamInfo &stream, ConnInfo &, const String &tagname, void *)
 {
     if (stream.filled_rcv_window) {
 	fprintf(f, "    <%s>\n", tagname.c_str());
@@ -525,7 +527,7 @@ TCPCollector::StreamInfo::fullrcvwindow_xmltag(FILE *f, const StreamInfo &stream
 }
 
 void
-TCPCollector::StreamInfo::windowprobe_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+TCPCollector::StreamInfo::windowprobe_xmltag(FILE *f, StreamInfo &stream, ConnInfo &, const String &tagname, void *)
 {
     if (stream.sent_window_probe) {
 	fprintf(f, "    <%s>\n", tagname.c_str());
@@ -537,7 +539,7 @@ TCPCollector::StreamInfo::windowprobe_xmltag(FILE *f, const StreamInfo &stream, 
 }
 
 void
-TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, StreamInfo &stream, ConnInfo &, const String &tagname, void *)
 {
     if (stream.pkt_head) {
 	fprintf(f, "    <%s>\n", tagname.c_str());
@@ -560,7 +562,7 @@ TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream,
 
 TCPCollector::TCPCollector()
     : Element(1, 1), _free_pkt(0), _pkt_size(sizeof(Pkt)),
-      _filepos_h(0), _packet_source(0)
+      _conn_size(sizeof(ConnInfo)), _filepos_h(0), _packet_source(0)
 #if TCPCOLLECTOR_XML
     , _traceinfo_file(0)
 #endif
@@ -702,9 +704,12 @@ TCPCollector::simple_action(Packet *p)
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())) {
 	ConnInfo *loss = _conn_map.find(aggregate);
 	if (!loss) {
-	    if ((loss = new ConnInfo(p, _filepos_h, _ip_id)))
+	    if (char *connbuf = new char[_conn_size]) {
+		loss = new((void*)connbuf) ConnInfo(p, _filepos_h, _ip_id);
+		for (ConnAttachment **ca = _conn_attachments.begin(); ca < _conn_attachments.end(); ca++)
+		    (*ca)->new_conn_hook(loss);
 		_conn_map.insert(aggregate, loss);
-	    else {
+	    } else {
 		click_chatter("out of memory!");
 		p->kill();
 		return 0;

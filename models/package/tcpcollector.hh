@@ -152,16 +152,18 @@ class TCPCollector : public Element, public AggregateListener { public:
 #if TCPCOLLECTOR_XML
     // XML writing functions
     int add_trace_xmlattr(const String &attrname, const String &value);
-    typedef String (*ConnectionXMLAttrHook)(const ConnInfo &, const String &attrname, void *thunk);
+    typedef String (*ConnectionXMLAttrHook)(ConnInfo &, const String &attrname, void *thunk);
     int add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook, void *thunk);
-    typedef String (*StreamXMLAttrHook)(const StreamInfo &, const ConnInfo &, const String &attrname, void *thunk);
+    typedef String (*StreamXMLAttrHook)(StreamInfo &, ConnInfo &, const String &attrname, void *thunk);
     int add_stream_xmlattr(const String &attrname, StreamXMLAttrHook, void *thunk);
-    typedef void (*StreamXMLTagHook)(FILE *f, const StreamInfo &, const ConnInfo &, const String &tagname, void *thunk);
+    typedef void (*StreamXMLTagHook)(FILE *f, StreamInfo &, ConnInfo &, const String &tagname, void *thunk);
     int add_stream_xmltag(const String &tagname, StreamXMLTagHook, void *thunk);
 #endif
 
     // add space for other elements
+    class ConnAttachment;
     int add_pkt_space(unsigned);
+    int add_conn_space(ConnAttachment *, unsigned);
     
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
@@ -171,10 +173,12 @@ class TCPCollector : public Element, public AggregateListener { public:
     Pkt *_free_pkt;
     
     int _pkt_size;
+    Vector<char*> _pktbuf_bank;
+    
+    int _conn_size;
+    Vector<ConnAttachment*> _conn_attachments;
+
     bool _ip_id : 1;
-
-    Vector<char *> _pktbuf_bank;
-
     HandlerCall *_filepos_h;
     Element *_packet_source;
 
@@ -291,11 +295,11 @@ struct TCPCollector::StreamInfo {
     void attach_packet(Pkt *);
 
 #if TCPCOLLECTOR_XML
-    void write_xml(FILE *, const ConnInfo &, const TCPCollector *) const;
-    static void packet_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
-    static void fullrcvwindow_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
-    static void windowprobe_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
-    static void interarrival_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
+    void write_xml(FILE *, ConnInfo &, const TCPCollector *);
+    static void packet_xmltag(FILE *, StreamInfo &, ConnInfo &, const String &, void *);
+    static void fullrcvwindow_xmltag(FILE *, StreamInfo &, ConnInfo &, const String &, void *);
+    static void windowprobe_xmltag(FILE *, StreamInfo &, ConnInfo &, const String &, void *);
+    static void interarrival_xmltag(FILE *, StreamInfo &, ConnInfo &, const String &, void *);
 #endif
 
 };
@@ -313,7 +317,7 @@ class TCPCollector::ConnInfo {  public:
     void handle_packet(const Packet *, TCPCollector *);
     
 #if TCPCOLLECTOR_XML
-    void write_xml(FILE *, const TCPCollector *) const;
+    void write_xml(FILE *, const TCPCollector *);
 #endif
     
   private:
@@ -326,6 +330,13 @@ class TCPCollector::ConnInfo {  public:
     bool _clean : 1;		// have packets been added since we finished?
     StreamInfo _stream[2];
 
+};
+
+class TCPCollector::ConnAttachment { public:
+    ConnAttachment()				{ }
+    virtual ~ConnAttachment()			{ }
+    virtual void new_conn_hook(ConnInfo *)	{ }
+    virtual void kill_conn_hook(ConnInfo *)	{ }
 };
 
 inline uint32_t

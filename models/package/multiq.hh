@@ -219,7 +219,7 @@ class MultiQ : public Element { public:
     bool significant_flow(const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn) const;
 
     static String read_capacities(Element *, void *);
-    static void multiqcapacity_xmltag(FILE *f, const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
+    static void multiqcapacity_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk);
     
 };
 

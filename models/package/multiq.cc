@@ -369,7 +369,7 @@ MultiQ::significant_flow(const TCPCollector::StreamInfo &stream, const TCPCollec
 }
 
 void
-MultiQ::multiqcapacity_xmltag(FILE *f, const TCPCollector::StreamInfo &stream, const TCPCollector::ConnInfo &conn, const String &tagname, void *thunk)
+MultiQ::multiqcapacity_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk)
 {
     MultiQ *mq = static_cast<MultiQ *>(thunk);
     
