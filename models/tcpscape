@@ -1403,7 +1403,7 @@ class PlotCanvas:
     def cmd_press(self, widget, event):
         if event.button == 1:
             try:
-                if self.tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
+                if self.show_tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
                     self.press = self._transform_packet(self.highlight[1], self.highlight[2])
                 else:
                     self._itransform(event.x, event.y) # for signal
@@ -1428,8 +1428,8 @@ class PlotCanvas:
                 if not self.stuck:
                     shift_x = (x - self.press[0]) / self.drag_tscale
                     self.set_time_range(self.drag_t0 - shift_x)
-            elif self.show_tool == PlotCanvas.TOOL_IDENTIFY:
-                if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None:
+            elif self.tool == PlotCanvas.TOOL_IDENTIFY:
+                if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None and self.show_tool == PlotCanvas.TOOL_IDENTIFY:
                     cp = self.closest_packet(x, y, mindist=PlotCanvas.DRAG_MAGNETISM)
                     if cp is not None: x, y = self._transform_packet(cp[1], cp[2])
                     t, s = self._itransform(x, y, constrain=False)
@@ -1462,15 +1462,15 @@ class PlotCanvas:
         return 1
     def _check_tool(self, state):
         t = self.tool
-        if t == PlotCanvas.TOOL_HAND:
+        if t == PlotCanvas.TOOL_HAND or t == PlotCanvas.TOOL_IDENTIFY:
             if state & gtk.gdk.BUTTON1_MASK:
                 state = self.press_state
             if state & gtk.gdk.MOD1_MASK:
                 t = PlotCanvas.TOOL_ZOOM_OUT
             elif state & gtk.gdk.CONTROL_MASK:
                 t = PlotCanvas.TOOL_ZOOM_IN
-            elif state & gtk.gdk.BUTTON1_MASK:
-                t = PlotCanvas.TOOL_GRABHAND
+        if t == PlotCanvas.TOOL_HAND and state & gtk.gdk.BUTTON1_MASK:
+            t = PlotCanvas.TOOL_GRABHAND
         if t != self.show_tool:
             self.show_tool = t
             self.canvas.window.set_cursor(PlotCursors(self.canvas)[PlotCanvas._tool_cursor[t]])
