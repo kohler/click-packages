@@ -1199,13 +1199,13 @@ class FlowSet:
             return fn
 
     def _start_element(self, name, attrs):
-        if name == 'connections':
+        if name == 'trace':
             if self.reading_state != 0:
-                raise ConnectionFormatError, "nested <connections>"
+                raise ConnectionFormatError, "nested <trace>"
             self.reading_output_pattern = self.fix_directory(attrs.get("flowfilepattern", None))
-            self.reading_tracefile = self.fix_directory(attrs.get("tracefile", None))
+            self.reading_tracefile = self.fix_directory(attrs.get("file", None))
             self.reading_state = 1
-        elif name == 'connection' and self.reading_state == 1:
+        elif name == 'flow' and self.reading_state == 1:
             agg, src, sport, dst, dport = long(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
             filepos = endtime = None
             if self.reading_output_pattern is not None:
@@ -1217,7 +1217,7 @@ class FlowSet:
                 endtime = float(attrs["begin"]) + float(attrs["duration"])
             self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=True)
             self.append(self.reading_connection)
-        elif name == 'flow' and self.reading_connection is not None:
+        elif name == 'stream' and self.reading_connection is not None:
             try:
                 d, l, pl, fl = int(attrs["dir"]), long(attrs["nloss"]), long(attrs["nploss"]), long(attrs["nfloss"])
                 self.reading_connection.loss_count[d] += l + pl + fl
