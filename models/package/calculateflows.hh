@@ -12,7 +12,7 @@ class ToIPSummaryDump;
 /*
 =c
 
-CalculateTCPLossEvents([CONNINFO, I<keywords> CONNINFO, CONNINFO_FILEPOS, CONNINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACK_MATCH])
+CalculateTCPLossEvents([TRACEINFO, I<keywords> TRACEINFO, TRACEINFO_FILEPOS, TRACEINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACK_MATCH])
 
 =s
 
@@ -30,22 +30,19 @@ Keywords are:
 
 =over 8
 
-=item CONNINFO
+=item TRACEINFO
 
 Filename. If given, then output information about each aggregate to that file,
 in an XML format. Information includes the flow identifier, total sequence
 space used on each flow, and loss counts for each flow.
 
-=item CONNINFO_FILEPOS
+=item SOURCE
 
-Read handler, whose value should correspond to the trace file position at
-which the packet currently being processed resides. If given, then CONNINFO
-will record the file position of the first packet in each flow, facilitating
-quicker processing.
-
-=item CONNINFO_TRACEFILE
-
-Filename. If given, this filename will be recorded in CONNINFO.
+Element. If provided, the results of that element's 'C<filename>' and
+'C<packet_filepos>' read handlers will be recorded in the TRACEINFO dump. (It
+is not an error if the element doesn't have those handlers.) The
+'C<packet_filepos>' results may be particularly useful, since a reader can use
+those results to skip ahead through a trace file.
 
 =item NOTIFIER
 
@@ -125,8 +122,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     static inline uint32_t calculate_seqlen(const click_ip *, const click_tcp *);
     ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
-    FILE *conninfo_file() const		{ return _conninfo_file; }
-    HandlerCall *filepos_call() const	{ return _filepos_call; }
+    FILE *traceinfo_file() const	{ return _traceinfo_file; }
+    HandlerCall *filepos_h() const	{ return _filepos_h; }
     bool ack_match() const		{ return _ack_match; }
 
     static double float_timeval(const struct timeval &);
@@ -139,8 +136,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     ToIPFlowDumps *_tipfd;
     ToIPSummaryDump *_tipsd;
-    FILE *_conninfo_file;
-    HandlerCall *_filepos_call;
+    FILE *_traceinfo_file;
+    HandlerCall *_filepos_h;
 
     bool _ack_match : 1;
     bool _ip_id : 1;
@@ -148,8 +145,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
 
-    String _conninfo_filename;
-    String _conninfo_tracefile;
+    String _traceinfo_filename;
+    Element *_packet_source;
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
@@ -252,7 +249,7 @@ struct CalculateFlows::StreamInfo {
 
 class CalculateFlows::ConnInfo {  public:
     
-    ConnInfo(const Packet *, const HandlerCall *, Router *);
+    ConnInfo(const Packet *, const HandlerCall *);
     void kill(CalculateFlows *);
 
     uint32_t aggregate() const		{ return _aggregate; }
