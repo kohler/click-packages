@@ -1062,13 +1062,14 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	}
 	
 	// find acked packet
-	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
-	    //k->cumack_pkt = acked_pkt;
-	    struct timeval latency = k->timestamp - acked_pkt->timestamp;
-	    if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
-		ack_stream.have_ack_latency = true;
-		ack_stream.min_ack_latency = latency;
-	    }
+	if (!k->prev || k->ack != k->prev->ack)
+	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
+		//k->cumack_pkt = acked_pkt;
+		struct timeval latency = k->timestamp - acked_pkt->timestamp;
+		if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
+		    ack_stream.have_ack_latency = true;
+		    ack_stream.min_ack_latency = latency;
+		}
 	}
 	    
 	// check whether this acknowledges something in the last loss event;
