@@ -178,6 +178,7 @@ struct CalculateCapacity::StreamInfo::IntervalStream {
     tcp_seq_t size; //packet size (incl headers)
     tcp_seq_t newack; //new ack data
     struct timeval interval; //time since previous packet
+    struct timeval time; //flow-relative
 };
 
 struct CalculateCapacity::StreamInfo::Peak {

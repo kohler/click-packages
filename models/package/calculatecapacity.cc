@@ -83,10 +83,12 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     
     
     for(unsigned int i=0; i < pkt_cnt; i++){
-	fprintf(f, "%d %ld.%06ld %d\n", intervals[i].size,
+	fprintf(f, "%d %ld.%06ld %d %ld.%06ld\n", intervals[i].size,
 		intervals[i].interval.tv_sec,
 		intervals[i].interval.tv_usec,
-		intervals[i].newack);
+		intervals[i].newack,
+		intervals[i].time.tv_sec,
+		intervals[i].time.tv_usec);
     }
     fprintf(f, " />\n");
 }
@@ -126,7 +128,8 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	max = 0;
 	maxi = histpoints+1;
 	uint32_t rightedge, leftedge;
-	
+	bool combined = false;
+
 	for(i=1; i < histpoints; i++){
 	    if(valid[i] && hist[i] > max && hist[i] > 2){
 		max = hist[i];
@@ -164,6 +167,29 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	    leftedge--;
 	}
 
+	//should this be combined with an existing peak or be a new one?
+	//should pick the bigger of possible neighbors
+	for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
+	    iter!=peaks.end(); iter++){
+	    struct Peak *p = *iter;
+	    if(leftedge - 1 == p->right || leftedge - 2 == p->right){
+		p->right = rightedge;
+		p->area += area;
+		combined = true;
+		break;
+	    }
+	    if(rightedge + 1 == p->left || rightedge + 2 == p->left){
+		p->area += area;
+		combined = true;
+		break;
+	    }
+	}
+	
+	if(combined){
+	    //printf("combined\n");
+	    continue;
+	}
+
 	//append to list of peaks
 	peak = new Peak;
 	peak->area = area;
@@ -173,11 +199,6 @@ CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
 	peak->right = rightedge;
 	peaks.push_back(peak);
 	
-
-	//printf("added new peak: %d %lf %d\n", peak->area,
-	//      peak->center, peak->index);
-
-
 	npeaks--;
     }
 
@@ -272,6 +293,8 @@ CalculateCapacity::StreamInfo::fill_intervals()
 // 	    printf("ack? %d\n%d\n%d\n%d\n", i, intervals[i].newack,
 // 		   cp->ack, cp->prev->ack);
 // 	}
+
+	intervals[i].time = cp->timestamp;
 
 	intervals[i].interval = cp->timestamp -
 	    (cp->prev ? cp->prev->timestamp : cp->timestamp);
