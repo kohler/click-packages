@@ -235,7 +235,6 @@ struct CalculateFlows::Pkt {
     int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
-    tcp_seq_t cumack_seq;	// sequence number of the cumack for this packet
 
     Pkt *cumack_pkt;		// packet that this ack cumacks
     Pkt *caused_ack;		// ack that this data packet caused
@@ -367,10 +366,12 @@ class CalculateFlows::ConnInfo {  public:
 
 class CalculateFlows::Scoreboard { public:
 
-    Scoreboard()				: _cumack(0) { }
+    Scoreboard(tcp_seq_t cumack = 0)	: _cumack(cumack) { }
 
-    void add_packet(tcp_seq_t seq, tcp_seq_t end_seq);
-    tcp_seq_t cumack() const			{ return _cumack; }
+    void clear(tcp_seq_t cumack = 0)	{ _cumack = cumack; }
+    void add(tcp_seq_t seq, tcp_seq_t end_seq);
+    bool contains(tcp_seq_t seq, tcp_seq_t end_seq) const;
+    inline tcp_seq_t cumack() const	{ return _cumack; }
 
   public:
 

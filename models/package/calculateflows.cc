@@ -395,10 +395,13 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	int numacks = 1;
 	for (Pkt *ackt = ackk->next; ackt && ackt->ack == ackk->ack && ackt->seq == ackt->end_seq; ackt = ackt->next)
 	    numacks++;
-	int numacksexpected = 1;
-	for (Pkt *kk = k->next->next; kk && kk->cumack_seq == ackk->ack; kk = kk->next)
-	    if (kk->flags & Pkt::F_DELIVERED)
+	int numacksexpected = 0;
+	Scoreboard sb(ackk->ack);
+	for (Pkt *kk = k->next->next; kk && sb.cumack() == ackk->ack && numacksexpected <= numacks; kk = kk->next)
+	    if (kk->flags & Pkt::F_DELIVERED) {
+		sb.add(kk->seq, kk->end_seq);
 		numacksexpected++;
+	    }
 	//click_chatter("%u ack: %u vs. %u", ackk->ack, numacks, numacksexpected);
 	if (numacksexpected > numacks)
 	    k = k->next;
@@ -449,7 +452,6 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     }
     
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
-	//&& SEQ_GEQ(k->cumack_seq, ackk->ack)) {
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
 	// If the new match started a retransmission section, change cumack
@@ -467,7 +469,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
 {
-    //click_chatter("mark_delivered at %{timeval}: %u", &ackk->timestamp, ackk->ack);
+    //click_chatter("mark_delivered at %{timeval}: %u  %{timeval}:%u  %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
     
     // update current RTT
     struct timeval cur_min_ack_latency = min_ack_latency;
@@ -527,13 +529,15 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
     if (!k_cumack)
 	k_cumack = pkt_head;
     // must be SEQ_LT
-    while (k_cumack && SEQ_LT(k_cumack->end_seq, ackk->ack))
+    // 3.Feb.2004 - Add k_cumack != k_time check to avoid bad behavior on
+    // weird traces where acks mistakenly precede data (NLANR)
+    while (k_cumack && k_cumack != k_time && SEQ_LT(k_cumack->end_seq, ackk->ack))
 	k_cumack = k_cumack->next;
     return k_cumack;
 }
 
 void
-CalculateFlows::Scoreboard::add_packet(tcp_seq_t seq, tcp_seq_t end_seq)
+CalculateFlows::Scoreboard::add(tcp_seq_t seq, tcp_seq_t end_seq)
 {
     // common cases
     if (seq == end_seq || SEQ_LEQ(end_seq, _cumack))
@@ -573,6 +577,28 @@ CalculateFlows::Scoreboard::add_packet(tcp_seq_t seq, tcp_seq_t end_seq)
     }
 }
 
+bool
+CalculateFlows::Scoreboard::contains(tcp_seq_t seq, tcp_seq_t end_seq) const
+{
+    // common cases
+    if (seq == end_seq)
+	return false;
+    else if (SEQ_LEQ(end_seq, _cumack))
+	return true;
+    else {
+	if (SEQ_LT(seq, _cumack))
+	    seq = _cumack;
+	for (int block = 0; block < _sack.size(); block += 2)
+	    if (SEQ_LT(seq, _sack[block]))
+		return false;
+	    else if (SEQ_LEQ(end_seq, _sack[block+1]))
+		return true;
+	    else if (SEQ_LEQ(seq, _sack[block+1]))
+		seq = _sack[block+1];
+	return false;
+    }
+}
+
 void
 CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
@@ -589,17 +615,6 @@ CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 		else
 		    last_ack = ackk->ack;
 	    }
-    }
-
-    // calculate cumack_seq
-    {
-	Scoreboard sb;
-	for (Pkt *k = pkt_head; k; k = k->next) {
-	    if (k->flags & Pkt::F_DELIVERED)
-		sb.add_packet(k->seq, k->end_seq);
-	    k->cumack_seq = sb.cumack();
-	    //click_chatter("%u: %{timeval} %u gets %u", conn->aggregate(), &k->timestamp, k->end_seq, k->cumack_seq);
-	}
     }
 
     // calculate ack causality
