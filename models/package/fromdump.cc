@@ -56,7 +56,13 @@ FromDump_Fast::~FromDump_Fast()
 int
 FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
-    bool timing = false, stop = false, mmap = true;
+    bool timing = false, stop = false;
+#ifdef __linux__
+    bool mmap = false;
+#else
+    bool mmap = true;
+#endif
+    
     if (cp_va_parse(conf, this, errh,
 		    cpString, "dump file name", &_filename,
 		    cpOptional,
@@ -67,6 +73,7 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    "MMAP", cpBool, "access file with mmap()?", &mmap,
 		    0) < 0)
 	return -1;
+    
     _timing = timing;
     _stop = stop;
 #ifdef ALLOW_MMAP

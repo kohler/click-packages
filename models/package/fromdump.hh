@@ -5,7 +5,7 @@
 
 /*
 =c
-FromDump(FILENAME [, TIMING])
+FromDump(FILENAME [, TIMING, I<KEYWORDS>])
 
 =s sources
 
@@ -18,15 +18,39 @@ Pushes them out the output, and stops the driver when there are no more
 packets. If TIMING is true, then FromDump tries to maintain the timing of
 the original packet stream. TIMING is false by default.
 
+Keyword arguments are:
+
+=over 8
+
+=item TIMING
+
+Boolean. Same as the TIMING argument.
+
+=item STOP
+
+Boolean. If true, then FromDump will ask the router to stop when it is done
+reading its tcpdump file. Default is false.
+
+=item MMAP
+
+Boolean. If true, then FromDump will use mmap(2) to access the tcpdump file.
+This can result in slightly better performance on some machines. FromDump's
+regular file discipline is pretty optimized, so the difference is often small
+in practice. Default is true on most operating systems, but false on Linux.
+
+=back
+
+Only available in user-level processes.
+
+=n
+
 By default, `tcpdump -w FILENAME' dumps only the first 68 bytes of
 each packet. You probably want to run `tcpdump -w FILENAME -s 2000' or some
 such.
 
-Only available in user-level processes.
-
 =a
 
-ToDump, FromDevice.u, ToDevice.u, tcpdump(1) */
+ToDump, FromDevice.u, ToDevice.u, tcpdump(1), mmap(2) */
 
 class FromDump_Fast : public Element { public:
 
