@@ -1309,13 +1309,15 @@ class PlotCanvas:
     def set_time_range(self, begin, interval=None, incr=False):
         true_begin = max(self.conn.get_time_range()[0] - 0.001, 0)
         true_end = self.conn.get_time_range()[1]
+        
         if begin is None: begin = true_begin
         if interval is None: interval = self.end - self.begin
-        end = min(max(begin, 0) + interval, true_end)
-        begin = max(min(begin, self.end - interval), 0)
-        if incr and begin == self.begin and end == self.end:
-            return
-        self.begin, self.end = begin, end
+
+        old_begin, old_end = self.begin, self.end
+        self.end = min(max(begin, 0) + interval, true_end)
+        self.begin = max(min(begin, self.end - interval), 0)
+        if incr and self.begin == old_begin and self.end == old_end: return
+
         self.highlight = None
         if self.plotted: self.plot()
 
