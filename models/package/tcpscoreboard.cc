@@ -7,7 +7,7 @@ void
 TCPScoreboard::add(tcp_seq_t seq, tcp_seq_t end_seq)
 {
     // common cases
-    if (seq == end_seq || SEQ_LEQ(end_seq, _cumack))
+    if (SEQ_GEQ(seq, end_seq) || SEQ_LEQ(end_seq, _cumack))
 	/* nothing to do */;
     else if (SEQ_LEQ(seq, _cumack) && !_sack.size())
 	_cumack = end_seq;

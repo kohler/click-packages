@@ -9,10 +9,12 @@ class TCPScoreboard { public:
 
     TCPScoreboard(tcp_seq_t cumack = 0)	: _cumack(cumack) { }
 
-    void clear(tcp_seq_t cumack = 0)	{ _cumack = cumack; }
-    void add(tcp_seq_t seq, tcp_seq_t end_seq);
-    bool contains(tcp_seq_t seq, tcp_seq_t end_seq) const;
     inline tcp_seq_t cumack() const	{ return _cumack; }
+    bool contains(tcp_seq_t seq, tcp_seq_t end_seq) const;
+    
+    inline void clear(tcp_seq_t cumack = 0);
+    void add(tcp_seq_t seq, tcp_seq_t end_seq);
+    inline void add_cumack(tcp_seq_t cumack);
 
   public:
 
@@ -20,6 +22,17 @@ class TCPScoreboard { public:
     DEQueue<tcp_seq_t> _sack;
 
 };
+
+inline void TCPScoreboard::clear(tcp_seq_t cumack)
+{
+    _cumack = cumack;
+    _sack.clear();
+}
+
+inline void TCPScoreboard::add_cumack(tcp_seq_t cumack)
+{
+    add(_cumack, cumack);
+}
 
 CLICK_ENDDECLS
 #endif
