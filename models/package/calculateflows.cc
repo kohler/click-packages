@@ -24,7 +24,7 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool gnuplot, bool eventfile
     : _aggregate(AGGREGATE_ANNO(p))
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
-	   && !IP_FIRSTFRAG(p->ip_header())
+	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     
     // initialize to empty
@@ -516,18 +516,20 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
     if (cp_va_parse(conf, this, errh,
-                    cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
-		    cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    cpOptional,
 		    cpFilename, "filename for output flow1", &_outfilename[0],
 		    cpFilename, "filename for output flow2", &_outfilename[1],
+		    cpKeywords,
+                    "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
+		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    0) < 0)
         return -1;
     
-    AggregateIPFlows *af;
-    if (!af_element || !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
+    AggregateIPFlows *af = 0;
+    if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
 	return errh->error("first element not an AggregateIPFlows");
-    af->add_listener(this);
+    else if (af)
+	af->add_listener(this);
     
     if (!tipfd_element || !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("first element not an ToIPFlowDumps");

@@ -11,56 +11,31 @@
 /*
 =c
 
-CalculateFlows([I<KEYWORDS>])
+CalculateFlows([FILENAME1, FILENAME2, I<KEYWORDS>])
 
 =s
 
-sets aggregate annotation based on flow
+calculates loss events in flows
 
 =d
-
-CalculateFlows monitors TCP and UDP flows, setting the aggregate annotation on
-every passing packet to a flow number, and the paint annotation to a direction
-indication. Non-TCP and UDP packets, second and subsequent fragments, and
-short packets are emitted on output 1, or dropped if there is no output 1.
-
-CalculateFlows uses source and destination addresses and source and
-destination ports to distinguish flows. Reply packets get the same flow
-number, but a different paint annotation. Old flows die after a configurable
-timeout, after which new packets with the same addresses and ports get a new
-flow number. UDP, active TCP, and completed TCP flows have different timeouts.
-
-Flow numbers are assigned sequentially, starting from 1. Different flows get
-different numbers. Paint annotations are set to 0 or 1, depending on whether
-packets are on the forward or reverse subflow. (The first packet seen on each
-flow gets paint color 0; reply packets get paint color 1.)
 
 Keywords are:
 
 =over 8
 
-=item TCP_TIMEOUT
+=item NOTIFIER
 
-The timeout for active TCP flows, in seconds. Default is 24 hours.
+An AggregateNotifier element.
 
-=item TCP_DONE_TIMEOUT
+=item FLOWDUMPS
 
-The timeout for completed TCP flows, in seconds. A completed TCP flow has seen
-FIN flags on both subflows. Default is 30 seconds.
-
-=item UDP_TIMEOUT
-
-The timeout for UDP connections, in seconds. Default is 1 minute.
-
-=item REAP
-
-The garbage collection interval. Default is 10 minutes of packet time.
+A ToIPFlowDumps element. Not optional.
 
 =back
 
 =a
 
-AggregateIP, AggregateCounter */
+AggregateIPFlows, ToIPFlowDumps */
 
 class CalculateFlows : public Element, public AggregateListener { public:
 
