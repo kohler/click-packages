@@ -475,23 +475,29 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 }
 
 bool
-CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const
 {
     //click_chatter("mark_delivered at %{timeval}: %u  CA %{timeval}:%u  TH %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
     
     // update current RTT
     struct timeval cur_min_ack_latency = min_ack_latency;
-    //update_cur_min_ack_latency(cur_min_ack_latency, running_min_ack_latency, ackk, ackwindow_begin, ackwindow_end);
     
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
 	k_time = k_time->next;
 
+    // move k_time backward if this followed a string of dupacks
+    if (prev_ndupack && k_time)
+	while (k_time->prev && SEQ_GT(k_time->prev->seq, prev_ackno))
+	    k_time = k_time->prev;
+
     // go over previous packets, marking them as delivered
     if (!k_time || k_time != k_cumack) {
 	Pkt *k_time_hint = k_time;
+#if ACK_JUMP_SECTION
 	bool ack_jump_section = (ackk->prev && ackk->prev->ack != ackk->ack);
 	uint32_t ack_jump_end_seq = ackk->ack;
+#endif
 	for (Pkt *k = (k_time ? k_time->prev : pkt_tail); k && k != k_cumack; k = k->prev) {
 	    if (SEQ_LEQ(k->end_seq, ackk->ack) && k->seq != k->end_seq) {
 		// can we find an already-received packet covering these
@@ -505,6 +511,7 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 		// otherwise, this puppy was delivered
 		k->flags |= Pkt::F_DELIVERED;
 
+#if ACK_JUMP_SECTION
 		// if the ack number jumped inside a reordered section,
 		// previous packets were delivered too
 		if (ack_jump_section
@@ -522,14 +529,17 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 			ack_jump_end_seq = k->seq;
 		    }
 		}
+#endif
 
 	      not_delivered: ;
 	    }
 
+#if ACK_JUMP_SECTION
 	    // we have left the ack jump section if we've encountered a packet
 	    // starting at or after the previous ack
 	    if (ack_jump_section && SEQ_LEQ(k->seq, ackk->prev->ack))
 		ack_jump_section = false;
+#endif
 	}
     }
     
@@ -622,15 +632,16 @@ CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
     // calculate delivered packets
     {
 	Pkt *k_cumack = 0, *k_time = pkt_head;
-	//struct timeval running_min_ack_latency;
-	//const Pkt *ackwindow_begin = 0, *ackwindow_end = 0;
-	uint32_t last_ack = 0;
+	tcp_seq_t last_ack = 0;
+	int last_ndupack = 0;
 	for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
-	    if (last_ack != ackk->ack) {
-		if (!mark_delivered(ackk, k_cumack, k_time /*, running_min_ack_latency, ackwindow_begin, ackwindow_end */))
+	    if (ackk->ack == last_ack)
+		last_ndupack++;
+	    else if (SEQ_GT(ackk->ack, last_ack)) {
+		if (!mark_delivered(ackk, k_cumack, k_time, last_ack, last_ndupack))
 		    break;
-		else
-		    last_ack = ackk->ack;
+		last_ack = ackk->ack;
+		last_ndupack = 0;
 	    }
     }
 
