@@ -74,10 +74,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     
-    void print_ack_event(unsigned, int,  timeval, unsigned);
-    void print_send_event(unsigned, timeval, unsigned , unsigned);
-    void gplotp_ack_event(unsigned, int ,timeval, unsigned);
-    void gplotp_send_event(unsigned, timeval, unsigned);
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
 	
     Packet *simple_action(Packet *);
@@ -121,8 +117,6 @@ class CalculateFlows::LossInfo {
     unsigned  _p_loss_events[2];
 		   
   public:	
-    FILE *outfile[5]; // 0,1 for Events Output and 2,3 for statistics and 4 for info files.
-    FILE *outfileg[10]; 
     String outfilename[2];	// Event output files using Jitu format 
     String outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
     // 6,7 for Possible loss Events, 8,9 for Data Acks
@@ -138,7 +132,7 @@ class CalculateFlows::LossInfo {
     MapInterval inter_by_time[2];
     MapS acks[2];
     MapS rexmt[2];
-    tcp_seq_t  init_seq[2];
+    tcp_seq_t init_seq[2];
     timeval init_time;
     double prev_diff[2];
     short int doubling[2];
@@ -201,99 +195,8 @@ class CalculateFlows::LossInfo {
 	init();
 	LossInfoInit(outfilename, aggp, gnuplotp, eventfilesp);
     }
-    void LossInfoInit(String *outfilenamep, uint32_t aggp, short int gnuplotp, short int eventfilesp) { 
-	String outfilenametmp;
-	String *strtmp = new String (aggp);
-	gnuplot = gnuplotp;
-	eventfiles = eventfilesp;
-	agganno = aggp;
-	outputdir = "./flown"+ *strtmp;
-	system(" mkdir -p ./"+outputdir);
-	if (eventfiles){	
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/" + outfilenamep[i];
-		outfilename[i] = outfilenametmp;
-		outfile[i] = fopen(outfilenametmp.cc(), "w");
-	    			//printf ("%s:%d\n",outfilenametmp.cc(),aggp);
-		if (!outfile[i]){
-		    click_chatter("%s: %s", outfilename[i].cc(), strerror(errno));
-		    return;
-		}
-	    }
-	} else {
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/"+ outfilenamep[i];
-		outfilename[i] = outfilenametmp;
-	    }
-	}
-	if (gnuplot){  // check if gnuplot output is requested.
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/" + outfilenamep[i];
-		outfilenametmp.append("_acks.gp",8);
-		outfilenameg[i] = outfilenametmp;
-		outfileg[i] = fopen(outfilenametmp.cc(), "w");
-		if (!outfileg[i]){
-		    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		    return;
-		}
-	    }
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/" + outfilenamep[i];
-		outfilenametmp.append("_xmts.gp",8);
-		outfilenameg[i+2] = outfilenametmp;
-		outfileg[i+2] = fopen(outfilenametmp.cc(), "w");
-		if (!outfileg[i+2]){
-		    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		    return;
-		}
-	    }
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/"+ outfilenamep[i];
-		outfilenametmp.append("_levt.gp",8);
-		outfilenameg[i+4] = outfilenametmp;
-		outfileg[i+4] = fopen(outfilenametmp.cc(), "w");
-		if (!outfileg[i+4]){
-		    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		    return;
-		}
-	    }
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/" + outfilenamep[i];
-		outfilenametmp.append("_plevt.gp",9);
-		outfilenameg[i+6] = outfilenametmp;
-		outfileg[i+6] = fopen(outfilenametmp.cc(), "w");
-		if (!outfileg[i+6]){
-		    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		    return;
-		}
-	    }
-	    for (int i = 0 ; i < 2 ; i++){
-		outfilenametmp = outputdir + "/" + outfilenamep[i];
-		outfilenametmp.append("_dacks.gp",9);
-		outfilenameg[i+8] = outfilenametmp;
-		outfileg[i+8] = fopen(outfilenametmp.cc(), "w");
-		if (!outfileg[i+8]){
-		    click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		    return;
-		}
-	    }				
-	    
-	}
-	if (eventfiles){
-	    for (int i = 0 ; i < 2 ; i++){
-		if (fclose(outfile[i])){ 
-		    click_chatter("error closing file!");
-		}
-	    }
-	}
-	if (gnuplot){  // check if gnuplot output is requested.
-	    for (int i = 0 ; i < 10 ; i++){
-		if (fclose(outfileg[i])){ 
-		    click_chatter("error closing file!");
-		}
-	    }			
-	}		  
-    }
+
+    void LossInfoInit(String *outfilenamep, uint32_t aggp, short int gnuplotp, short int eventfilesp);
     
     ~LossInfo(){
 	print_stats();
@@ -308,35 +211,7 @@ class CalculateFlows::LossInfo {
 		}*/
     }
     
-    void print_stats() {
-	String outfilenametmp,strtmp;
-	for (int i = 0 ; i < 2 ; i++){
-	    outfilenametmp = outfilename[i];
-	    outfilenametmp.append(".stats",6);
-				//printf("%s",outfilenametmp.cc());
-	    outfile[i+2] = fopen(outfilenametmp.cc(), "w");
-	    if (!outfile[i+2]){
-		click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
-		return;
-	    }
-	    strtmp = i ? "B->A" : "A->B";
-	    fprintf(outfile[i+2], "Flow %d direction from %s \n",agganno,strtmp.cc());
-	    fprintf(outfile[i+2], "Total Bytes = [%u]      ", total_bytes(i));
-	    fprintf(outfile[i+2], "Total Bytes Lost = [%u]\n",bytes_lost(i));
-	    fprintf(outfile[i+2], "Total Packets = [%u]  ",packets(i));
-	    fprintf(outfile[i+2], "Total Packets Lost = [%u]\n",packets_lost(i));
-	    fprintf(outfile[i+2], "Total Loss Events = [%u]\n",loss_events(i));
-	    fprintf(outfile[i+2], "Total Possible Loss Events = [%u]\n",ploss_events(i));
-	    fprintf(outfile[i+2], "I saw the start(SYN):[%d], I saw the end(FIN):[%d]",
-		    has_syn[i],
-		    has_fin[i]);
-	    if (fclose(outfile[i+2])){ 
-		click_chatter("error closing file!");
-	    }
-	}
-    }
-
-
+    void print_stats();
     
     struct timeval Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint);
     
@@ -407,6 +282,11 @@ class CalculateFlows::LossInfo {
 	return _packets_lost[paint];
     }
 
+    void print_ack_event(unsigned, int, const timeval &, tcp_seq_t);
+    void print_send_event(unsigned, const timeval &, tcp_seq_t, tcp_seq_t);
+    void gplotp_ack_event(unsigned, int, const timeval &, tcp_seq_t);
+    void gplotp_send_event(unsigned, const timeval &, tcp_seq_t);
+    
 };
 
 #endif
