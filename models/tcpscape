@@ -50,6 +50,8 @@ _screen_style = {
     }
 
 _postscript_style = {
+    "bg": None,
+    
     "data": LineDescriptor(1, 0, 0, linewidth=0.5),
     "data.undelivered": LineDescriptor(0, 0, 0, linewidth=0.5),
     "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
@@ -73,6 +75,7 @@ _postscript_style = {
 PRINT_PRINTER = 0
 PRINT_FILE = 1
 PRINT_EPSFILE = 2
+PRINT_MPFILE = 3
 _print_options = {
     "dest": PRINT_PRINTER,
     "file": "x.ps",
@@ -80,7 +83,9 @@ _print_options = {
     "papersize": (612, 792),
     "landscape": True,
     "color": True,
-    "margins": (28, 28, 28, 28)         # left, top, right, bottom
+    "margins": (28, 28, 28, 28),         # left, top, right, bottom
+    "links": True,
+    "rcvwnd": True
     }
 
 
@@ -1708,7 +1713,7 @@ class PlotCanvas_ScreenDrawable:
             x, y, w, h = args
         else:
             raise TypeError("PlotCanvas_Drawable.fill_rectangle() takes 1 or 4 arguments")
-        if w > 0 and h > 0:
+        if w > 0 and h > 0 and gc is not None:
             self.drawable.draw_rectangle(gc, True, x, y, w, h)
 
     def draw_rectangle(self, gc, x, y, w, h):
@@ -1878,7 +1883,8 @@ class PlotCanvas_PostScriptDrawable:
         self.FONT().write_define(f)
         self.LEGEND_FONT().write_define(f)
         f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
-        for key, s in _postscript_style:
+        for key in _postscript_style:
+            s = _postscript_style[key]
             f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
             if len(s.dash):
                 f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
@@ -1998,6 +2004,188 @@ class PlotCanvas_PostScriptDrawable:
         self.f.write(str(x) + " " + str(self.top - y) + " Pda\n")
 
 
+
+class PlotCanvas_MetaPostDrawable:
+
+    FONT = Helvetica
+    LEGEND_FONT = HelveticaBold
+
+    PPD_PAPER_SIZES = { (612, 792): "Letter",
+                        (792, 612): "LetterRotated",
+                        (612, 1008): "Legal",
+                        (842, 1191): "A3",
+                        (595, 842): "A4",
+                        (420, 595): "A5" }
+
+    ANCHOR_NAME = { ANCHOR_N: "bot", ANCHOR_E: "lft", ANCHOR_S: "top" }
+
+    def __init__(self, plotcanvas, options):
+        self.plotcanvas = plotcanvas
+        self.options = options
+        self.style = { }
+        if not options["links"]: self.style["link"] = None
+        if not options["rcvwnd"]: self.style["window"] = None
+
+    def gc(self, name):
+        if name in self.style:
+            return self.style[name]
+        return _postscript_style[name]
+
+    def layout(self, name=""):
+        if name == "small":
+            return ("\\small{", "}")
+        elif name == "{":
+            return ("", "")
+        elif name == "flags":
+            return ("\\small{\\textbf{", "}}")
+        elif name == "legend":
+            return ("\\textbf{", "}")
+        elif name == "title":
+            return ("\\large{\\textbf{", "}}")
+        elif name == "subtitle":
+            return ("", "")
+        else:
+            return None
+
+    def prepare(self):
+        if self.options["dest"] == PRINT_PRINTER:
+            f = self.f = os.popen(self.options["command"], "w")
+        else:
+            f = self.f = open(self.options["file"], "w")
+
+        papersize = self.options["windowsize"]
+        margins = self.options["margins"]
+
+        # determine initial bounds
+        if self.options["landscape"]:
+            self.bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
+            self.top = papersize[0]
+        else:
+            self.bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
+            self.top = papersize[1]
+
+        f.write("""prologues := 1;
+linejoin := mitered;
+linecap := squared;
+verbatimtex %&latex
+\\documentclass[10pt]{article}
+\\begin{document}
+etex;
+
+datawid = 3; ackwid = 2;
+labeloffset := 5;
+picture clipper;
+
+def datapath(expr x, y, yy) =
+  (x-datawid,y) -- (x+datawid,y) -- (x, y) -- (x, yy) -- (x-datawid,yy) -- (x+datawid,yy)
+enddef;
+
+def ackpath(expr x, y) =
+  (x-ackwid,y - ackwid) -- (x+ackwid,y + ackwid) -- (x,y) -- (x-ackwid,y+ackwid) -- (x+ackwid,y-ackwid)
+enddef;
+
+def dataackpath(expr x, y) =
+  (x-ackwid,y - ackwid) -- (x+ackwid,y+ackwid) -- (x,y) -- (x-ackwid,y+ackwid) -- (x+ackwid,y-ackwid) -- (x,y) -- (x+(ackwid+1),y) -- (x-(ackwid+1),y) -- (x,y) -- (x,y-(ackwid+1)) -- (x,y+(ackwid+1))
+enddef;
+
+beginfig(1);
+""")
+
+	self.clipped = None
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height) -- vertical opposite of PostScript coordinates
+        return self.bounds
+
+    def want(self, name):
+        return name == "shrinkwrap" or name == "axislabel"
+    
+    def legend(self, gc, layout, text, position):
+        b, allb = self.bounds, self.all_bounds
+        if position == "xaxis":
+            self.draw_text(gc, layout, text, b[0] + b[2]/2., allb[1] + allb[3] - 2 - layout.height(), ANCHOR_N)
+        elif position == "yaxis":
+            self.draw_text(gc, layout, text, allb[0] + layout.height() + 4, b[1] + b[3]/2., ANCHOR_S|ANCHOR_ROT)
+        elif position == "title":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., allb[1] - 6, ANCHOR_N)
+        elif position == "subtitle":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., b[1] - 6, ANCHOR_S)
+        else:
+            raise ValueError
+    
+    def complete(self):
+        self.f.write("endfig;\n\nend\n")
+        self.f.close()
+        
+    def clip(self, gc, rectangle):
+        if self.clipped is not None:
+            raise ValueError
+        self.clipped = rectangle
+        self.f.write("  clipper := currentpicture; currentpicture := nullpicture;\n")
+
+    def unclip(self, gc):
+        if self.clipped is None:
+            raise ValueError
+        x, y, w, h = self.clipped
+        self.clipped = None
+        self.f.write("  clip currentpicture to (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle;\n")
+        self.f.write("  addto clipper also currentpicture; currentpicture := clipper;\n")
+
+    def clear(self):
+        pass
+
+    def mp_color(self, gc):
+        return "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
+    
+    def mp_style(self, gc):
+        s = "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
+        if len(gc.dash):
+            pass
+        if gc.linewidth != 1:
+            s = "withpen pencircle scaled " + str(gc.linewidth) + " " + s
+        return s
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        self.f.write("  draw (" + str(x1) + ", " + str(self.top - y1) + ") -- (" + str(x2) + ", " + str(self.top - y2) + ") " + self.mp_style(gc) + ";\n")
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1:
+            s = "  draw ("
+            for x, y in l:
+                self.f.write(s + str(x) + ", " + str(self.top - y))
+                s = ")\n    -- ("
+            self.f.write(") " + self.mp_style(gc) + ";\n")
+
+    def fill_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.f.write("  fill (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle " + self.mp_color(gc) + ";\n")
+
+    def draw_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.f.write("  draw (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle " + self.mp_style(gc) + ";\n")
+
+    def anchor_offset(self, anchor):
+        return (0, 0)
+
+    def draw_text(self, gc, font, text, x, y, anchor=ANCHOR_N):
+        if font is None: font = ("", "")
+        self.f.write("  label." + self.ANCHOR_NAME[anchor & ~ANCHOR_ROT] + "(btex " + font[0] + text + font[1] + " etex");
+        if anchor & ANCHOR_ROT:
+            self.f.write(" rotated 90");
+        self.f.write(", (" + str(x) + ", " + str(self.top - y) + "));\n");
+
+    def text_size(self, font, text):
+        return (len(text) * 5.56, 8.5, 1.5)
+
+    def draw_data(self, gc, x, y1, y2):
+        self.f.write("  draw datapath(" + str(x) + ", " + str(self.top - y1) + ", " + str(self.top - y2) + ") " + self.mp_style(gc) + ";\n")
+
+    def draw_ack(self, gc, x, y):
+        self.f.write("  draw ackpath(" + str(x) + ", " + str(self.top - y) + ") " + self.mp_style(gc) + ";\n")
+    
+    def draw_dataack(self, gc, x, y):
+        self.f.write("  draw dataackpath(" + str(x) + ", " + str(self.top - y) + ") " + self.mp_style(gc) + ";\n")
+
+
 ####################
 # PlotCanvas
 #
@@ -2020,7 +2208,6 @@ class PlotCanvas:
     # initialization
     def __init__(self, master, width=900, height=600):
         self.canvas = gtk.DrawingArea()
-        self.canvas.set_size_request(width, height)
         self.canvas.set_double_buffered(False) # we do our own
         self.canvas.set_flags(gtk.CAN_FOCUS)
 
@@ -2544,13 +2731,16 @@ class PlotCanvas:
 
             # links
             gc = drawable.gc('link')
-            for l in self.conn.links(self.dir, t0, t1):
-                if l.s0 is not None and l.s1 is not None:
-                    x0 = l.t0 * tscale + toff
-                    x1 = l.t1 * tscale + toff
-                    y0 = l.s0 * sscale + soff
-                    y1 = l.s1 * sscale + soff
-                    drawable.draw_line(gc, x0, y0, x1, y1)
+            if gc is not None:
+                drawable.clip(gc, (left_margin, top_margin, plot_width, plot_height))
+                for l in self.conn.links(self.dir, t0, t1):
+                    if l.s0 is not None and l.s1 is not None:
+                        x0 = l.t0 * tscale + toff
+                        x1 = l.t1 * tscale + toff
+                        y0 = l.s0 * sscale + soff
+                        y1 = l.s1 * sscale + soff
+                        drawable.draw_line(gc, x0, y0, x1, y1)
+                drawable.unclip(gc)
             
             # border box
             border_gc = drawable.gc("border")
@@ -2593,19 +2783,21 @@ class PlotCanvas:
                     drawable.draw_dataack(gc2, x, y)
 
             # window line, if enabled
-            if self.show_window and self.conn.has_window:
-                windows = []; gc = drawable.gc("window")
+            gc = drawable.gc("window")
+            if self.show_window and self.conn.has_window and gc is not None:
+                windows = []
                 for p in self.conn.packets(1 - self.dir, t0, t1, fuzz=1):
                     x, y = int(p.time * tscale + toff), int((p.ack + p.window) * sscale + soff)
                     windows.append((x, y))
-                drawable.clip(gc, drawable.plot_bounds())
+                drawable.clip(gc, (left_margin, top_margin, plot_width, plot_height))
                 drawable.draw_lines(gc, windows)
                 drawable.unclip(gc)
 
             # data packets
             gc1, gc2 = drawable.gc("data"), drawable.gc("data.undelivered")
             for p in self.conn.packets(self.dir, t0, t1):
-                gc = (p.flags & TH_UNDELIVERED and gc2 or gc1)
+                if p.flags & TH_UNDELIVERED: gc = gc2
+                else: gc = gc1
                 drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
                 if p.flags & (TH_SYN | TH_FIN | TH_RST):
                     s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
@@ -2787,12 +2979,13 @@ class PrintOptionsDialog:
 
         # destination radio buttons
         b = gtk.HBox(False, 10)
-        self.w_dest = [None, None, None]
+        self.w_dest = [None, None, None, None]
         self.w_dest[PRINT_PRINTER] = gtk.RadioButton(group=None, label='Printer')
         self.w_dest[PRINT_FILE] = gtk.RadioButton(group=self.w_dest[0], label='File')
         self.w_dest[PRINT_EPSFILE] = gtk.RadioButton(group=self.w_dest[0], label='EPS File')
+        self.w_dest[PRINT_MPFILE] = gtk.RadioButton(group=self.w_dest[0], label='MetaPost File')
         self.w_dest[self.options["dest"]].set_active(True)
-        for i in range(3):
+        for i in range(4):
             self.w_dest[i].connect("toggled", self.dest_toggled, i)
             b.pack_start(self.w_dest[i], False, False)
         table.attach(b, 1, 2, 0, 1)
@@ -2830,6 +3023,11 @@ class PrintOptionsDialog:
         label_group.add_widget(l)
         table.attach(l, 0, 1, 1, 2, xoptions=0)
 
+        l = gtk.Label("Plot Elements:")
+        l.set_alignment(1, 0.5)
+        label_group.add_widget(l)
+        table.attach(l, 0, 1, 2, 3, xoptions=0)
+
         # color/grayscale
         b = gtk.HBox(False, 10)
         self.w_color = gtk.RadioButton(group=None, label='Color')
@@ -2853,6 +3051,16 @@ class PrintOptionsDialog:
         b = gtk.HBox(False, 10)
         b.pack_start(self.w_papersize, False, False)
         table.attach(b, 1, 3, 1, 2)
+
+        # plot elements
+        b = gtk.HBox(False, 10)
+        self.w_links = gtk.CheckButton(label='Ack Links')
+        self.w_links.set_active(options["links"])
+        b.pack_start(self.w_links, False, False)
+        self.w_rcvwnd = gtk.CheckButton(label='Receive Window')
+        self.w_rcvwnd.set_active(options["rcvwnd"])
+        b.pack_start(self.w_rcvwnd, False, False)
+        table.attach(b, 1, 2, 2, 3, xoptions=gtk.EXPAND|gtk.FILL)
 
         # action area
         ok = gtk.Button(stock=gtk.STOCK_PRINT)
@@ -2889,13 +3097,16 @@ class PrintOptionsDialog:
         
     def cmd_done(self, widget, data):
         if data:                        # OK
-            for i in range(3):
+            for i in range(4):
                 if self.w_dest[i].get_active():
                     self.options["dest"] = i
             self.options["command"] = self.w_command.get_text()
             self.options["file"] = self.w_file.get_text()
             self.options["color"] = self.w_color.get_active()
             self.options["papersize"] = self.PAPER_SIZES[self.w_papersize.get_history()][1]
+            self.options["windowsize"] = (self.parent.canvas.plot_height, self.parent.canvas.plot_width)
+            self.options["links"] = self.w_links.get_active()
+            self.options["rcvwnd"] = self.w_rcvwnd.get_active()
             if not self.parent.cmd_print(widget, data, self.dialog):
                 return
         self.dialog.destroy()
@@ -3032,6 +3243,7 @@ class PlotFlowWindow:
         #else:
         #    self._activate_flow_items(None)
 
+        win.set_default_size(900, 660)
         win.show()
 
         self.canvas.grab_focus()
@@ -3044,8 +3256,8 @@ class PlotFlowWindow:
             ( "/_File",         None,         None, 0, "<Branch>" ),
    	    ( "/File/_Open",    "<control>O", None, 0, None ),
    	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
-            ( "/File/Print",    "<control>P", self.cmd_print, 0, "<StockItem>", gtk.STOCK_PRINT ),
-            ( "/File/Print To...", "<control><shift>P", self.cmd_print_to, 0, None ),
+            #( "/File/Print",    "<control>P", self.cmd_print, 0, "<StockItem>", gtk.STOCK_PRINT ),
+            ( "/File/Print...", "<control>P", self.cmd_print_to, 0, "<StockItem>", gtk.STOCK_PRINT ),
    	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, "<StockItem>", gtk.STOCK_QUIT ),
             ( "/_Tools",	None,		None, 0, "<Branch>" ),
@@ -3162,7 +3374,10 @@ class PlotFlowWindow:
 
     def cmd_print(self, widget, event, window=None):
         try:
-            self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, _print_options))
+            if _print_options["dest"] == PRINT_MPFILE:
+                self.canvas.plot(PlotCanvas_MetaPostDrawable(self.canvas, _print_options))
+            else:
+                self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, _print_options))
             return 1
         except IOError, (errno, strerror):
             if window is None: window = self.window
