@@ -1892,6 +1892,7 @@ class PlotCanvas:
             self.stuck = True
         self.grab_focus()
         return 1
+    
     def cmd_motion(self, widget, event):
         x, y, state = widget.window.get_pointer()
         try:
@@ -1931,6 +1932,7 @@ class PlotCanvas:
         except ValueError:
             pass
         return 1
+    
     def cmd_release(self, widget, event):
         try:
             if event.button != 1 or self.press is None:
@@ -1939,6 +1941,7 @@ class PlotCanvas:
                 self.lit_main[0] = self.lit_main[1]
                 self.lit_main[1] = None
                 self.highlight = ['lit_packet']
+                self.sublight_matchers()
                 
                 if self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
                     when = self._itransform(event.x, event.y)[0]
@@ -2739,7 +2742,9 @@ class PlotFlowWindow:
             elif bw < 1000000: desc += " = %.3f Kb/s" % (bw/1000.)
             else: desc += " = %.3f Mb/s" % (bw/1000000.)
 
-            desc2 = "%+d in %.6fs" % (h[5] - h[3], h[4] - h[2])
+            ds, dt = h[5] - h[3], h[4] - h[2]
+            if dt < 0: dt = -dt; ds = -ds
+            desc2 = "%+d in %.6fs" % (ds, dt)
             
             self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b> (" + desc2 + ")</span>")
         else:
