@@ -344,6 +344,10 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 
     Pkt *k = k_cumack;
 
+    // From this point on, we are shifting over packets that might, indeed,
+    // cause ack latencies later, so don't change the stable k_cumack hint.
+
+    // Handle reordering: skip packets that are in a hole.
     if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE))
 	for (k = k->next;
 	     k && (!(k->flags & (Pkt::F_DELIVERED | Pkt::F_WINDOW_PROBE))
@@ -355,7 +359,6 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	k->flags |= Pkt::F_ACK_CAUSE;
 	if (SEQ_GT(k->end_seq, max_ack))
 	    max_ack = k->end_seq;
-	//k_cumack = k;
 	return k;
     } else
 	return 0;
