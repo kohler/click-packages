@@ -84,6 +84,18 @@ I<latency> is the delay between the packet's arrival and its ack's arrival at
 the trace point. These lines will generally be sorted in increasing order of
 I<timestamp>, but that is not guaranteed.
 
+=item ACKCAUSALITY
+
+Boolean. If true, then output the latencies between acknowledgements and the
+packets to which they were responses to the TRACEINFO file. This information
+will be written inside an "C<&lt;ackcausality&gt;>" XML element as a series of
+non-XML lines.  Each line has the format "I<timestamp> I<ack> I<latency>",
+where I<timestamp> is the data packet's timestamp, I<ack> is its
+acknowledgement's sequence number, and I<latency> is the delay between the
+packet's arrival and its ack's arrival at the trace point. These lines will
+generally be sorted in increasing order of I<timestamp>, but that is not
+guaranteed.
+
 =item FULLRCVWINDOW
 
 Boolean. If true, then output a list of data packet timestamps that fill the
@@ -138,8 +150,9 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPSummaryDump *summary_dump() const { return _tipsd; }
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
-    bool write_ack_latency() const	{ return _ack_latency; }
-    bool write_full_rcv_window() const	{ return _full_rcv_window; }
+
+    enum WriteFlags { WR_ACKLATENCY = 1, WR_ACKCAUSALITY = 2, WR_FULLRCVWND = 4 };
+    WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
     static double float_timeval(const struct timeval &);
     
@@ -154,8 +167,6 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *_traceinfo_file;
     HandlerCall *_filepos_h;
 
-    bool _ack_latency : 1;
-    bool _full_rcv_window : 1;
     bool _ip_id : 1;
     
     Pkt *_free_pkt;
@@ -163,6 +174,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     String _traceinfo_filename;
     Element *_packet_source;
+    int _write_flags;
 
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
@@ -274,11 +286,13 @@ struct CalculateFlows::StreamInfo {
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
     void update_counters(const Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
-    Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &, Pkt *search_hint = 0) const;
+    Pkt *find_acked_pkt(const Pkt *ack, Pkt *search_hint = 0) const;
+    Pkt *find_ack_cause(const Pkt *ack, Pkt *search_hint = 0) const;
 
     void output_loss(ConnInfo *, CalculateFlows *);
-    void write_xml(ConnInfo *, FILE *, bool ack_latency, bool full_rcv_window) const;
+    void write_xml(ConnInfo *, FILE *, WriteFlags) const;
     void write_ack_latency_xml(ConnInfo *, FILE *) const;
+    void write_ack_causality_xml(ConnInfo *, FILE *) const;
     void write_full_rcv_window_xml(FILE *) const;
     
 };
