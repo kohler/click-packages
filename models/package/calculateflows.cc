@@ -141,9 +141,6 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     // either way, intervening packets are in a non-ordered event
     for (x = (x ? x->next : pkt_head); x; x = x->next)
 	x->flags |= Pkt::F_NONORDERED;
-
-    if (timeval2double(np->timestamp) >= 73.9 && timeval2double(np->timestamp) < 74.2)
-	fprintf(stderr, "%ld.%06ld %u %x\n", np->timestamp.tv_sec, np->timestamp.tv_usec, np->end_seq, np->flags);
 }
 
 void
