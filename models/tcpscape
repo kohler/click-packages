@@ -105,6 +105,12 @@ def union_rectangle(r1, r2):
 def expand_rectangle(r1, v):
     return (r1[0] - v, r1[1] - v, r1[2] + 2*v, r1[3] + 2*v)
 
+def ordinal(n):
+    if abs(n) == 1: return str(n) + "st"
+    elif abs(n) == 2: return str(n) + "nd"
+    elif abs(n) == 3: return str(n) + "rd"
+    else: return str(n) + "th"
+
 
 class Packet:
     __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
@@ -1265,6 +1271,8 @@ class PlotCanvas:
         self.backing_store_updated = False
 
         self.highlight = None
+        self.highlight_bounds = None
+        self.highlight_hooks = []
         
         self.adjustment = gtk.Adjustment()
         self.adjustment.connect("value_changed", self.adj_value_changed)
@@ -1298,13 +1306,16 @@ class PlotCanvas:
         if self.plotted: self.plot()
     def view_all(self):
         self.set_time_range(None, interval=1000000000.0)
-    def set_time_range(self, begin, interval=None):
+    def set_time_range(self, begin, interval=None, incr=False):
         true_begin = max(self.conn.get_time_range()[0] - 0.001, 0)
         true_end = self.conn.get_time_range()[1]
         if begin is None: begin = true_begin
         if interval is None: interval = self.end - self.begin
-        self.end = min(max(begin, 0) + interval, true_end)
-        self.begin = max(min(begin, self.end - interval), 0)
+        end = min(max(begin, 0) + interval, true_end)
+        begin = max(min(begin, self.end - interval), 0)
+        if incr and begin == self.begin and end == self.end:
+            return
+        self.begin, self.end = begin, end
         self.highlight = None
         if self.plotted: self.plot()
 
@@ -1329,7 +1340,7 @@ class PlotCanvas:
         new_dt = (self.end - self.begin) * factor
         t0, t1 = self.get_plotted_time_range()
         new_t0 = max(when - new_dt * ((when - t0) / (t1 - t0)), 0)
-        self.set_time_range(new_t0, new_dt)        
+        self.set_time_range(new_t0, new_dt, incr=True)
 
     def grab_focus(self):
         self.canvas.grab_focus()
@@ -1584,23 +1595,6 @@ class PlotCanvas:
 
 
     # higlights
-    def _highlight_bounds(self):
-        if self.highlight is None:
-            return (0, 0, 0, 0)
-        elif self.highlight[0] == 'packet':
-            p, dir = self.highlight[1:]
-            if dir == self.dir:
-                x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
-                return (x - 5, y2 - 5, 10, y1 - y2 + 10)
-            elif p.dup_acks > 0:
-                x, y = self._transform(p.time, p.ack)
-                small_playout = drawable.layout("small")
-                
-            else:
-                x, y = self._transform(p.time, p.ack)
-                return (x - 5, y - 5, 10, 10)
-        else:
-            return (0, 0, 0, 0)
     def draw_highlight(self):
         if self.highlight is None:
             return
@@ -1638,6 +1632,11 @@ class PlotCanvas:
             self.erase_highlight()
             self.highlight = highlight
             self.draw_highlight()
+            for a in self.highlight_hooks:
+                a(self, self.highlight)
+
+    def add_highlight_hook(self, a):
+        self.highlight_hooks.append(a)
 
 
 class PlotFlowWindow:
@@ -1645,6 +1644,7 @@ class PlotFlowWindow:
     def __init__(self, fset):
         self.flowset = fset
         self.flowid = None
+        self.flowref = None
         
         win = gtk.Window()
         win.connect('destroy', self.cmd_exit)
@@ -1668,7 +1668,7 @@ class PlotFlowWindow:
         paned.add2(flowtree)
 
         if len(fset):
-            self.set_flowid(0)
+            self.set_flow(id=0)
         else:
             self._activate_flow_items(None)
 
@@ -1758,6 +1758,8 @@ class PlotFlowWindow:
         self.statusbar.set_padding(5, 3)
         frame.pack_start(self.statusbar, 0, 0)
         self.statusbar.show()
+
+        self.canvas.add_highlight_hook(self.highlight_hook)
         return frame
         
     def cmd_exit(self, *args):
@@ -1784,52 +1786,61 @@ class PlotFlowWindow:
         self.prev_flow_button.set_sensitive(self.flowid > 0)
         self.rcv_window_item.set_sensitive(fref is not None and fref.has_window())
 
-    def flowref(self):
-        if self.flowid is None:
-            return None
-        else:
-            return self.flowset[self.flowid]
-
     def connection(self):
         if self.flowid is None:
             return None
         else:
-            return self.flowset[self.flowid].conn
-    
-    def set_flowref(self, new_flowref, keeptime=False):
-        self.set_flowid(self.flowset.index(new_flowref), keeptime)
-    
-    def set_flowid(self, new_flowid, keeptime=False):
-        nf = self.flowset[new_flowid]
-        oc = self.connection()
-        if oc is not nf.conn and oc is not None:
-            oc.unload()
-        
-        self.canvas.set_flowref(nf, keeptime)
+            return self.flowref.conn
 
-        desc = nf.get_description()
+    def statusbar_description(self):
+        desc = self.flowref.get_description()
         desc = re.sub("<", "&lt;", desc)
         desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
         self.statusbar.set_markup(desc)
         
-        self.flowid = new_flowid
-        self._activate_flow_items(nf)
+    def set_flow(self, id=None, fref=None, keeptime=False):
+        if id is None: id = self.flowset.index(fref)
+        if fref is None: fref = self.flowset[id]
+
+        oc = self.connection()
+        if oc is not fref.conn and oc is not None:
+            oc.unload()
+        
+        self.canvas.set_flowref(fref, keeptime)
+        
+        self.flowid = id
+        self.flowref = fref
+        self._activate_flow_items(fref)
+        self.statusbar_description()
 
     def cmd_next_flow(self, widget, event):
-        self.set_flowid(self.flowid + 1)
+        self.set_flow(id=self.flowid + 1)
 
     def cmd_prev_flow(self, widget, event):
-        self.set_flowid(self.flowid - 1)
+        self.set_flow(id=self.flowid - 1)
 
     def cmd_swap_dir(self, widget, event):
-        self.set_flowref(self.flowref().opposite(), keeptime=True)
+        self.set_flow(fref=self.flowref.opposite(), keeptime=True)
 
     def cmd_flowtree_row_activated(self, widget, path, column):
-        self.set_flowref(self.flowtree_model.path2flowref(path))
+        self.set_flow(fref=self.flowtree_model.path2flowref(path))
 
     def cmd_toggle_receive_window(self, widget, event):
         self.canvas.set_show_window(not self.canvas.get_show_window())
         self.item_factory.get_item("/View/Hide Receive Window").get_child().set_label(["Show Receive Window", "Hide Receive Window"][self.canvas.get_show_window()])
+
+    def highlight_hook(self, plotcanvas, highlight):
+        if highlight is None:
+            self.statusbar_description()
+        elif highlight[0] == "packet":
+            p, dir = highlight[1:]
+            if dir == self.flowref.dir:
+                desc = "%.06fs: <b>Data</b> at %d+%d" % (p.time, int(p.seq), int(p.last_seq - p.seq))
+            else:
+                desc = "%.06fs: <b>Ack</b> for %d" % (p.time, int(p.ack))
+                if p.dup_acks > 0:
+                    desc += " (" + ordinal(p.dup_acks + 1) + " dup)"
+            self.statusbar.set_markup(desc)
             
 
 
