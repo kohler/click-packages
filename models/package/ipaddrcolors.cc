@@ -103,7 +103,7 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
 	// check topheaviness
 	if (n->color != NULLCOLOR) {
 	    if (_n_fixed_colors == 0 || (n->color != BADCOLOR && n->color >= _n_fixed_colors))
-		return errh->error("%x: packets present in middle of tree (color %d)", n->aggregate, n->color);
+		errh->error("%x: packets present in middle of tree (color %d)", n->aggregate, n->color);
 	}
 
 	// check child counts
@@ -157,6 +157,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
     }
 
     // swivel is first bit 'a' and 'n->aggregate' differ
+    assert(a != n->aggregate);
     int swivel = first_bit_set(a ^ n->aggregate);
     // bitvalue is the value of that bit of 'a'
     int bitvalue = (a >> (32 - swivel)) & 1;
@@ -172,7 +173,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
 
     n->aggregate = (down[0]->aggregate & mask);
     if (n->aggregate == down[0]->aggregate && (n->flags & F_COLORSUBTREE)) {
-	assert(n->color == down[0]->color);
+	assert(bitvalue == 1 && n->color == down[0]->color);
 	n->flags = F_COLORSUBTREE;
 	down[0]->color = NULLCOLOR;
 	down[0]->flags &= ~F_COLORSUBTREE;
@@ -232,7 +233,7 @@ IPAddrColors::hard_ensure_color(color_t c)
 	_color_mapping.resize((c | 1) + 1);
 	if (_color_mapping.size() <= (int) c)
 	    return -1;
-	for (color_t x = _next_color; x < c; x++)
+	for (color_t x = _next_color; x <= (c | 1); x++)
 	    _color_mapping[x] = x;
 	_next_color = (c | 1) + 1;
     }
@@ -245,21 +246,9 @@ IPAddrColors::set_color(uint32_t a, color_t color)
     Node *n = find_node(a);
     if (n && ensure_color(color) >= 0) {
 	n->color = color;
-	n->flags &= ~F_COLORSUBTREE;
 	return 0;
     } else
 	return -1;
-}
-
-void
-IPAddrColors::color_subtree_node(Node *n, color_t c)
-{
-    if (n->color == NULLCOLOR)
-	n->color = c;
-    if (n->child[0]) {
-	color_subtree_node(n->child[0], c);
-	color_subtree_node(n->child[1], c);
-    }
 }
 
 int
@@ -267,19 +256,27 @@ IPAddrColors::set_color_subtree(uint32_t a, int prefix, color_t color)
 {
     if (prefix == 32)
 	return set_color(a, color);
-    
+
+    // split the tree properly
+    if (prefix && (!find_node(a) || !find_node(a ^ (1U << (32 - prefix)))))
+	return -1;
+	
     uint32_t mask = (prefix == 0 ? 0 : 0xFFFFFFFFU << (32 - prefix));
-    assert((a & mask) == 0);
+    assert((a & ~mask) == 0);
 
     Node *n = _root;
     while (n) {
 	int swivel = (n->child[0] ? first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate) : 33);
-	if (swivel <= prefix)
+	if (swivel <= prefix) {
+#ifndef NDEBUG
+	    uint32_t swivel_mask = (swivel < 2 ? 0 : 0xFFFFFFFFU << (33 - swivel));
+	    assert((n->aggregate & swivel_mask) == (a & swivel_mask));
+#endif
 	    n = n->child[(a >> (32 - swivel)) & 1];
-	else if (n->aggregate != a)
-	    (void) make_peer(a, n); // stay pointed here
-	else
+	} else {
+	    assert(n->aggregate == a);
 	    break;
+	}
     }
 
     if (!n || ensure_color(color) < 0)
@@ -287,19 +284,37 @@ IPAddrColors::set_color_subtree(uint32_t a, int prefix, color_t color)
     else {
 	n->color = color;
 	n->flags |= F_COLORSUBTREE;
-	color_subtree_node(n, color);
+	node_print(_root, 0);
+	ok();
 	return 0;
     }
 }
 
+
 // CLEAR, REAGGREGATE
 
 void
-IPAddrColors::clear_node(Node *n)
+IPAddrColors::node_print(const Node *n, int depth, const Node *highlight)
+{
+    uint32_t a = n->aggregate;
+    const char *highlight_str = (n == highlight ? "  <====" : "");
+    if (n->color == NULLCOLOR)
+	fprintf(stderr, "%*s%d.%d.%d.%d%s\n", depth, "", (a>>24)&255, (a>>16)&255, (a>>8)&255, a&255, highlight_str);
+    else
+	fprintf(stderr, "%*s%d.%d.%d.%d: %d%s%s\n", depth, "", (a>>24)&255, (a>>16)&255, (a>>8)&255, a&255, n->color, (n->flags & F_COLORSUBTREE ? " *" : ""), highlight_str);
+    if (n->child[0]) {
+	node_print(n->child[0], depth + 3, highlight);
+	node_print(n->child[1], depth + 3, highlight);
+    }
+}
+
+
+void
+IPAddrColors::node_clear(Node *n)
 {
     if (n->child[0]) {
-	clear_node(n->child[0]);
-	clear_node(n->child[1]);
+	node_clear(n->child[0]);
+	node_clear(n->child[1]);
     }
     free_node(n);
 }
@@ -308,7 +323,7 @@ int
 IPAddrColors::clear(ErrorHandler *errh)
 {
     if (_root)
-	clear_node(_root);
+	node_clear(_root);
     
     if (!(_root = new_node())) {
 	if (errh)
@@ -319,7 +334,9 @@ IPAddrColors::clear(ErrorHandler *errh)
     _root->color = NULLCOLOR;
     _root->flags = 0;
     _root->child[0] = _root->child[1] = 0;
+    
     _next_color = 0;
+    _color_mapping.resize(0);
     _compacted = true;
     _n_fixed_colors = 0;
     return 0;
@@ -327,13 +344,13 @@ IPAddrColors::clear(ErrorHandler *errh)
 
 
 void
-IPAddrColors::compact_colors_node(Node *n)
+IPAddrColors::node_compact_colors(Node *n)
 {
     if (n->color < BADCOLOR)
 	n->color = _color_mapping[n->color];
     if (n->child[0]) {
-	compact_colors_node(n->child[0]);
-	compact_colors_node(n->child[1]);
+	node_compact_colors(n->child[0]);
+	node_compact_colors(n->child[1]);
     }
 }
 
@@ -360,7 +377,7 @@ IPAddrColors::compact_colors()
 	    _color_mapping[c] = _color_mapping[ _color_mapping[c] ];
 
     // change nodes according to mapping
-    compact_colors_node(_root);
+    node_compact_colors(_root);
 
     // rewrite mapping array
     for (color_t c = 0; c < next_color; c++)
@@ -372,13 +389,13 @@ IPAddrColors::compact_colors()
 
 
 IPAddrColors::color_t
-IPAddrColors::mark_subcolors_node(Node *n)
+IPAddrColors::node_mark_subcolors(Node *n)
 {
     if (!n->child[0])
 	return (n->color < 2U ? n->color : NULLCOLOR);
     else {
-	color_t lcolor = mark_subcolors_node(n->child[0]);
-	color_t rcolor = mark_subcolors_node(n->child[1]);
+	color_t lcolor = node_mark_subcolors(n->child[0]);
+	color_t rcolor = node_mark_subcolors(n->child[1]);
 	if (lcolor == NULLCOLOR)
 	    lcolor = rcolor;
 	else if (rcolor == NULLCOLOR)
@@ -391,17 +408,17 @@ IPAddrColors::mark_subcolors_node(Node *n)
 }
 
 void
-IPAddrColors::nearest_colored_ancestors_node(Node *n, color_t color, int swivel,
-					    Vector<color_t> &colors,
-					    Vector<int> &swivels)
+IPAddrColors::node_nearest_colored_ancestors(Node *n, color_t color, int swivel,
+					     Vector<color_t> &colors,
+					     Vector<int> &swivels)
 {
     if (n->child[0]) {
 	if (n->color != NULLCOLOR) {
 	    color = n->color;
 	    swivel = first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate);
 	}
-	nearest_colored_ancestors_node(n->child[0], color, swivel, colors, swivels);
-	nearest_colored_ancestors_node(n->child[1], color, swivel, colors, swivels);
+	node_nearest_colored_ancestors(n->child[0], color, swivel, colors, swivels);
+	node_nearest_colored_ancestors(n->child[1], color, swivel, colors, swivels);
     } else if (n->color != NULLCOLOR && color < BADCOLOR && swivel >= swivels[n->color]) {
 	if (swivel == swivels[n->color] && colors[n->color] != color)
 	    colors[n->color] = BADCOLOR;
@@ -416,10 +433,10 @@ IPAddrColors::compress_cycle(Vector<color_t> &colors, Vector<int> &swivels)
 {
     compact_colors();
     _n_fixed_colors = 2;
-    (void) mark_subcolors_node(_root);
+    (void) node_mark_subcolors(_root);
     colors.assign(ncolors(), NULLCOLOR);
     swivels.assign(ncolors(), -1);
-    nearest_colored_ancestors_node(_root, NULLCOLOR, 0, colors, swivels);
+    node_nearest_colored_ancestors(_root, NULLCOLOR, 0, colors, swivels);
 }
 
 void
@@ -432,11 +449,11 @@ IPAddrColors::compress_colors()
 
     // step back through distances until all done
     int current_distance = 32;
-    while (_next_color > 2 && current_distance >= 0) {
+    while (_next_color > 2 && current_distance >= 8) {
 	for (color_t c = 2; c < _next_color; c++)
 	    if (swivels[c] == current_distance && colors[c] < 2) {
 		if (swivels[c^1] == current_distance && colors[c^1] == colors[c]) {
-		    click_chatter("color %u conflcit XXX %d/%d", c, swivels[c], swivels[c^1]);
+		    //click_chatter("color %u conflcit XXX %d/%d", c, swivels[c], swivels[c^1]);
 		    continue;
 		}
 		_color_mapping[c] = colors[c];
@@ -488,7 +505,7 @@ IPAddrColors::write_nodes(Node *n, FILE *f, bool binary,
 	buffer[pos++] = SUBTREECOLOR;
 	buffer[pos++] = first_bit_set(parent->child[0]->aggregate ^ parent->child[1]->aggregate);
 	buffer[pos++] = n->color;
-    } else if (n->color <= NULLCOLOR && !n->child[0]) {
+    } else if (n->color <= MAXCOLOR && !n->child[0]) {
 	buffer[pos++] = n->aggregate;
 	buffer[pos++] = n->color;
 	if (pos == len)
@@ -592,8 +609,13 @@ read_packed_file(FILE *f, IPAddrColors *tree, int file_byte_order)
 int
 IPAddrColors::read_file(FILE *f, ErrorHandler *errh)
 {
+    // initialize if necessary
+    if (_blocks.size() == 0 && clear(errh) < 0)
+	return -1;
+    
     char s[BUFSIZ];
     uint32_t u0, u1, u2, u3, prefix, value;
+
     while (fgets(s, BUFSIZ, f)) {
 	if (strlen(s) == BUFSIZ - 1 && s[BUFSIZ - 2] != '\n')
 	    return errh->error("line too long");
@@ -613,6 +635,7 @@ IPAddrColors::read_file(FILE *f, ErrorHandler *errh)
     }
     if (ferror(f))
 	return errh->error("file error");
+    node_print(_root, 0);
     return 0;
 }
 

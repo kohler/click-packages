@@ -1,18 +1,18 @@
 // -*- c-basic-offset: 4 -*-
-#ifndef CLICK_GROUPIPADDR_HH
-#define CLICK_GROUPIPADDR_HH
+#ifndef CLICK_INFERIPADDRCOLORS_HH
+#define CLICK_INFERIPADDRCOLORS_HH
 #include <click/element.hh>
 #include "ipaddrcolors.hh"
 class HandlerCall;
 
-class GroupIPAddr : public Element, public IPAddrColors { public:
+class InferIPAddrColors : public Element, public IPAddrColors { public:
   
-    GroupIPAddr();
-    ~GroupIPAddr();
+    InferIPAddrColors();
+    ~InferIPAddrColors();
   
-    const char *class_name() const	{ return "GroupIPAddr"; }
+    const char *class_name() const	{ return "InferIPAddrColors"; }
     const char *processing() const	{ return AGNOSTIC; }
-    GroupIPAddr *clone() const		{ return new GroupIPAddr; }
+    InferIPAddrColors *clone() const	{ return new InferIPAddrColors; }
 
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);

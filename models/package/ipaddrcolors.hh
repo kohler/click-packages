@@ -64,14 +64,14 @@ class IPAddrColors { public:
     int hard_ensure_color(color_t);
     
     uint32_t node_ok(Node *, int, uint32_t *, color_t, ErrorHandler *) const;
-    void color_subtree_node(Node *, color_t);
+    static void node_print(const Node *, int, const Node *highlight = 0);
     
     Node *make_peer(uint32_t, Node *);
     Node *find_node(uint32_t);
-    void clear_node(Node *);
-    void compact_colors_node(Node *);
-    static color_t mark_subcolors_node(Node *);
-    static void nearest_colored_ancestors_node(Node *, color_t, int, Vector<color_t> &, Vector<int> &);
+    void node_clear(Node *);
+    void node_compact_colors(Node *);
+    static color_t node_mark_subcolors(Node *);
+    static void node_nearest_colored_ancestors(Node *, color_t, int, Vector<color_t> &, Vector<int> &);
     void compress_cycle(Vector<color_t> &, Vector<int> &);
 
     static void write_nodes(Node *, FILE *, bool, uint32_t *, int &, int, Node *, ErrorHandler *);

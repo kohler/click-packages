@@ -1,6 +1,7 @@
 // -*- c-basic-offset: 4 -*-
 /*
- * groupipaddr.{cc,hh} -- group IP addresses
+ * inferipaddrcolors.{cc,hh} -- infer IP address colors by communication
+ * patterns and address structure
  * Eddie Kohler
  *
  * Copyright (c) 2002 International Computer Science Institute
@@ -17,27 +18,26 @@
  */
 
 #include <click/config.h>
-#include "groupipaddr.hh"
+#include "inferipaddrcolors.hh"
 #include <click/handlercall.hh>
 #include <click/confparse.hh>
 #include <click/error.hh>
-#include <click/packet_anno.hh>
 #include <click/router.hh>
 #include <click/integers.hh>
 
-GroupIPAddr::GroupIPAddr()
+InferIPAddrColors::InferIPAddrColors()
     : Element(1, 1)
 {
     MOD_INC_USE_COUNT;
 }
 
-GroupIPAddr::~GroupIPAddr()
+InferIPAddrColors::~InferIPAddrColors()
 {
     MOD_DEC_USE_COUNT;
 }
 
 int
-GroupIPAddr::configure(const Vector<String> &conf, ErrorHandler *errh)
+InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     bool active = true;
     
@@ -52,7 +52,7 @@ GroupIPAddr::configure(const Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-GroupIPAddr::initialize(ErrorHandler *errh)
+InferIPAddrColors::initialize(ErrorHandler *errh)
 {
     if (clear(errh) < 0)
 	return -1;
@@ -60,13 +60,13 @@ GroupIPAddr::initialize(ErrorHandler *errh)
 }
 
 void
-GroupIPAddr::cleanup(CleanupStage)
+InferIPAddrColors::cleanup(CleanupStage)
 {
     IPAddrColors::cleanup();
 }
 
 inline bool
-GroupIPAddr::update(Packet *p)
+InferIPAddrColors::update(Packet *p)
 {
     const click_ip *iph = p->ip_header();
     if (!_active || !iph)
@@ -121,14 +121,14 @@ GroupIPAddr::update(Packet *p)
 }
 
 void
-GroupIPAddr::push(int, Packet *p)
+InferIPAddrColors::push(int, Packet *p)
 {
     (void) update(p);
     output(0).push(p);
 }
 
 Packet *
-GroupIPAddr::pull(int)
+InferIPAddrColors::pull(int)
 {
     Packet *p = input(0).pull();
     if (p)
@@ -140,9 +140,9 @@ GroupIPAddr::pull(int)
 // HANDLERS
 
 int
-GroupIPAddr::write_file_handler(const String &data, Element *e, void *thunk, ErrorHandler *errh)
+InferIPAddrColors::write_file_handler(const String &data, Element *e, void *thunk, ErrorHandler *errh)
 {
-    GroupIPAddr *ac = static_cast<GroupIPAddr *>(e);
+    InferIPAddrColors *ac = static_cast<InferIPAddrColors *>(e);
     String fn;
     if (!cp_filename(cp_uncomment(data), &fn))
 	return errh->error("argument should be filename");
@@ -155,9 +155,9 @@ enum {
 };
 
 String
-GroupIPAddr::read_handler(Element *e, void *thunk)
+InferIPAddrColors::read_handler(Element *e, void *thunk)
 {
-    GroupIPAddr *ac = static_cast<GroupIPAddr *>(e);
+    InferIPAddrColors *ac = static_cast<InferIPAddrColors *>(e);
     switch ((int)thunk) {
       case AC_ACTIVE:
 	return cp_unparse_bool(ac->_active) + "\n";
@@ -170,9 +170,9 @@ GroupIPAddr::read_handler(Element *e, void *thunk)
 }
 
 int
-GroupIPAddr::write_handler(const String &data, Element *e, void *thunk, ErrorHandler *errh)
+InferIPAddrColors::write_handler(const String &data, Element *e, void *thunk, ErrorHandler *errh)
 {
-    GroupIPAddr *ac = static_cast<GroupIPAddr *>(e);
+    InferIPAddrColors *ac = static_cast<InferIPAddrColors *>(e);
     String s = cp_uncomment(data);
     switch ((int)thunk) {
       case AC_ACTIVE: {
@@ -194,9 +194,10 @@ GroupIPAddr::write_handler(const String &data, Element *e, void *thunk, ErrorHan
 }
 
 void
-GroupIPAddr::add_handlers()
+InferIPAddrColors::add_handlers()
 {
-    add_write_handler("write_file", write_file_handler, (void *)0);
+    add_write_handler("write_ascii_file", write_file_handler, (void *)0);
+    add_write_handler("write_file", write_file_handler, (void *)1);
     add_read_handler("active", read_handler, (void *)AC_ACTIVE);
     add_write_handler("active", write_handler, (void *)AC_ACTIVE);
     add_write_handler("stop", write_handler, (void *)AC_STOP);
@@ -205,4 +206,4 @@ GroupIPAddr::add_handlers()
 }
 
 ELEMENT_REQUIRES(userlevel IPAddrColors)
-EXPORT_ELEMENT(GroupIPAddr)
+EXPORT_ELEMENT(InferIPAddrColors)
