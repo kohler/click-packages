@@ -2,7 +2,7 @@
 
 from __future__ import generators
 import sys, os, re, types, string, struct, gzip, array
-#sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
+sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat
@@ -1952,7 +1952,7 @@ class PlotCanvas:
         return FlowRef(self.conn, self.dir)
     def get_plotted_time_range(self):
         if self.plotted:
-            return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
+            return self.plotted_time_range
         else:
             return self.begin, self.end
     def get_time_adjustment(self):
@@ -1976,8 +1976,8 @@ class PlotCanvas:
         self.show_window = show_window
         if self.configured: self.plot()
     def view_all(self):
-        self.set_time_range(None, interval=1000000000.0)
-    def set_time_range(self, begin, interval=None, incr=False):
+        self.set_time_range(None, interval=1000000000.0, incr=False)
+    def set_time_range(self, begin, interval=None, incr=True):
         true_begin = max(self.conn.get_time_range()[0] - 0.001, 0)
         true_end = self.conn.get_time_range()[1]
         
@@ -1996,13 +1996,8 @@ class PlotCanvas:
         begin, end = self.get_plotted_time_range()
         self.adjusting = True
         a = self.adjustment
-        a.lower = float(true_begin)
-        a.upper = float(max(end, true_end))
-        a.page_size = float(end - self.begin)
-        a.page_increment = a.page_size * 0.7
-        a.step_increment = a.page_size * 0.03
-        a.emit("changed")
-        a.set_value(self.begin)
+        ps = float(end - self.begin)
+        a.set_all(value=self.begin, lower=float(true_begin), upper=float(max(end, true_end)), step_increment=ps * 0.03, page_increment=ps * 0.7, page_size=ps)
         self.adjusting = False
     def adj_value_changed(self, adj):
         if not self.adjusting:
@@ -2015,7 +2010,7 @@ class PlotCanvas:
         t0, t1 = self.get_plotted_time_range()
         new_t0 = max(when - new_dt * ((when - t0) / (t1 - t0)), 0)
         self.beginseq = self.endseq = None
-        self.set_time_range(new_t0, new_dt, incr=True)
+        self.set_time_range(new_t0, new_dt)
 
     def grab_focus(self):
         self.canvas.grab_focus()
@@ -2368,6 +2363,7 @@ class PlotCanvas:
             # save screen information
             if isinstance(drawable, PlotCanvas_ScreenDrawable):
                 self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
+                self.plotted_time_range = (t0, t1)
                 self.plotted = True
             
             # clear background
@@ -2900,15 +2896,24 @@ class PlotFlowWindow:
         treeview.connect("row_activated", self.cmd_flowtree_row_activated)
         return scrolled_window
 
+    def _scrollbar_showhide(self, adj, scrollbar):
+        hidden = (adj.lower >= adj.value) and (adj.value + adj.page_size >= adj.upper)
+        if hidden:
+            scrollbar.hide()
+        else:
+            scrollbar.show()
+
     def _init_plotbox(self):
         frame = gtk.VBox()
         frame.show()
         
         self.canvas = PlotCanvas(frame)
 
-        scale = gtk.HScrollbar(adjustment=self.canvas.get_time_adjustment())
+        adjustment = self.canvas.get_time_adjustment()
+        scale = gtk.HScrollbar(adjustment)
         frame.pack_start(scale, 0, 0)
-        scale.show()
+        adjustment.connect("changed", self._scrollbar_showhide, scale)
+        adjustment.connect("value_changed", self._scrollbar_showhide, scale)
 
         self.statusbox = gtk.HBox()
         frame.pack_start(self.statusbox, 0, 0, padding=3)
