@@ -81,6 +81,8 @@ class CalculateVariance : public Element {
     typedef BigHashMap<int, CounterEntry> counter_table;
     counter_table _hashed_counters;
 
+    String _outfilename;
+
 };
 
 #endif

@@ -17,13 +17,13 @@ class SplitInOutBound : public Element { public:
     const char *class_name() const { return "SplitInOutBound";}
     SplitInOutBound *clone() const { return new SplitInOutBound; }
 
-    const char *processing() const { return "a/ah";}
+    const char *processing() const { return "a/ahhhh";}
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
 
     void push(int,Packet *);
 
-    IPAddress getNetworkAddr(IPAddress);
+    IPAddress getNetworkAddr(IPAddress, int &);
     Packet * handle_packet(Packet *);
 
     private:

@@ -30,6 +30,7 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
     if (cp_va_parse(conf, this, errh,
 		    cpTimeval, "interval in struct timeval", &_interval,
 		    cpUnsigned, "number of aggregates expected", &naggregates,
+		    cpFilename, "filename for output",&_outfilename,
 		    cpKeywords,
 		    "BITS", cpBool, "number of aggregates is in bits?", &bits,
 		    "USEHASH",cpBool,"use hash table for classifying aggregates?",&_use_hash,
@@ -71,6 +72,12 @@ CalculateVariance::initialize(ErrorHandler *)
 Packet *
 CalculateVariance::simple_action(Packet *p)
 {
+    /*
+    const click_ip *iph = p->ip_header();
+    IPAddress dstaddr = IPAddress(iph->ip_dst);
+    IPAddress srcaddr = IPAddress(iph->ip_src);
+    printf("src addr %s dst addr %s\n",srcaddr.unparse().cc(),dstaddr.unparse().cc());
+    */
 
     uint32_t row = AGGREGATE_ANNO(p);
 
@@ -186,17 +193,10 @@ static int pktsorter(const void *av, const void *bv) {
 void
 CalculateVariance::print_edf_function()
 {
-    String _filename;
 
-    if (_num_aggregates_bits>0) {
-	_filename = String(_num_aggregates_bits) + "-bit-agg";
-    }else{
-	_filename = String(_num_aggregates) + "-agg";
-    }
-
-    FILE *outfile = fopen(_filename.cc(), "w");
+    FILE *outfile = fopen(_outfilename.cc(), "w");
     if (!outfile) {
-        click_chatter("%s: %s", _filename.cc(), strerror(errno));
+        click_chatter("%s: %s", _outfilename.cc(), strerror(errno));
 	return;
     }
    

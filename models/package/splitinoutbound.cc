@@ -7,7 +7,7 @@
 #include <click/confparse.hh>
 #include <packet_anno.hh>
 
-SplitInOutBound::SplitInOutBound() : Element(1,1) 
+SplitInOutBound::SplitInOutBound() : Element(1,5) 
 {
     MOD_INC_USE_COUNT;
 }
@@ -40,17 +40,18 @@ SplitInOutBound::initialize(ErrorHandler *errh)
     //read all the addresses in the file to hashmap
     IPAddress ipaddr;
     int addr[4];
+    int isin;
 
     while (1) {
-	if (fscanf(f,"%u.%u.%u.%u\n",&addr[0],&addr[1],&addr[2],&addr[3]) != 4) {
+	if (fscanf(f,"%u.%u.%u.%u %u\n",&addr[0],&addr[1],&addr[2],&addr[3],&isin) != 5) {
 	    if (feof(f)) break;
 	}
 	ipaddr = IPAddress(htonl((addr[0] << 24) | (addr[1] << 16) | (addr[2] << 8) | addr[3]));
 
+	printf("insert %s (%d)\n",ipaddr.unparse().cc(),isin);
 	//insert it into bighashmap
 	int *inout = _hash_inoutaddresses.findp(ipaddr);
 	if (!inout) {
-	    int isin = 1;
 	    _hash_inoutaddresses.insert(ipaddr,isin);
 	}else{
 	    click_chatter("dupliate!\n");
@@ -63,18 +64,20 @@ void
 SplitInOutBound::push(int, Packet *p)
 {
     if (Packet *q = handle_packet(p))
-	output(2).push(q); //error packets got thrown out
+	output(4).push(q); //error packets got thrown out
 }
 
 
 IPAddress
-SplitInOutBound::getNetworkAddr(IPAddress addr)
+SplitInOutBound::getNetworkAddr(IPAddress addr, int & is_multicast)
 {
     //check for class A/B/C
     int address = ntohl(addr.addr());
     //i cannot stand network/host order!!!
-   
-    int prefix = address & 0xF0000000;
+  
+    assert(is_multicast == 0);
+
+    int prefix = (address & 0xF0000000) >> 28;
 
     if (prefix < 8 ) { //the first bit of class A address is 0
 	address = address & 0xFF000000;
@@ -86,6 +89,7 @@ SplitInOutBound::getNetworkAddr(IPAddress addr)
 	address = address & 0xFFFFFF00;
 	return IPAddress(htonl(address));
     }else {
+	is_multicast = 1;
 	return addr;
     }
 
@@ -96,36 +100,58 @@ SplitInOutBound::handle_packet(Packet *p)
 {
     //port 1 is inbound  traffic, i.e. packets with inbound dst ip address
     const click_ip *iph = p->ip_header();
-    IPAddress dstaddr = getNetworkAddr(IPAddress(iph->ip_src));
-    IPAddress srcaddr = getNetworkAddr(IPAddress(iph->ip_dst));
 
-    int *in = _hash_inoutaddresses.findp(dstaddr);
+    int *in;
+    int in_compl;
+
+    int dstmulticast = 0;
+    IPAddress dstaddr = getNetworkAddr(IPAddress(iph->ip_dst), dstmulticast);
+
+    int srcmulticast = 0;
+    IPAddress srcaddr = getNetworkAddr(IPAddress(iph->ip_src), srcmulticast);
+    assert(srcmulticast == 0);
+
+    if (dstmulticast) {
+	in = _hash_inoutaddresses.findp(srcaddr);
+	if (in && (*in == 1)) {
+	    //src address is an inbound addr
+	    output(3).push(p);
+	}else{
+	    output(2).push(p);
+	}
+
+	return NULL;
+    }
+
+    in = (int *)_hash_inoutaddresses.findp(dstaddr);
+
+
     if (in) {
+	in_compl = (*in+1) % 2;
 	if (*in == 1) {
-	    //the src addr must be an outbound address then
-	    *in = 0;
-	    _hash_inoutaddresses.insert(srcaddr,*in);
+	    //dst inbound and the src addr must be an outbound address then
+	    if (!_hash_inoutaddresses.findp(srcaddr)) _hash_inoutaddresses.insert(srcaddr,in_compl);
+
 	    //this is an inbound packet
 	    output(1).push(p);
 	}else {
-	    *in = 1;
-	    _hash_inoutaddresses.insert(srcaddr,*in);
+	    if (!_hash_inoutaddresses.findp(srcaddr)) _hash_inoutaddresses.insert(srcaddr,in_compl);
 	    output(0).push(p);
 	}
 	return NULL;
     }
 
-    in = _hash_inoutaddresses.findp(srcaddr);
+    in = (int *)_hash_inoutaddresses.findp(srcaddr);
 
     if (in) {
+	in_compl = (*in+1) % 2;
 	if (*in == 0) {
-	    //this is an inbound packet
-	    *in = 1;
-	    _hash_inoutaddresses.insert(dstaddr,*in);
+	    //src is out-addr, so dst must be in-addr, this is an inbound packet
+	    //the entry associated with dstaddr must be NULL
+	    _hash_inoutaddresses.insert(dstaddr,in_compl);
 	    output(1).push(p);
 	}else {
-	    *in = 0;
-	    _hash_inoutaddresses.insert(dstaddr,*in);
+	    _hash_inoutaddresses.insert(dstaddr,in_compl);
 	    output(0).push(p);
 	}
 	return NULL;
