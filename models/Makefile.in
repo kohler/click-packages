@@ -9,6 +9,7 @@ srcdir = @srcdir@
 top_builddir = .
 subdir = .
 AUTOCONF = @AUTOCONF@
+ACLOCAL = cp m4/click.m4 aclocal.m4
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL@ -m 644
 INSTALL_DATA_IF_CHANGED = @INSTALL_IF_CHANGED@ -m 644
@@ -35,8 +36,8 @@ install: Makefile
 install-man:
 	@cd elements && $(MAKE) install-man
 
-$(srcdir)/configure: $(srcdir)/configure.in
-	cd $(srcdir) && $(AUTOCONF)
+$(srcdir)/configure: $(srcdir)/configure.in $(srcdir)/m4/click.m4
+	cd $(srcdir) && $(ACLOCAL) && $(AUTOCONF)
 config.status: $(srcdir)/configure
 	$(SHELL) $(srcdir)/configure @ac_configure_args@
 Makefile: config.status $(srcdir)/Makefile.in
