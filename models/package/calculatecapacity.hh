@@ -138,7 +138,7 @@ struct CalculateCapacity::Pkt {
     int flags;			// packet flags
 };
 
-struct CalculateCapacity::StreamInfo {
+struct CalculateCapacity::StreamInfo { 
     unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
 
@@ -147,17 +147,28 @@ struct CalculateCapacity::StreamInfo {
     
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
+    uint32_t pkt_cnt;           // how many in this stream
     
+    struct IntervalStream;
+    struct IntervalStream *intervals;
+
     StreamInfo();
     ~StreamInfo();
 
-    void categorize(Pkt *insertion, ConnInfo *, CalculateCapacity *);
-    void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateCapacity *);
-    void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
-    
+    //void categorize(Pkt *insertion, ConnInfo *, CalculateCapacity *);
+    //void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateCapacity *);
+    //void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
+    void fill_intervals();
     void write_xml(FILE *) const;
     
 };
+
+struct CalculateCapacity::StreamInfo::IntervalStream {
+    tcp_seq_t size; //packet size (incl headers)
+    tcp_seq_t newack; //new ack data
+    struct timeval interval; //time since previous packet
+};
+
 
 class CalculateCapacity::ConnInfo {  public:
     

@@ -24,13 +24,16 @@ operator*(double frac, const struct timeval &tv)
 CalculateCapacity::StreamInfo::StreamInfo()
     : have_init_seq(false),
       init_seq(0),
-      pkt_head(0), pkt_tail(0)
+      pkt_head(0), pkt_tail(0),
+      pkt_cnt(0)
 {
 }
 
 CalculateCapacity::StreamInfo::~StreamInfo()
 {
+    if(intervals) delete intervals;
 }
+
 
 
 // CONNINFO
@@ -58,12 +61,96 @@ CalculateCapacity::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepo
     _stream[1].direction = 1;
 }
 
+
+
 void
 CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 {
-    fprintf(f, "  <stream dir='%d' beginseq='%u'",
+    fprintf(f, "  <stream dir='%d' beginseq='%u'\n",
 	    direction, init_seq);
+    for(unsigned int i=0; i < pkt_cnt; i++){
+	fprintf(f, "%d %ld.%06ld %d\n", intervals[i].size+40,
+		intervals[i].interval.tv_sec,
+		intervals[i].interval.tv_usec,
+		intervals[i].newack);
+    }
     fprintf(f, " />\n");
+}
+
+static int compare(const void *a, const void *b){
+    struct CalculateCapacity::StreamInfo::IntervalStream *ac;
+    struct CalculateCapacity::StreamInfo::IntervalStream *bc;
+    double iratea, irateb;
+
+    ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
+    bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
+    
+    iratea = (ac->interval.tv_sec + ac->interval.tv_usec/1.0e6)
+	/ ((ac->size+40)*8.0);
+    irateb = (bc->interval.tv_sec + bc->interval.tv_usec/1.0e6)
+	/ ((bc->size+40)*8.0);
+    
+//     if(ac->interval < bc->interval) return -1;
+//     if(ac->interval == bc->interval) return 0;
+//     return 1;
+
+    if(iratea < irateb) return -1;
+    if(iratea == irateb) return 0;
+    return 1;
+}
+
+void
+CalculateCapacity::StreamInfo::fill_intervals() 
+{
+    uint32_t i=0;
+    Pkt *cp;
+    intervals = new IntervalStream[sizeof(struct IntervalStream) * pkt_cnt];
+    
+    for(cp = pkt_head, i=0; cp != NULL && i < pkt_cnt; i++, cp=cp->next){
+	intervals[i].size = cp->last_seq - cp->seq;
+	if(intervals[i].size > 1500){
+	    printf("huh?\n%d\n%d\n%d\n",
+		   intervals[i].size,
+		   cp->last_seq, cp->seq);
+	}
+	
+
+	if(cp->flags & TH_ACK && cp->prev && cp->prev->flags & TH_ACK &&
+	   cp->ack > cp->prev->ack){
+	    intervals[i].newack = cp->ack - cp->prev->ack;
+	} else{
+	    intervals[i].newack = 0;
+	}
+
+	//if it appears to be acking more than, oh, say 5 packets then
+	//we're probably not seeing all the acks
+	intervals[i].newack = intervals[i].newack < 5 * 1500 ?
+	    intervals[i].newack : 0;
+
+// 	if(intervals[i].newack > 30000){
+// 	    printf("ack? %d\n%d\n%d\n%d\n", i, intervals[i].newack,
+// 		   cp->ack, cp->prev->ack);
+// 	}
+
+	intervals[i].interval = cp->timestamp -
+	    (cp->prev ? cp->prev->timestamp : cp->timestamp);
+    }
+
+    if(i < pkt_cnt){
+	printf("missing pkts: %d %d\n", pkt_cnt, i);
+    }
+
+    click_qsort(intervals, pkt_cnt, sizeof(struct IntervalStream),
+    		&compare);
+
+//     for(unsigned int i=0; i < pkt_cnt; i++){
+// 	printf("%d %d %ld.%06ld %d\n", pkt_cnt, intervals[i].size+40,
+// 	       intervals[i].interval.tv_sec,
+// 	       intervals[i].interval.tv_usec,
+// 	       intervals[i].newack);
+//     }
+
+
 }
 
 void
@@ -83,7 +170,9 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
 	
+	_stream[0].fill_intervals();
 	_stream[0].write_xml(f);
+	_stream[1].fill_intervals();
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }
@@ -122,7 +211,7 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	np->last_seq = np->seq + calculate_seqlen(iph, tcph);
 	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
 	np->timestamp = p->timestamp_anno() - _init_time;
-	np->flags = 0;
+	np->flags = tcph->th_flags;
 
 	// hook up to packet list
 	np->next = 0;
@@ -131,6 +220,7 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	    stream.pkt_tail = stream.pkt_tail->next = np;
 	else
 	    stream.pkt_head = stream.pkt_tail = np;
+	stream.pkt_cnt++;
 
 	return np;
     } else
@@ -144,15 +234,16 @@ CalculateCapacity::ConnInfo::handle_packet(const Packet *p, CalculateCapacity *p
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
     // update timestamp and sequence number offsets at beginning of connection
-    if (Pkt *k = create_pkt(p, parent)) {
+    //if (Pkt *k = create_pkt(p, parent)) {
 	//int direction = (PAINT_ANNO(p) & 1);
 	//_stream[direction].categorize(k, this, parent);
 	//_stream[direction].update_counters(k, p->tcp_header(), this);
-    }
+    //}
+    create_pkt(p, parent);
 }
 
 
-// CALCULATEFLOWS PROPER
+// CalculateCapacity PROPER
 
 CalculateCapacity::CalculateCapacity()
     : Element(1, 1), _traceinfo_file(0), _filepos_h(0),
