@@ -18,8 +18,8 @@
 class CalculateVariance : public Element {
 
     struct timeval _interval;
-    struct timeval end_time;
-    unsigned num_intervals;
+    struct timeval _end_time;
+    unsigned _num_intervals;
 
     public:
     CalculateVariance();
@@ -33,39 +33,29 @@ class CalculateVariance : public Element {
     int initialize(ErrorHandler *);
     void add_handlers();
 
+    double variance(int) const;
+    uint32_t packet_count(int i) const	{ return _counters[i].pkt_count; }
+
     Packet *simple_action(Packet *);
-    double get_variance(int);
     void reset();
     void print_all_variance(); 
     void print_edf_function();
 
     class CounterEntry {
 	public:
-	CounterEntry():pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0),pkt_count(0),byte_count(0),aggregate_no(0) {};
-	double get_pkt_variance(unsigned num_int) {
+	CounterEntry():pkt_sum_interval(0),pkt_sum(0),pkt_sum_sq(0),pkt_count(0),byte_count(0) {}
+	double get_pkt_variance(unsigned num_int) const {
 	    assert(num_int>0);
 	    double tmp_mean_sqr = (double) pkt_sum/num_int;
 	    tmp_mean_sqr = tmp_mean_sqr * tmp_mean_sqr;
 	    return ((double)pkt_sum_sq/num_int) - tmp_mean_sqr;
-	};
-
-	void init(unsigned agg_no) {
-	    pkt_sum_interval = 0;
-	    pkt_sum = 0;
-	    pkt_sum_sq = 0;
-	    pkt_count = 0;
-	    byte_count = 0;
-	    aggregate_no = agg_no;
 	}
-
-	
 
 	unsigned pkt_sum_interval; //number of packets accumulated in the current (unfinished) interval
 	unsigned pkt_sum; // Sum(X) where X is ther number of packets in the previous intervals.
 	unsigned pkt_sum_sq; //Sum(X^2) where X is ther number of packets in the previous intervals. var(X) = E(X^2) - E(X)^2;
-	unsigned pkt_count;
+	uint32_t pkt_count;
 	unsigned byte_count;
-	unsigned aggregate_no;
 	
 	/*
 	double pkt_bytes_sum;
