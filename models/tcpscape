@@ -921,6 +921,8 @@ class PlotCursors:
     def __getitem__(self, name):
         cname = name + ".cur"
         if cname not in PlotCursors._d:
+            if name not in PlotCursors._d:
+                PlotCursors._d[name] = ("", "", 0, 0, gtk.gdk.LEFT_PTR)
             data, mask, hotx, hoty, default = PlotCursors._d[name]
             dpix, mpix = self.make_pixmap(data), self.make_pixmap(mask)
             if dpix is not None and mpix is not None:
@@ -932,13 +934,12 @@ class PlotCursors:
         return PlotCursors._d[cname]
 
 
-
-
-_screen_gcs = { }
 ANCHOR_N = 0
 ANCHOR_E = 1
 
 class PlotCanvas_ScreenDrawable:
+
+    _gcs = { }
 
     def __init__(self, plotcanvas):
         self.plotcanvas = plotcanvas
@@ -946,8 +947,8 @@ class PlotCanvas_ScreenDrawable:
         self.small_playout = None
 
     def gc(self, name):
-        if name in _screen_gcs:
-            return _screen_gcs[name]
+        if name in PlotCanvas_ScreenDrawable._gcs:
+            return PlotCanvas_ScreenDrawable._gcs[name]
         orig_name = name
         if name not in _screen_style:
             name = re.sub("\\..*", "", name)
@@ -958,7 +959,7 @@ class PlotCanvas_ScreenDrawable:
             gc.line_width = s.linewidth
         if len(s.dash) > 0:
             gc.set_dashes(0, s.dash)
-        _screen_gcs[orig_name] = gc
+        PlotCanvas_ScreenDrawable._gcs[orig_name] = gc
         return gc
 
     def layout(self, name=""):
@@ -1201,6 +1202,14 @@ class PlotCanvas_PostScriptDrawable:
 
 class PlotCanvas:
 
+    TOOL_NONE = 0
+    TOOL_HAND = 1
+    TOOL_ZOOM_IN = 2
+    TOOL_ZOOM_OUT = 3
+    TOOL_GRABHAND = 4
+    TOOL_IDENTIFY = 5
+    _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "")
+
     # initialization
     def __init__(self, master, width=600, height=500):
         self.canvas = gtk.DrawingArea()
@@ -1228,7 +1237,8 @@ class PlotCanvas:
         self.plotted = False
         self.press_x = None
         self.press_state = 0
-        self.mod_state = 0
+        self.tool = PlotCanvas.TOOL_HAND
+        self.show_tool = PlotCanvas.TOOL_NONE
         self.begin = 0
         self.end = 1000000000.0
         self.show_window = True
@@ -1326,22 +1336,21 @@ class PlotCanvas:
             raise ValueError
     
     def cmd_press(self, widget, event):
-        try:
-            if event.button == 1:
+        if event.button == 1:
+            try:
                 self._itransform(event.x, event.y) # for signal
                 self.press_x = event.x
-                if not (event.state & (gtk.gdk.CONTROL_MASK | gtk.gdk.SHIFT_MASK)):
-                    self.canvas.window.set_cursor(PlotCursors(self.canvas)["grabhand"])
-        except ValueError:
-            self.press_x = None
-        self.stuck = True
-        self.press_state = event.state
+            except ValueError:
+                self.press_x = None
+            self.stuck = True
+            self.press_state = event.state | gtk.gdk.BUTTON1_MASK
+            self._check_tool(self.press_state)
         self.grab_focus()
         return 1
     def cmd_motion(self, widget, event):
         try:
-            x, y, state = widget.window.get_pointer()
-            if (state & gtk.gdk.BUTTON1_MASK) and self.plotted and self.press_x is not None:
+            if self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press_x is not None:
+                x, y, state = widget.window.get_pointer()
                 if self.stuck and (abs(self.press_x - x) > 5):
                     self.stuck = False
                     self.drag_t0 = self.get_plotted_time_range()[0]
@@ -1354,43 +1363,38 @@ class PlotCanvas:
         return 1
     def cmd_release(self, widget, event):
         try:
-            if event.button == 1 and self.press_x is not None:
-                if self.press_state & gtk.gdk.CONTROL_MASK:
-                    when = self._itransform(event.x, event.y)[0]
-                    if self.press_state & gtk.gdk.MOD1_MASK:
-                        self.zoom(when, 4)
-                    else:
-                        self.zoom(when, 0.25)
-                else:
-                    self.mod_state = -1 # lie
+            if event.button != 1 or self.press_x is None:
+                pass
+            elif self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
+                when = self._itransform(event.x, event.y)[0]
+                self.zoom(when, 4)
+            elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
+                when = self._itransform(event.x, event.y)[0]
+                self.zoom(when, 0.25)
         except ValueError:
             pass
-        self._state2cursor(self.canvas.window.get_pointer()[2])
+        self._check_tool(self.canvas.window.get_pointer()[2])
         self.press_x = None
         return 1
-    def _state2cursorname(self, state):
-        if state < 0:
-            return ""
-        elif not state & gtk.gdk.CONTROL_MASK:
-            return "hand"
-        elif state & gtk.gdk.MOD1_MASK:
-            return "zoomout"
-        else:
-            return "zoomin"
-    def _state2cursor(self, state):
-        if state & gtk.gdk.BUTTON1_MASK and not (self.press_state & gtk.gdk.CONTROL_MASK):
-            pass
-        else:
-            s1 = self._state2cursorname(self.mod_state)
-            s2 = self._state2cursorname(state)
-            if s1 != s2:
-                self.canvas.window.set_cursor(PlotCursors(self.canvas)[s2])
-            self.mod_state = state
+    def _check_tool(self, state):
+        t = self.tool
+        if t == PlotCanvas.TOOL_HAND:
+            if state & gtk.gdk.BUTTON1_MASK:
+                state = self.press_state
+            if state & gtk.gdk.CONTROL_MASK:
+                t = PlotCanvas.TOOL_ZOOM_IN
+            elif state & gtk.gdk.MOD1_MASK:
+                t = PlotCanvas.TOOL_ZOOM_OUT
+            elif state & gtk.gdk.BUTTON1_MASK:
+                t = PlotCanvas.TOOL_GRABHAND
+        if t != self.show_tool:
+            self.show_tool = t
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)[PlotCanvas._tool_cursor[t]])
     def cmd_check_state(self, widget, event):
-        self._state2cursor(widget.window.get_pointer()[2])
+        self._check_tool(widget.window.get_pointer()[2])
         return 1
     def cmd_check_state_focus(self, widget, event):
-        self._state2cursor(widget.window.get_pointer()[2])
+        self._check_tool(widget.window.get_pointer()[2])
         self.grab_focus()
         return 1
 
