@@ -26,7 +26,7 @@ CalculateCapacity::StreamInfo::StreamInfo()
     : have_init_seq(false),
       init_seq(0),
       pkt_head(0), pkt_tail(0),
-      pkt_cnt(0), max_size(0),
+      pkt_cnt(0), mss(0), rmss(0),
       intervals(0), hist(0),
       cutoff(0), valid(0)
 {
@@ -73,13 +73,16 @@ void
 CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 {
     struct Peak *p;
-    fprintf(f, "  <stream dir='%d' beginseq='%u' maxsize='%u'>\n",
-	    direction, init_seq, max_size);
+    fprintf(f, "  <stream dir='%d' beginseq='%u' mss='%u' mssr='%u'>\n",
+	    direction, init_seq, mss, rmss);
     for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
-	iter!= peaks.end(); iter++){
+	iter != peaks.end(); iter++){
 	p = *iter;
-	fprintf(f, "   <peak center='%lf' area='%d' left='%d' right='%d' />\n",
+	fprintf(f, "   <peak center='%lf' area='%d' left='%lf' right='%lf' ",
 		p->center, p->area, p->left, p->right);
+	fprintf(f, "acknone='%lf' ackone='%lf' acktwo='%lf' ackmore='%lf'",
+		p->acknone, p->ackone, p->acktwo, p->ackmore);
+	fprintf(f, " />\n");
     }
     
     fprintf(f,"    <interarrival>\n");
@@ -126,6 +129,8 @@ CalculateCapacity::StreamInfo::findpeaks()
     uint32_t j;
     uint32_t n;
     uint32_t slopelen;
+    uint32_t lefti=0;
+    uint32_t righti;
 
     logs = new double[pkt_cnt];
     slopes = new double[pkt_cnt];
@@ -170,10 +175,15 @@ CalculateCapacity::StreamInfo::findpeaks()
 		peak->area++;
 	    } else {
 		//end of peak here
-		peak->right = j-1;
-		uint32_t cint = (peak->right + peak->left)/2;
+		righti = j-1;
+		peak->right = exp(logs[righti]);;
+		uint32_t cint = (righti + lefti)/2;
 		peak->center = exp(logs[cint]);
-		peaks.push_back(peak);
+		if(peak->area > 2){
+		    peaks.push_back(peak);
+		} else {
+		    delete peak;
+		}
 		inpeak = false;
 		peak = new Peak;
 	    }
@@ -185,7 +195,8 @@ CalculateCapacity::StreamInfo::findpeaks()
 		peak->area = 1;
 		while(k > 0 && slopes[k-1] < peakend)
 		    k--;
-		peak->left = k;
+		lefti = k;
+		peak->left = exp(logs[lefti]);
 		peak->area += j-k;
 	    } else {
 		//nothing
@@ -195,17 +206,60 @@ CalculateCapacity::StreamInfo::findpeaks()
     }
     if(inpeak){
 	//end peak here
-	peak->right = n-1;
-	uint32_t cint = (peak->right + peak->left)/2;
+	righti = n-1;
+	peak->right = exp(logs[righti]);;
+	uint32_t cint = (righti + lefti)/2;
 	peak->center = exp(logs[cint]);
-
-	peaks.push_back(peak);
+	if(peak->area > 2){
+	    peaks.push_back(peak);
+	} else {
+	    delete peak;
+	}
     } else {
 	delete peak;
     }
 
     delete[] logs;
     delete[] slopes;
+
+    //what is the ack size for these peaks?
+    for(Vector<struct Peak *>::const_iterator iter = peaks.begin();
+	iter != peaks.end(); iter++){
+	struct Peak *p = *iter;
+	uint32_t cnt = 0;
+	uint32_t none = 0;
+	uint32_t one = 0;
+	uint32_t two = 0;
+	uint32_t more = 0;
+	for(uint32_t j = 0 ; j < pkt_cnt; j++){
+	    struct IntervalStream *i = intervals + j;
+	    struct timeval *t = &(i->interval);
+	    double ft = float_timeval(*t);
+	    if(cnt == 0 && ft < p->left)
+		continue;
+	    if(cnt > 0 && ft > p->right)
+		break;
+	    if(i->size > mss / 2 || i->newack < 0.5 * rmss){
+		none++;
+	    } else if (i->newack < 1.5 * rmss){
+		one++;
+	    } else if (i->newack < 2.5 * rmss){
+		two++;
+	    } else {
+		more++;
+	    }
+	    cnt++;
+	}
+	if(cnt == 0){
+	    printf("empty peak %d\n", peak->area);
+	}
+	p->acknone = none / (double)cnt;
+	p->ackone = one / (double)cnt;
+	p->acktwo = two / (double)cnt;
+	p->ackmore = more / (double)cnt;
+    }
+
+
 }
 
 void
@@ -239,7 +293,7 @@ CalculateCapacity::StreamInfo::histogram()
 	while(j < pkt_cnt &&
 	      (intervals[j].interval.tv_sec +
 	       intervals[j].interval.tv_usec * 1.0e-6) < curr){
-	    if(max_size == intervals[j].size ||
+	    if(mss == intervals[j].size ||
 	       (intervals[j].size < 100 &&
 		intervals[j].newack > 500)){
 		hist[i]++;
@@ -398,7 +452,8 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	stream.pkt_cnt++;
 	//can't use p->length() due to truncated traces
 	size = np->hsize + np->last_seq - np->seq;
-	stream.max_size = stream.max_size > size ? stream.max_size : size;
+	stream.mss = stream.mss > size ? stream.mss : size;
+	ack_stream.rmss = stream.mss;
 
 	return np;
     } else

@@ -149,7 +149,10 @@ struct CalculateCapacity::StreamInfo {
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
     uint32_t pkt_cnt;           // how many in this stream
-    uint32_t max_size;          // largest in this stream
+    
+    uint32_t mss;               //largest single packet here
+    uint32_t rmss;              // mss in reverse direction
+
 
     struct IntervalStream;
     struct IntervalStream *intervals;
@@ -182,10 +185,14 @@ struct CalculateCapacity::StreamInfo::IntervalStream {
 };
 
 struct CalculateCapacity::StreamInfo::Peak {
-    double center;
-    uint32_t left;
-    uint32_t right;
+    double center;  //interval in middle
+    double left;  //interval at left edge
+    double right; //at right edge
     uint32_t area;
+    double acknone; // < 0.5 mss
+    double ackone; //frac of a peak that acks between 0.5 and 1.5 * rmss
+    double acktwo; // 2* rmss
+    double ackmore; // > 2 * rmss
 };
 
 
