@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4 -*-
 /*
- * checkipaddrcolors.{cc,hh} -- check IP address colors by communication
+ * testipaddrcolors.{cc,hh} -- test IP address colors by communication
  * patterns
  * Eddie Kohler
  *
@@ -18,28 +18,28 @@
  */
 
 #include <click/config.h>
-#include "checkipaddrcolors.hh"
+#include "testipaddrcolors.hh"
 #include <click/handlercall.hh>
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include <click/integers.hh>
 #include <click/straccum.hh>
 
-CheckIPAddrColors::CheckIPAddrColors()
+TestIPAddrColors::TestIPAddrColors()
     : Element(1, 1)
 {
     MOD_INC_USE_COUNT;
 }
 
-CheckIPAddrColors::~CheckIPAddrColors()
+TestIPAddrColors::~TestIPAddrColors()
 {
     MOD_DEC_USE_COUNT;
 }
 
 int
-CheckIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
+TestIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
-    bool verbose = true;
+    bool verbose = false;
     if (cp_va_parse(conf, this, errh,
 		    cpFilename, "colors filename", &_filename,
 		    cpKeywords,
@@ -51,7 +51,7 @@ CheckIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-CheckIPAddrColors::initialize(ErrorHandler *errh)
+TestIPAddrColors::initialize(ErrorHandler *errh)
 {
     if (clear(errh) < 0 || read_file(_filename, errh) < 0)
 	return -1;
@@ -60,13 +60,13 @@ CheckIPAddrColors::initialize(ErrorHandler *errh)
 }
 
 void
-CheckIPAddrColors::cleanup(CleanupStage)
+TestIPAddrColors::cleanup(CleanupStage)
 {
     IPAddrColors::cleanup();
 }
 
 void
-CheckIPAddrColors::check_error(uint64_t &counter, const char *format, ...)
+TestIPAddrColors::test_error(uint64_t &counter, const char *format, ...)
 {
     counter++;
     if (_verbose) {
@@ -78,7 +78,7 @@ CheckIPAddrColors::check_error(uint64_t &counter, const char *format, ...)
 }
 
 inline void
-CheckIPAddrColors::check(Packet *p)
+TestIPAddrColors::test(Packet *p)
 {
     const click_ip *iph = p->ip_header();
     if (!iph)
@@ -91,28 +91,28 @@ CheckIPAddrColors::check(Packet *p)
     color_t dcolor = color(daddr);
 
     if (scolor > MAXCOLOR)
-	check_error(_n_bad_colors, "src %#.0A: bad color %u", saddr, scolor);
+	test_error(_n_bad_colors, "src %#.0A: bad color %u", saddr, scolor);
     else if (dcolor > MAXCOLOR)
-	check_error(_n_bad_colors, "dst %#.0A: bad color %u", daddr, dcolor);
+	test_error(_n_bad_colors, "dst %#.0A: bad color %u", daddr, dcolor);
     else if (scolor != (dcolor ^ 1))
-	check_error(_n_bad_pairs, "src %#.0A, dst %#.0A: bad color pair %u, %u", saddr, daddr, scolor, dcolor);
+	test_error(_n_bad_pairs, "src %#.0A, dst %#.0A: bad color pair %u, %u", saddr, daddr, scolor, dcolor);
     else if (scolor >= 2)
 	_n_large_colors++;
 }
 
 void
-CheckIPAddrColors::push(int, Packet *p)
+TestIPAddrColors::push(int, Packet *p)
 {
-    check(p);
+    test(p);
     output(0).push(p);
 }
 
 Packet *
-CheckIPAddrColors::pull(int)
+TestIPAddrColors::pull(int)
 {
     Packet *p = input(0).pull();
     if (p)
-	check(p);
+	test(p);
     return p;
 }
 
@@ -124,9 +124,9 @@ enum {
 };
 
 String
-CheckIPAddrColors::read_handler(Element *e, void *thunk)
+TestIPAddrColors::read_handler(Element *e, void *thunk)
 {
-    CheckIPAddrColors *c = static_cast<CheckIPAddrColors *>(e);
+    TestIPAddrColors *c = static_cast<TestIPAddrColors *>(e);
     switch ((int)thunk) {
       case AC_COUNT:
 	return String(c->_npackets) + "\n";
@@ -147,7 +147,7 @@ CheckIPAddrColors::read_handler(Element *e, void *thunk)
 }
 
 void
-CheckIPAddrColors::add_handlers()
+TestIPAddrColors::add_handlers()
 {
     add_read_handler("count", read_handler, (void *)AC_COUNT);
     add_read_handler("error_count", read_handler, (void *)AC_ERROR_COUNT);
@@ -155,4 +155,4 @@ CheckIPAddrColors::add_handlers()
 }
 
 ELEMENT_REQUIRES(userlevel IPAddrColors)
-EXPORT_ELEMENT(CheckIPAddrColors)
+EXPORT_ELEMENT(TestIPAddrColors)

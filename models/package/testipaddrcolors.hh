@@ -1,24 +1,76 @@
 // -*- c-basic-offset: 4 -*-
-#ifndef CLICK_CHECKIPADDRCOLORS_HH
-#define CLICK_CHECKIPADDRCOLORS_HH
+#ifndef CLICK_TESTIPADDRCOLORS_HH
+#define CLICK_TESTIPADDRCOLORS_HH
 #include <click/element.hh>
 #include "ipaddrcolors.hh"
 
-class CheckIPAddrColors : public Element, public IPAddrColors { public:
+/*
+=c
+
+TestIPAddrColors(FILENAME, I<KEYWORDS>)
+
+=s analysis
+
+tests an IP address coloring
+
+=d
+
+Reads FILENAME, an IP address coloring probably produced by InferIPAddrColors,
+and tests incoming packets against that coloring. In particular, it checks
+that every address has an assigned color, and that the colors for source and
+destination addresses differ (one is red and the other blue). Maintains counts
+of various kinds of coloring errors, accessible via handlers, and optionally
+prints a message on each error.
+
+=over 8
+
+=item VERBOSE
+
+Boolean. If true, then print a message on every coloring error. Default is
+false.
+
+=back
+
+=e
+
+Here are some sample verbose error messages:
+
+   src 1.0.0.1: bad color 98
+   src 1.0.0.1, dst 3.0.0.3: bad color pair 98, 98
+
+=h count read-only
+
+Returns the number of packets seen.
+
+=h error_count read-only
+
+Returns the number of packets seen with bad-color and/or bad-color-pair
+errors.
+
+=h details read-only
+
+Returns a string detailing the numbers of packets, bad-color errors,
+bad-color-pair errors, and large colors.
+
+=a
+
+InferIPAddrColors, IPAddrColorPaint */
+
+class TestIPAddrColors : public Element, public IPAddrColors { public:
   
-    CheckIPAddrColors();
-    ~CheckIPAddrColors();
+    TestIPAddrColors();
+    ~TestIPAddrColors();
   
-    const char *class_name() const	{ return "CheckIPAddrColors"; }
+    const char *class_name() const	{ return "TestIPAddrColors"; }
     const char *processing() const	{ return AGNOSTIC; }
-    CheckIPAddrColors *clone() const	{ return new CheckIPAddrColors; }
+    TestIPAddrColors *clone() const	{ return new TestIPAddrColors; }
 
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();
 
-    void check(Packet *);
+    void test(Packet *);
     void push(int, Packet *);
     Packet *pull(int);
 
@@ -31,7 +83,7 @@ class CheckIPAddrColors : public Element, public IPAddrColors { public:
     uint64_t _n_large_colors;
     bool _verbose;
 
-    void check_error(uint64_t &, const char *, ...);
+    void test_error(uint64_t &, const char *, ...);
     static String read_handler(Element *, void *);
     
 };
