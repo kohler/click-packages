@@ -120,6 +120,19 @@ static int compare(const void *a, const void *b){
     return 1;
 }
 
+static int compare_time(const void *a, const void *b){
+    struct CalculateCapacity::StreamInfo::IntervalStream *ac;
+    struct CalculateCapacity::StreamInfo::IntervalStream *bc;
+
+    ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
+    bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
+    
+    if(ac->time < bc->time) return -1;
+    if(ac->time == bc->time) return 0;
+    return 1;
+}
+
+
 void
 CalculateCapacity::StreamInfo::findpeaks()
 {
@@ -381,18 +394,22 @@ CalculateCapacity::StreamInfo::fill_shortrate()
     uint32_t i,j;
     uint32_t ackbytes=0;
     uint32_t databytes=0;
-    double time_windowsize = 1.0;
+    double time_windowsize = 3.0;
     timeval start;
 
     datarate = 0;
     ackrate = 0;
+    ackstart = make_timeval(0,0);
+    datastart = make_timeval(0,0);
+
+    click_qsort(intervals, pkt_cnt, sizeof(struct IntervalStream),
+    		&compare_time);
 
     for(i=0;i<pkt_cnt;i++){
 	ackbytes = intervals[i].newack;
 	databytes = intervals[i].size;
 	start = intervals[i].time;
 	for(j=i+1 ; j<pkt_cnt ; j++){
-	    assert(j < pkt_cnt);
 	    if(float_timeval(intervals[j].time - start) < time_windowsize){
 		ackbytes += intervals[j].newack;
 		databytes += intervals[j].size;
@@ -400,16 +417,25 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 		j--;
 		break;
 	    }
+	    
+	    assert(intervals[j].time > start);
 	}
+	//printf("j-1: %d\n", j-i);
 	//must be larger than any single flight
-	double timetmp = j-i > 20 ?
+	double timetmp = j - i > 20 ?
 	    float_timeval(intervals[j].time - start) : time_windowsize;
 	double tmp = ackbytes / timetmp;
-	if(tmp > ackrate)
+	if(tmp > ackrate){
 	    ackrate = tmp;
+	    ackstart = intervals[j].time;//start;
+	    abytes = ackbytes;
+	}
 	tmp = databytes / timetmp;
-	if(tmp > datarate)
+	if(tmp > datarate){
 	    datarate = tmp;
+	    datastart = intervals[j].time;//start;
+	    dbytes = databytes;
+	}
 	
 // 	if(ackbytes > 0){
 // 	    printf("ack bytes: %d\n", ackbytes);
@@ -418,8 +444,12 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 	    //printf("data bytes: %d\nack bytes: %d\n", databytes, ackbytes);
     }
     
-    datarate *=8;
-    ackrate *=8;
+    datarate *= 8;
+    ackrate *= 8;
+
+    click_qsort(intervals, pkt_cnt, sizeof(struct IntervalStream),
+    		&compare);
+
         
 }
 
@@ -462,7 +492,11 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 
 	drate = _stream[bigger].datarate;
 	arate = _stream[!bigger].ackrate;
-	    
+	struct timeval atime = _stream[!bigger].ackstart;
+	struct timeval dtime = _stream[bigger].datastart;
+	uint32_t abytes = _stream[!bigger].abytes;
+	uint32_t dbytes = _stream[bigger].dbytes;
+
 // 	if((drate == 0 || arate == 0) || _aggregate == 1821){
 // 	    printf("rate zero: %u\n %lf %lf\n %lf %lf\n",
 // 		   _aggregate,
@@ -473,8 +507,10 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 // 		   );
 // 	}
 
-	fprintf(f, "  <rate data='%lf' ack='%lf' dir='%u' />\n",
-		drate, arate, bigger);
+	fprintf(f, "  <rate data='%lf' ack='%lf' dir='%u' "
+		"dtime='%d.%06d' atime='%d.%06d' db='%d' ab='%d' />\n",
+		drate, arate, bigger, (int)dtime.tv_sec, (int)dtime.tv_usec,
+		(int)atime.tv_sec, (int)atime.tv_usec, dbytes, abytes);
 	
 
 	_stream[0].write_xml(f);

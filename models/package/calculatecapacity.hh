@@ -152,8 +152,13 @@ struct CalculateCapacity::StreamInfo {
     
     uint32_t mss;               //largest single packet here
     uint32_t rmss;              // mss in reverse direction
+
     double datarate;
     double ackrate;
+    struct timeval ackstart;
+    struct timeval datastart;
+    uint32_t dbytes;
+    uint32_t abytes;
 
     struct IntervalStream;
     struct IntervalStream *intervals;
