@@ -124,36 +124,35 @@ class CalculateFlows::LossInfo {
     uint32_t _aggregate;
     bool _gnuplot;
     bool _eventfiles;
-    short int  has_syn[2];
-    short int  has_fin[2];
+    bool _has_syn[2];
+    bool _has_fin[2];
     MapT time_by_firstseq[2];
     MapT time_by_lastseq[2];
     MapInterval inter_by_time[2];
     MapS acks[2];
     MapS rexmt[2];
-    tcp_seq_t init_seq[2];
-    timeval init_time;
-    double prev_diff[2];
-    short int doubling[2];
-    short int prev_doubling[2];
-    short int outoforder_pckt;
-    tcp_seq_t max_ack[2];
+    tcp_seq_t _init_seq[2];
+    timeval _init_time;
+    double _prev_diff[2];
+    short _doubling[2];
+    short _prev_doubling[2];
+    bool _outoforder_pckt;
+    tcp_seq_t _max_ack[2];
     
     
     void init() { 
 	_gnuplot = _eventfiles = false;
 	_aggregate = 0;
-	init_time.tv_usec = 0;
-	init_time.tv_sec = 0;
-	outoforder_pckt = 0;
+	_init_time.tv_usec = 0;
+	_init_time.tv_sec = 0;
+	_outoforder_pckt = 0;
 	
-	has_syn[0] = 0;
-	has_fin[0] = 0;
-	init_seq[0] = 0;
-	prev_diff[0] = 0;
-	doubling[0] = -1;
-	prev_doubling[0] = 0;
-	max_ack[0] = 0;
+	_has_syn[0] = _has_fin[0] = false;
+	_init_seq[0] = 0;
+	_prev_diff[0] = 0;
+	_doubling[0] = -1;
+	_prev_doubling[0] = 0;
+	_max_ack[0] = 0;
 	_upper_wind_seq[0] = 0;
 	_max_wind_seq[0] = 0;
 	_last_seq[0] = 0;
@@ -166,13 +165,12 @@ class CalculateFlows::LossInfo {
 	_loss_events[0] = 0;
 	_p_loss_events[0] = 0;
 	
-	has_syn[1] = 0;
-	has_fin[1] = 0;
-	init_seq[1] = 0;
-	prev_diff[1]=0;
-	doubling[1] = -1;
-	prev_doubling[1] = 0;
-	max_ack[1] = 0;
+	_has_syn[1] = _has_fin[1] = false;
+	_init_seq[1] = 0;
+	_prev_diff[1]=0;
+	_doubling[1] = -1;
+	_prev_doubling[1] = 0;
+	_max_ack[1] = 0;
 	_upper_wind_seq[1] = 0;
 	_max_wind_seq[1] = 0;
 	_last_seq[1] = 0;
