@@ -736,8 +736,8 @@ class TCPDumpFile(object):
 
     def next_packet(self):
         try:
+            s, pos = self.s, self.pos
             while True:
-                s, pos = self.s, self.pos
                 if pos + self.header_size > len(s):
                     s = s[pos:] + self.f.read(32768)
                     pos = 0
