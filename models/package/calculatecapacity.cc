@@ -25,13 +25,18 @@ CalculateCapacity::StreamInfo::StreamInfo()
     : have_init_seq(false),
       init_seq(0),
       pkt_head(0), pkt_tail(0),
-      pkt_cnt(0)
+      pkt_cnt(0), max_size(0),
+      intervals(0), hist(0),
+      cutoff(0), valid(0)
 {
 }
 
 CalculateCapacity::StreamInfo::~StreamInfo()
 {
     if(intervals) delete intervals;
+    if(hist) delete hist;
+    if(cutoff) delete cutoff;
+    if(valid) delete valid;
 }
 
 
@@ -66,8 +71,15 @@ CalculateCapacity::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepo
 void
 CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 {
-    fprintf(f, "  <stream dir='%d' beginseq='%u'\n",
-	    direction, init_seq);
+    fprintf(f, "  <stream dir='%d' beginseq='%u' maxsize='%u'\n",
+	    direction, init_seq, max_size);
+    for(Vector<struct Peak *>::const_iterator iter = peaks.begin(); iter; iter++){
+	const struct Peak *p = *iter;
+	fprintf(f, "    <peak center='%lf' index='%d' area='%d'>\n",
+		p->center, p->index, p->area);
+    }
+    
+    
     for(unsigned int i=0; i < pkt_cnt; i++){
 	fprintf(f, "%d %ld.%06ld %d\n", intervals[i].size,
 		intervals[i].interval.tv_sec,
@@ -89,14 +101,123 @@ static int compare(const void *a, const void *b){
 	/ ((ac->size)*8.0);
     irateb = (bc->interval.tv_sec + bc->interval.tv_usec/1.0e6)
 	/ ((bc->size)*8.0);
-    
-//     if(ac->interval < bc->interval) return -1;
-//     if(ac->interval == bc->interval) return 0;
-//     return 1;
 
     if(iratea < irateb) return -1;
     if(iratea == irateb) return 0;
     return 1;
+}
+
+void
+CalculateCapacity::StreamInfo::findpeaks(uint32_t npeaks)
+{
+    uint32_t max;
+    uint32_t maxi;
+    struct Peak *peak;
+
+    while(npeaks > 0){
+	
+	uint32_t i, prev, area;
+	max = 0;
+	maxi = histpoints+1;
+
+	for(i=0; i < histpoints; i++){
+	    if(valid[i] && hist[i] > max && hist[i] > 1){
+		max = hist[i];
+		maxi = i;
+	    }
+	}
+	
+	if(maxi > histpoints){
+	    //no new ones
+	    return;
+	}
+
+	//remove surrounding areas
+	valid[maxi] = 0;
+	prev = area = max;
+	
+	i = maxi + 1;
+	while(i < histpoints && hist[i] > 0 && hist[i] < prev){
+	    area += hist[i];
+	    valid[i]=0;
+	    prev = hist[i];
+	    i++;
+	}
+
+	i = maxi - 1;
+	prev = max;
+	while(i > 0 && hist[i] > 0 && hist[i] < prev){
+	    area += hist[i];
+	    valid[i]=0;
+	    prev = hist[i];
+	    i--;
+	}
+
+	//append to list of peaks
+	peak = new Peak;
+	peak->area = area;
+	peak->center = cutoff[i];
+	peak->index = maxi;
+	peaks.push_back(peak);
+
+
+	npeaks--;
+    }
+
+}
+
+void
+CalculateCapacity::StreamInfo::histogram()
+{
+    uint32_t i;
+    double stepsize; // in seconds
+    double curr; // in seconds
+    const double factor=1.009;
+    const uint32_t howmany = 1000;
+    
+    uint32_t j=0;
+    uint32_t totcnt=0;
+    uint32_t usedcnt=0;
+
+    histpoints = howmany;
+    hist = new uint32_t[howmany];
+    cutoff = new double[howmany];
+    valid = new uint8_t[howmany];
+
+    curr = 1.0e-6;
+    stepsize = 1.0e-6;
+    
+    for(i=0; i < howmany; i++){
+	stepsize *= factor;
+	curr += stepsize;
+	cutoff[i] = curr;
+	hist[i] = 0;
+	valid[i] = 1;
+	
+	while(j < pkt_cnt &&
+	      (intervals[j].interval.tv_sec +
+	       intervals[j].interval.tv_usec * 1.0e-6) < curr){
+	    if(max_size == intervals[j].size){
+		hist[i]++;
+		usedcnt++;
+	    }
+	    j++;
+	    totcnt++;
+	}
+    }
+
+//     if(totcnt != pkt_cnt){
+// 	printf("missing %d packets: %d %d\n", pkt_cnt - totcnt,
+// 	       totcnt, pkt_cnt);
+// 	printf("  %ld.%06ld\n", intervals[j].interval.tv_sec,
+// 	       intervals[j].interval.tv_usec);
+// 	printf("  %lf %lf\n", curr, stepsize);
+//     }
+
+//    if(usedcnt < totcnt){
+//	printf("%d %d %d\n", totcnt, usedcnt, totcnt - usedcnt);
+//   }
+
 }
 
 void
@@ -171,8 +292,12 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	fprintf(f, ">\n");
 	
 	_stream[0].fill_intervals();
+	_stream[0].histogram();
+	_stream[0].findpeaks(5);
 	_stream[0].write_xml(f);
 	_stream[1].fill_intervals();
+	_stream[1].histogram();
+	_stream[1].findpeaks(5);
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }
@@ -205,6 +330,7 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
     // introduce a Pkt
     if (Pkt *np = parent->new_pkt()) {
 	const click_ip *iph = p->ip_header();
+	uint32_t size;
 
 	// set fields appropriately
 	np->seq = ntohl(tcph->th_seq) - stream.init_seq;
@@ -214,7 +340,6 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	np->flags = tcph->th_flags;
 	np->hsize = 4*(tcph->th_off + iph->ip_hl);
 
-
 	// hook up to packet list
 	np->next = 0;
 	np->prev = stream.pkt_tail;
@@ -222,7 +347,11 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	    stream.pkt_tail = stream.pkt_tail->next = np;
 	else
 	    stream.pkt_head = stream.pkt_tail = np;
+
 	stream.pkt_cnt++;
+	//can't use p->length() due to truncated traces
+	size = np->hsize + np->last_seq - np->seq;
+	stream.max_size = stream.max_size > size ? stream.max_size : size;
 
 	return np;
     } else

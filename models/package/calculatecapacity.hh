@@ -149,17 +149,27 @@ struct CalculateCapacity::StreamInfo {
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
     uint32_t pkt_cnt;           // how many in this stream
-    
+    uint32_t max_size;          // largest in this stream
+
     struct IntervalStream;
     struct IntervalStream *intervals;
+    struct Peak;
 
     StreamInfo();
     ~StreamInfo();
 
+    uint32_t histpoints;
+    uint32_t *hist;
+    double *cutoff;
+    uint8_t *valid;
+    Vector<struct Peak *> peaks;
+
     //void categorize(Pkt *insertion, ConnInfo *, CalculateCapacity *);
     //void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateCapacity *);
     //void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
+    void findpeaks(uint32_t npeaks);
     void fill_intervals();
+    void histogram();
     void write_xml(FILE *) const;
     
 };
@@ -169,6 +179,13 @@ struct CalculateCapacity::StreamInfo::IntervalStream {
     tcp_seq_t newack; //new ack data
     struct timeval interval; //time since previous packet
 };
+
+struct CalculateCapacity::StreamInfo::Peak {
+    double center;
+    uint32_t index;
+    uint32_t area;
+};
+
 
 
 class CalculateCapacity::ConnInfo {  public:
