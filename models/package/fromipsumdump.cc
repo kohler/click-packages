@@ -27,6 +27,7 @@
 #include <click/click_ip.h>
 #include <click/click_udp.h>
 #include <click/click_tcp.h>
+#include <click/packet_anno.hh>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -315,6 +316,8 @@ FromIPSummaryDump::read_packet(ErrorHandler *errh)
 	      case W_LENGTH:
 		ok += (cp_unsigned(words[i], &j) && j <= 0xFFFF);
 		iph->ip_len = htons(j);
+		if (j > q->length())
+		    SET_EXTRA_LENGTH_ANNO(q, j - q->length());
 		break;
 		
 	      case W_PROTO: {
@@ -362,6 +365,16 @@ FromIPSummaryDump::read_packet(ErrorHandler *errh)
 	      case W_TCP_ACK:
 		if (cp_unsigned(words[i], &j) && j <= 0xFFFF)
 		    q->tcp_header()->th_ack = htonl(j), ok++;
+		break;
+
+	      case W_TCP_FLAGS:
+		if (cp_unsigned(words[i], &j) && j <= 0xFF)
+		    q->tcp_header()->th_flags = j, ok++;
+		break;
+
+	      case W_COUNT:
+		if (cp_unsigned(words[i], &j))
+		    SET_PACKET_COUNT_ANNO(q, j), ok++;
 		break;
 
 	    }
