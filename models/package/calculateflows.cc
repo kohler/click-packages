@@ -75,9 +75,19 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	
 	if ((x->flags & Pkt::F_NEW)
 	    && SEQ_LEQ(x->end_seq, np->seq)) {
-	    // packet has new data older than our oldest data;
-	    // therefore, nothing relevant can precede it.
-	    // either we have a retransmission or a reordering.
+	    // 'x' is the first packet whose newest data is as old or older
+	    // than our oldest data. Nothing relevant can precede it.
+	    // Either we have a retransmission or a reordering.
+
+	    // If the trace point is close to the receiver, we may have a
+	    // retransmission where we did not see the earlier transmission.
+	    // Assume we have a retransmission if np->ts >= x->ts + rtt.
+	    if (!rexmit
+		&& np->timestamp >= x->timestamp + conn->rtt()) {
+		rexmit = (x->next == np ? x : x->next);
+		np->flags |= Pkt::F_REXMIT;
+	    }
+	    
 	    break;
 
 	} else if (np->seq == np->end_seq) {
@@ -151,6 +161,8 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 	loss.type = LOSS;
     loss.time = startk->timestamp;
     loss.seq = startk->seq;
+    if (SEQ_LT(endk->seq, startk->seq))
+	loss.seq = endk->seq;
     loss.end_time = endk->timestamp;
     loss.top_seq = max_live_seq;
 
@@ -373,6 +385,19 @@ CalculateFlows::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_c
     // initialize streams
     _stream[0].direction = 0;
     _stream[1].direction = 1;
+}
+
+struct timeval
+CalculateFlows::ConnInfo::rtt() const
+{
+    if (_stream[0].have_ack_latency && _stream[1].have_ack_latency)
+	return _stream[0].min_ack_latency + _stream[1].min_ack_latency;
+    else if (_stream[0].have_ack_latency)
+	return _stream[0].min_ack_latency;
+    else if (_stream[1].have_ack_latency)
+	return _stream[1].min_ack_latency;
+    else
+	return make_timeval(10000, 0);
 }
 
 void

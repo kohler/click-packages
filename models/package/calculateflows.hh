@@ -290,6 +290,7 @@ class CalculateFlows::ConnInfo {  public:
 
     uint32_t aggregate() const		{ return _aggregate; }
     const struct timeval &init_time() const { return _init_time; }
+    struct timeval rtt() const;
     const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
 
     void handle_packet(const Packet *, CalculateFlows *);
