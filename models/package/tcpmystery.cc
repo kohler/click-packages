@@ -9,6 +9,8 @@
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
+#include <algorithm>
+#include <float.h>
 #include "elements/analysis/aggregateipflows.hh"
 #include "elements/analysis/toipsumdump.hh"
 #include "tcpscoreboard.hh"
@@ -32,28 +34,195 @@ int
 TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *e;
+    bool ackcausation = false, semirtt = false, rtt = true;
     if (cp_va_parse(conf, this, errh,
 		    cpElement, "TCPCollector", &e,
+		    cpKeywords,
+		    "ACKCAUSATION", cpBool, "output ack causation XML?", &ackcausation,
+		    "SEMIRTT", cpBool, "output semi-RTT XML?", &semirtt,
+		    "RTT", cpBool, "output RTT XML?", &rtt,
 		    cpEnd) < 0)
 	return -1;
     TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");
     if (!tcpc)
 	return errh->error("'%s' not a TCPCollector element", e->declaration().c_str());
-    //tcpc->add_stream_xmltag("multiq_capacity", multiqcapacity_xmltag, this);
+    if (rtt)
+	tcpc->add_connection_xmltag("rtt", mystery_rtt_xmltag, this);
+    if (semirtt)
+	tcpc->add_stream_xmltag("semirtt", mystery_semirtt_xmltag, this);
+    if (ackcausation)
+	tcpc->add_stream_xmltag("ackcausation", mystery_ackcausation_xmltag, this);
     _myconn_offset = tcpc->add_conn_attachment(this, sizeof(MyConn));
     _mypkt_offset = tcpc->add_pkt_attachment(sizeof(MyPkt));
     return 0;
 }
 
 
+// construction //
+
+void
+TCPMystery::new_conn_hook(Conn* c, unsigned)
+{
+    MyConn* mc = myconn(c);
+    mc->_finished = false;
+}
+
+void
+TCPMystery::clear(Stream* s)
+{
+    for (Pkt* k = s->pkt_head; k; k = k->next) {
+	MyPkt* mk = mypkt(k);
+	mk->flags = 0;
+	mk->event_id = 0;
+	mk->rexmit = 0;
+	mk->caused_ack = 0;
+    }
+}
+
+void
+TCPMystery::finish(Conn* c)
+{
+    MyConn* mc = myconn(c);
+    if (!mc->_finished) {
+	clear(c->stream(0));
+	clear(c->stream(1));
+	find_true_caused_acks(c->stream(0), c);
+	find_true_caused_acks(c->stream(1), c);
+	calculate_semirtt(c->stream(0), c);
+	calculate_semirtt(c->stream(1), c);
+	mc->_finished = true;
+    }
+}
+
+
 
 // Want to develop ack latencies for exactly those packets where the ack
-// latency is definitely correct.  That means (1) no retransmission, (2)
+// latency is definitely correct. 
+
+void
+TCPMystery::find_true_caused_acks(Stream* datas, Conn* c)
+{
+    Stream* acks = c->ack_stream(datas);
+    Pkt* ackk = acks->pkt_head;
+
+    for (Pkt* k = datas->pkt_head; k && ackk; k = k->next)
+	if (k->flags & Pkt::F_NEW) {
+	    while (ackk && ackk->timestamp < k->timestamp)
+		ackk = ackk->next;
+	    while (ackk && SEQ_LT(ackk->max_ack(), k->end_seq))
+		ackk = ackk->next;
+	    // Avoid if there was a retransmission.
+	    if ((k->flags & Pkt::F_NONORDERED) && ackk) {
+		for (Pkt* kk = k->next; kk && kk->timestamp < ackk->timestamp; kk = kk->next)
+		    if (kk->end_seq == k->end_seq)
+			goto next_round;
+	    }
+	    // Want to avoid ack latencies that might be due to reordering.
+	    // This is impossible if the previous ack wasn't a duplicate.
+	    if (ackk
+		&& ackk->max_ack() == k->end_seq
+		&& (ackk->seq == ackk->end_seq || (ackk->flags & (TH_SYN | TH_FIN)))
+		&& (!ackk->prev || !ackk->prev->prev
+		    || ackk->prev->max_ack() != ackk->prev->prev->max_ack()
+		    || ackk->prev->seq != ackk->prev->end_seq)) {
+		MyPkt* mk = mypkt(k);
+		mk->flags |= MyPkt::F_TRUE_CAUSED_ACK;
+		mk->caused_ack = ackk;
+	    }
+	  next_round: ;
+	}
+}
+
+void
+TCPMystery::calculate_semirtt(Stream* s, Conn* c)
+{
+    MyStream* ms = mystream(s, c);
+    
+    ms->semirtt_syn = 0;
+    ms->semirtt_min = DBL_MAX;
+    ms->semirtt_max = 0;
+    ms->semirtt_sum = 0;
+    ms->semirtt_sumsq = 0;
+    ms->nsemirtt = 0;
+
+    for (Pkt* k = s->pkt_head; k; k = k->next) {
+	MyPkt* mk = mypkt(k);
+	if (mk->flags & MyPkt::F_TRUE_CAUSED_ACK) {
+	    double semirtt = timeval2double(mk->caused_ack->timestamp - k->timestamp);
+	    if (k == s->pkt_head)
+		ms->semirtt_syn = semirtt;
+	    ms->semirtt_min = std::min(ms->semirtt_min, semirtt);
+	    ms->semirtt_max = std::max(ms->semirtt_max, semirtt);
+	    ms->semirtt_sum += semirtt;
+	    ms->semirtt_sumsq += semirtt * semirtt;
+	    ms->nsemirtt++;
+	}
+    }
+
+    if (ms->nsemirtt == 0)
+	ms->semirtt_min = 0;
+}
 
 
+void
+TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCollector::Conn* c, const String& tagname, void* thunk)
+{
+    TCPMystery* my = static_cast<TCPMystery*>(thunk);
+    my->finish(c);
+
+    fprintf(f, "    <%s", tagname.c_str());
+    //if (have_ack_latency)
+    //    fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+    fprintf(f, ">\n");
+    
+    for (Pkt* k = s->pkt_head; k; k = k->next) {
+	MyPkt* mk = my->mypkt(k);
+	if (Pkt* ackk = mk->caused_ack) {
+	    struct timeval latency = ackk->timestamp - k->timestamp;
+	    fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ackk->max_ack(), latency.tv_sec, latency.tv_usec);
+	}
+    }
+    
+    fprintf(f, "    </%s>\n", tagname.c_str());
+}
+
+void
+TCPMystery::mystery_semirtt_xmltag(FILE* f, TCPCollector::Stream* s, TCPCollector::Conn* c, const String& tagname, void* thunk)
+{
+    TCPMystery* my = static_cast<TCPMystery*>(thunk);
+    my->finish(c);
+
+    MyStream* ms = my->mystream(s, c);
+    if (ms->nsemirtt) {
+	if (ms->semirtt_syn)
+	    fprintf(f, "    <%s source='syn' value='%g' />\n", tagname.c_str(), ms->semirtt_syn);
+	fprintf(f, "    <%s source='min' value='%g' />\n", tagname.c_str(), ms->semirtt_min);
+	fprintf(f, "    <%s source='avg' value='%g' n='%d' />\n", tagname.c_str(), ms->semirtt_sum / ms->nsemirtt, ms->nsemirtt);
+	fprintf(f, "    <%s source='max' value='%g' />\n", tagname.c_str(), ms->semirtt_max);
+	if (ms->nsemirtt > 1)
+	    fprintf(f, "    <%s source='var' value='%g' n='%d' />\n", tagname.c_str(), (ms->semirtt_sumsq - (ms->semirtt_sum * ms->semirtt_sum) / ms->nsemirtt) / (ms->nsemirtt - 1), ms->nsemirtt);
+    }
+}
+
+void
+TCPMystery::mystery_rtt_xmltag(FILE* f, TCPCollector::Conn* c, const String& tagname, void* thunk)
+{
+    TCPMystery* my = static_cast<TCPMystery*>(thunk);
+    my->finish(c);
+
+    MyStream* ms0 = my->mystream(c->stream(0), c);
+    MyStream* ms1 = my->mystream(c->stream(1), c);
+    if (ms0->nsemirtt && ms1->nsemirtt) {
+	if (ms0->semirtt_syn && ms1->semirtt_syn)
+	    fprintf(f, "  <%s source='syn' value='%g' />\n", tagname.c_str(), ms0->semirtt_syn + ms1->semirtt_syn);
+	fprintf(f, "  <%s source='min' value='%g' />\n", tagname.c_str(), ms0->semirtt_min + ms1->semirtt_min);
+	fprintf(f, "  <%s source='avg' value='%g' />\n", tagname.c_str(), ms0->semirtt_sum/ms0->nsemirtt + ms1->semirtt_sum/ms1->nsemirtt);
+	fprintf(f, "  <%s source='max' value='%g' />\n", tagname.c_str(), ms0->semirtt_max + ms1->semirtt_max);
+    }
+}
 
 
-
+#if 0
 void
 TCPMystery::find_min_ack_latency(Stream* s, Conn* c)
 {
@@ -148,6 +317,7 @@ TCPMystery::find_loss_events(Stream* s, Conn* c)
 	    mk->flags |= MyPkt::F_REORDER;
     }
 }
+#endif
 
 
 
@@ -790,30 +960,6 @@ TCPMystery::mystery_loss_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCo
 }
 
 
-void
-TCPMystery::mystery_ackcausality_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk)
-{
-    TCPMystery *my = static_cast<TCPMystery *>(thunk);
-    MConnInfo *mconn = my->mconn(&conn);
-    mconn->finish(conn, my);
-    MStreamInfo &mstream = mconn->stream(stream.direction);
-
-    fprintf(f, "    <%s", tagname.c_str());
-    if (have_ack_latency)
-	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
-    fprintf(f, ">\n");
-    
-    for (Pkt *k = stream.pkt_head; k; k = k->next) {
-	MPkt *mk = my->mpkt(k);
-	if (Pkt *ack = mk->caused_ack) {
-	    struct timeval latency = ack->timestamp - k->timestamp;
-	    fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, ack->ack, latency.tv_sec, latency.tv_usec);
-	}
-    }
-    
-    fprintf(f, "    </%s>\n", tagname.c_str());
-}
-
 
 void
 TCPMystery::mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, TCPCollector::ConnInfo &conn, const String &tagname, void *thunk)
@@ -1269,7 +1415,7 @@ TCPMystery::add_handlers()
 #endif
 
 
-ELEMENT_REQUIRES(userlevel TCPScoreboard false)
+ELEMENT_REQUIRES(userlevel TCPScoreboard)
 EXPORT_ELEMENT(TCPMystery)
 #include <click/bighashmap.cc>
 #include <click/dequeue.cc>
