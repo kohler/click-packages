@@ -495,7 +495,7 @@ CalculateFlows::simple_action(Packet *p)
 	  unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
 	  int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
-	  if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ) { 
+	  if (!timerisset(&loss->init_time)) {
 	      unsigned short sport = ntohs(tcph->th_sport);
 	      unsigned short dport = ntohs(tcph->th_dport);
 	      String outfilenametmp;
@@ -534,8 +534,8 @@ CalculateFlows::simple_action(Packet *p)
 	      return p;
 	  }
 	  if (seqlen > 0) {
-	      type=1;
-	      loss->calculate_loss_events2(seq,seqlen,ts,paint, _tipfd); //calculate loss if any
+	      type = 1;
+	      loss->calculate_loss_events2(seq, seqlen, ts, paint, _tipfd); //calculate loss if any
 	      loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
 	      if (loss->eventfiles) {
 		  loss->print_send_event(paint, ts, seq, (seq+seqlen));
