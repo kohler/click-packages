@@ -25,6 +25,7 @@ _screen_style = {
     "data": LineDescriptor(1, 0, 0),
     "ack": LineDescriptor(0.42, 0.56, 0.14),
     "dataack": LineDescriptor(0, 0, 1),
+    "window": LineDescriptor(0.8, 0.8, 1, linewidth=2),
     
     "loss": LineDescriptor(1, 0.84, 0),
     "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
@@ -43,6 +44,7 @@ _postscript_style = {
     "data": LineDescriptor(1, 0, 0, linewidth=0.5),
     "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5),
     "dataack": LineDescriptor(0, 0, 1, linewidth=0.5),
+    "window": LineDescriptor(0.8, 0.8, 1),
     
     "loss": LineDescriptor(1, 0.84, 0),
     "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
@@ -96,18 +98,19 @@ def bisect_with_cmp(list, cmp, lo=0, hi=None):
 
 
 class Packet:
-    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks']
-    def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0):
-        self.time = float(time)
-        self.seq = float(seq)
-        self.last_seq = self.seq + int(payloadlen)
-        self.ack = float(ack)
+    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
+    def __init__(self, time, flags, seq, payloadlen, ack, dup_acks=0, window=0):
+        self.time = time
+        self.seq = seq
+        self.last_seq = self.seq + payloadlen
+        self.ack = ack
         if flags != "A" and flags != "PA":
             if flags.find("S") >= 0:
                 self.last_seq += 1
             if flags.find("F") >= 0:
                 self.last_seq += 1
-        self.dup_acks = int(dup_acks)
+        self.dup_acks = dup_acks
+        self.window = window
     def pure_ack(self):
         return self.seq == self.last_seq
     def has_data(self):
@@ -167,6 +170,19 @@ def unparse_tcp_flags(flags):
 class Connection:
 
     __slots__ = ['s', 'loss', 'available', 'flowid', 'aggregate', 'loss_count', 'filename']
+
+    _field_unpack_format = {
+        "ts_sec": "L", "ts_usec": "L", "ip_src": "L",
+        "ip_dst": "L", "ip_len": "L", "ip_proto": "B", "ip_id": "H", "sport": "H",
+        "dport": "H", "tcp_seq": "L", "tcp_ack": "L", "tcp_flags": "B", "payload_len": "L",
+        "count": "L", "ip_frag": "B", "ip_fragoff": "H", "direction": "B",
+        "aggregate": "L", "tcp_window": "H", "word_crap": "L"
+        }
+    _binary_size = { "L": 4, "H": 2, "B": 1 }
+    _parse_code = None
+    _parse_code_of = None
+    _parse_code_min_binary_len = 0
+    _parse_code_window = False
     
     def __init__(self, f=None, aggregate=-1, src=None, sport=None, dst=None, dport=None):
         self.s = ([], [])
@@ -211,14 +227,100 @@ class Connection:
             return self.str[p:] + self.f.read()
     
     def _check_data(self):
-        if self.read_state == "a":      # ASCII
-            x = '!data timestamp direction tcp_flags tcp_seq payload_len tcp_ack'
-        elif self.read_state == "b":    # binary
-            x = '!data timestamp tcp_seq payload_len tcp_ack tcp_flags direction'
-        else:
+        # exit early if not active
+        if self.read_state != "a" and self.read_state != "b":
             return
-        if not re.match(x, self.read_data):
-            raise ConnectionFormatError, "bad !data"
+
+        # replace 'timestamp' with 'ts_sec ts_usec' if necessary
+        line = self.read_data
+        if self.read_state == "b":
+            line = re.sub("\\btimestamp\\b", "ts_sec ts_usec", line)
+            line = re.sub("\\bfirst_timestamp\\b", "word_crap word_crap", line)
+        data = line[5:].split()
+
+        # drop everything after the first field we don't understand 
+        unpack_format = "!"; unpack_size = 0
+        if self.read_state == "b":
+            for i in range(0, len(data)):
+                try:
+                    f = Connection._field_unpack_format[data[i]]
+                    unpack_format += f; unpack_size += Connection._binary_size[f]
+                except KeyError:
+                    data = data[:i]
+                    break
+
+        # exit early if possible
+        if Connection._parse_code_of == (data, self.read_state):
+            self.has_window = Connection._parse_code_window
+            return
+
+        # create mapping
+        m = dict(zip(data, range(len(data))))
+
+        # complain if important fields missing
+        if ("timestamp" not in m and "ts_sec" not in m) or "direction" not in m or "tcp_seq" not in m:
+            raise ConnectionFormatError, "bad !data missing important pieces"
+
+        # create code
+        if self.read_state == "b":
+            code = 'fields = struct.unpack("' + unpack_format + '", data[pos+4:pos+' + str(unpack_size + 4) + '])\n'
+            ifields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+        else:
+            code = 'fields = line.split()\n'
+            ifields = dict(map(lambda x: (x[0], 'int(fields[' + `x[1]` + '])'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+
+        # analyze fragments separately
+        if "timestamp" in m:
+            f_time = ffields["timestamp"]
+        elif "ts_sec" in m and "ts_usec" in m:
+            f_time = ifields["ts_sec"] + ' + ' + ifields["ts_usec"] + '/1000000.'
+        elif "ts_sec" in m:
+            f_time = ffields["ts_sec"]
+        if self.read_state == "b":
+            code += 'dir = ' + ifields["direction"] + '\n'
+        else:
+            code += 'dir = direction(fields[' + `m["direction"]` + '])\n'
+        if "tcp_seq" in m:
+            f_seq = ffields["tcp_seq"]
+        else:
+            f_seq = '0.'
+        if "payload_len" in m:
+            f_len = ifields["payload_len"]
+        else:
+            f_len = '0'
+        if "tcp_ack" in m:
+            code += 'ack = ' + ffields["tcp_ack"] + '\n\
+if ack == last_ack[dir]: dup_acks[dir] += 1\n\
+else: dup_acks[dir] = 0; last_ack[dir] = ack\n'
+            f_ack = 'ack'
+            f_dupacks = 'dup_acks[dir]'
+        else:
+            f_ack = '0.'
+            f_dupacks = '0'
+        if "tcp_flags" in m:
+            if self.read_state == "b":
+                code += 'flag = fields[' + `m["tcp_flags"]` + ']\n\
+if (flag & 24) == flag: flag = "A"\n\
+else: flag = unparse_tcp_flags(flag)\n'
+                f_flags = 'flag'
+            else:
+                f_flags = 'fields[' + `m["tcp_flags"]` + ']'
+        else:
+            f_flags = '"A"'
+        if "tcp_window" in m:
+            f_window = ifields["tcp_window"]
+        else:
+            f_window = '0'
+
+        code += 'self.s[dir].append(Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_dupacks + ', ' + f_window + '))\n'
+
+        Connection._parse_code = compile(code, "<generated function>", "exec")
+        Connection._parse_code_of = (data, self.read_state)
+        Connection._parse_code_min_binary_len = unpack_size + 4
+        Connection._parse_code_window = "tcp_window" in m
+        self.has_window = Connection._parse_code_window
     
     def _read_nonpacket(self, line):
         if re.match('\\#[pf]?loss', line):
@@ -253,15 +355,8 @@ class Connection:
             elif l & 0x80000000:
                 if self._read_nonpacket(data[pos+4:pos+i]):
                     break
-            elif i >= 26:
-                ts_sec, ts_usec, seq, payloadlen, ack, flags, dir = \
-                   struct.unpack("!LLLLLBB", data[pos+4:pos+26])
-                time = ts_sec + ts_usec / 1000000.
-                if flags == 16: flags = "A"
-                else: flags = unparse_tcp_flags(flags)
-                if ack == last_ack[dir]: dup_acks[dir] += 1
-                else: dup_acks[dir] = 0; last_ack[dir] = ack
-                self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
+            elif i >= Connection._parse_code_min_binary_len:
+                exec Connection._parse_code
             pos += i
 
     def read(self, f):
@@ -269,15 +364,11 @@ class Connection:
         read_state = 0; self.read_state = ""; self.read_data = ""
         f = Connection.Fileboy(f)
         for line in f:
-            if line and line[0] >= '0' and line[0] <= '9':
+            if line and line[0] >= '0':
                 if read_state == 0:
                     read_state = 1; self.read_state = "a"
                     self._check_data()
-                time, dir, flags, seq, payloadlen, ack = line.split()
-                dir, ack = direction(dir), int(ack)
-                if ack == last_ack[dir]: dup_acks[dir] += 1
-                else: dup_acks[dir] = 0; last_ack[dir] = ack
-                self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
+                exec Connection._parse_code
             elif re.match('!binary', line):
                 self.read_state = "b"
                 break
@@ -300,17 +391,18 @@ class Connection:
             fake_pkt = Packet(time, "A", 0, 0, 0)
             return bisect(self.s[direction(dir)], fake_pkt)
     
-    def packets(self, dir, begin=None, end=None):
+    def packets(self, dir, begin=None, end=None, fuzz=0):
         if not self.available:
             self.load()
         dir = direction(dir)
         if begin is None:
             i = 0
         else:
-            i = self.first_index_after(begin, dir)
+            i = max(self.first_index_after(begin, dir) - fuzz, 0)
         while i < len(self.s[dir]) and (end is None or self.s[dir][i].time <= end):
-            yield self.s[dir][i]
-            i += 1
+            yield self.s[dir][i]; i += 1
+        while fuzz > 0 and i < len(self.s[dir]):
+            yield self.s[dir][i]; i += 1; fuzz -= 1
     
     def rev_packets(self, dir, begin=None, end=None):
         if not self.available:
@@ -853,6 +945,9 @@ class PlotCanvas_ScreenDrawable:
         _screen_gcs[orig_name] = gc
         return gc
 
+    def clip_gc(self, gc, rectangle):
+        gc.set_clip_rectangle(rectangle)
+
     def layout(self, name=""):
         if name == "small":
             if self.small_playout is None:
@@ -884,6 +979,12 @@ class PlotCanvas_ScreenDrawable:
     
     def draw_line(self, gc, x1, y1, x2, y2):
         self.drawable.draw_line(gc, x1, y1, x2, y2)
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1 and l[0][0] < 0:
+            x1, y1 = l[0]; x2, y2 = l[1]
+            l[0] = (0, y1 + (-x1 / (x2 - x1)) * (y2 - y1))
+        self.drawable.draw_lines(gc, l)
 
     def fill_rectangle(self, gc, x1, y1, w, h):
         self.drawable.draw_rectangle(gc, gtk.TRUE, x1, y1, w, h)
@@ -1089,6 +1190,7 @@ class PlotCanvas:
         self.mod_state = 0
         self.begin = 0
         self.end = 1000000000.0
+        self.show_window = True
 
         self.adjustment = gtk.Adjustment()
         self.adjustment.connect("value_changed", self.adj_value_changed)
@@ -1106,13 +1208,18 @@ class PlotCanvas:
             return self.begin, self.end
     def get_time_adjustment(self):
         return self.adjustment
+    def get_show_window(self):
+        return self.show_window
 
     # setting properties
-    def set_flowref(self, fref):
+    def set_flowref(self, fref, keeptime=False):
         self.conn, self.dir = fref.conn, fref.dir
-        self.view_all()
-    def set_direction(self, dir):
-        self.dir = direction(dir)
+        if keeptime:
+            self.plot()
+        else:
+            self.view_all()
+    def set_show_window(self, show_window):
+        self.show_window = show_window
         if self.plotted: self.plot()
     def view_all(self):
         self.set_time_range(None, interval=1000000000.0)
@@ -1327,11 +1434,6 @@ class PlotCanvas:
                 t0 = max(t0, self._itransform(area.x, area.y, constrain=False)[0])
                 t1 = min(t1, self._itransform(area.x + area.width, area.y, constrain=False)[0])
             
-            # data packets
-            gc = drawable.gc("data")
-            for p in self.conn.packets(self.dir, t0, t1):
-                drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
-            
             # ack packets
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
             last_dupack, last_dupack_x = -1, None
@@ -1349,46 +1451,24 @@ class PlotCanvas:
                 else:
                     drawable.draw_dataack(gc2, x, y)
 
+            # window line, if enabled
+            if self.show_window and self.conn.has_window:
+                windows = []; gc = drawable.gc("window")
+                drawable.clip_gc(gc, drawable.plot_bounds())
+                for p in self.conn.packets(1 - self.dir, t0, t1, fuzz=1):
+                    x, y = int(p.time * tscale + toff), int((p.ack + p.window) * sscale + soff)
+                    windows.append((x, y))
+                drawable.draw_lines(gc, windows)
+
+            # data packets
+            gc = drawable.gc("data")
+            for p in self.conn.packets(self.dir, t0, t1):
+                drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
+            
         else:
             self.plotted = False
 
         drawable.complete()
-            
-
-class PlotBox:
-    def __init__(self):
-        self.frame = gtk.VBox()
-        self.frame.show()
-        
-        self.canvas = PlotCanvas(self.frame)
-
-        self.scale = gtk.HScrollbar(adjustment=self.canvas.get_time_adjustment())
-        self.frame.pack_start(self.scale, 0, 0)
-        self.scale.show()
-
-        self.statusbar = gtk.Label("")
-        self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
-        self.statusbar.set_alignment(0, 0.5)
-        self.statusbar.set_padding(5, 3)
-        self.frame.pack_start(self.statusbar, 0, 0)
-        self.statusbar.show()
-    def set_flowref(self, fref):
-        self.canvas.set_flowref(fref)
-        desc = fref.get_description()
-        desc = re.sub("<", "&lt;", desc)
-        desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
-        self.statusbar.set_markup(desc)
-    def view_all(self):
-        self.canvas.view_all()
-    def zoom_in(self):
-        self.canvas.zoom(factor=0.75)
-    def zoom_out(self):
-        self.canvas.zoom(factor=1.25)
-    def pack(self, *args, **keys):
-        self.frame.pack(*args, **keys)
-    def get_widget(self):
-        return self.frame
-
 
 class PlotFlowWindow:
     def __init__(self, fset):
@@ -1410,10 +1490,10 @@ class PlotFlowWindow:
         vbox.add(paned)
         paned.show()
         
-        self.plotbox = PlotBox()
+        plotbox = self._init_plotbox()
         flowtree = self._init_flowtree()
 
-        paned.add1(self.plotbox.get_widget())
+        paned.add1(plotbox)
         paned.add2(flowtree)
 
         if len(fset):
@@ -1422,7 +1502,7 @@ class PlotFlowWindow:
 
         win.show()
 
-        self.plotbox.canvas.grab_focus()
+        self.canvas.grab_focus()
 
     def _init_menus(self, win, vbox):
         accel_group = gtk.AccelGroup()
@@ -1434,15 +1514,17 @@ class PlotFlowWindow:
    	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
             ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
    	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
-   	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, None ),
+   	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, "<StockItem>", gtk.STOCK_QUIT ),
             ( "/_View",		None,		None, 0, "<Branch>" ),
-            ( "/View/View _All", None, self.cmd_zoom_fit, 0, None ),
-            ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
-            ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
+            ( "/View/View _All", None, self.cmd_zoom_fit, 0, "<StockItem>", gtk.STOCK_ZOOM_FIT ),
+            ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, "<StockItem>", gtk.STOCK_ZOOM_IN ),
+            ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, "<StockItem>", gtk.STOCK_ZOOM_OUT ),
    	    ( "/View/sep1",     None,         None, 0, "<Separator>" ),
-            ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, None ),
-            ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, None ),
-            ( "/View/_Swap Direction", None, self.cmd_swap_dir, 0, None )
+            ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, "<StockItem>", gtk.STOCK_GO_FORWARD ),
+            ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, "<StockItem>", gtk.STOCK_GO_BACK ),
+            ( "/View/_Swap Direction", None, self.cmd_swap_dir, 0, None ),
+            ( "/View/sep2",	None, None, 0, "<Separator>" ),
+            ( "/View/Hide Receive Window", None, self.cmd_toggle_receive_window, 0, None )
    	    ))
         menubar = self.item_factory.get_widget("<main>")
         vbox.pack_start(menubar, 0, 0)
@@ -1486,22 +1568,40 @@ class PlotFlowWindow:
         treeview.connect("row_activated", self.cmd_flowtree_row_activated)
         return scrolled_window
 
+    def _init_plotbox(self):
+        frame = gtk.VBox()
+        frame.show()
+        
+        self.canvas = PlotCanvas(frame)
+
+        scale = gtk.HScrollbar(adjustment=self.canvas.get_time_adjustment())
+        frame.pack_start(scale, 0, 0)
+        scale.show()
+
+        self.statusbar = gtk.Label("")
+        self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
+        self.statusbar.set_alignment(0, 0.5)
+        self.statusbar.set_padding(5, 3)
+        frame.pack_start(self.statusbar, 0, 0)
+        self.statusbar.show()
+        return frame
+        
     def cmd_exit(self, *args):
         gtk.main_quit()
 
     def cmd_print(self, widget, event):
         f = file("/tmp/tcpplot.ps", "w")
-        self.plotbox.canvas.plot(PlotCanvas_PostScriptDrawable(self.plotbox.canvas, f))
+        self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, f))
         f.close()
         
     def cmd_zoom_in(self, widget, event):
-        self.plotbox.zoom_in()
+        self.canvas.zoom(factor=0.75)
 
     def cmd_zoom_out(self, widget, event):
-        self.plotbox.zoom_out()
+        self.canvas.zoom(factor=1.25)
 
     def cmd_zoom_fit(self, widget, event):
-        self.plotbox.view_all()
+        self.canvas.view_all()
 
     def _activate_flow_items(self):
         self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
@@ -1521,15 +1621,22 @@ class PlotFlowWindow:
         else:
             return self.flowset[self.flowid].conn
     
-    def set_flowref(self, new_flowref):
-        self.set_flowid(self.flowset.index(new_flowref))
+    def set_flowref(self, new_flowref, keeptime=False):
+        self.set_flowid(self.flowset.index(new_flowref), keeptime)
     
-    def set_flowid(self, new_flowid):
+    def set_flowid(self, new_flowid, keeptime=False):
         nf = self.flowset[new_flowid]
         oc = self.connection()
         if oc is not nf.conn and oc is not None:
             oc.unload()
-        self.plotbox.set_flowref(nf)
+        
+        self.canvas.set_flowref(nf, keeptime)
+
+        desc = nf.get_description()
+        desc = re.sub("<", "&lt;", desc)
+        desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
+        self.statusbar.set_markup(desc)
+        
         self.flowid = new_flowid
         self._activate_flow_items()
 
@@ -1540,10 +1647,15 @@ class PlotFlowWindow:
         self.set_flowid(self.flowid - 1)
 
     def cmd_swap_dir(self, widget, event):
-        self.set_flowref(self.flowref().opposite())
+        self.set_flowref(self.flowref().opposite(), keeptime=True)
 
     def cmd_flowtree_row_activated(self, widget, path, column):
         self.set_flowref(self.flowtree_model.path2flowref(path))
+
+    def cmd_toggle_receive_window(self, widget, event):
+        self.canvas.set_show_window(not self.canvas.get_show_window())
+        self.item_factory.get_item("/View/Hide Receive Window").get_child().set_label(["Show Receive Window", "Hide Receive Window"][self.canvas.get_show_window()])
+            
 
 
 if __name__ == "__main__":
