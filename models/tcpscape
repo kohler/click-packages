@@ -2,7 +2,7 @@
 
 from __future__ import generators
 import sys, re, types, string, struct, gzip
-sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
+#sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat
@@ -861,10 +861,10 @@ def fix_range(a, b, min_step_frac):
 
 
 _plot_cursors = {
-    "zoomin": ("zoomin_data", "zoom_mask", 6, 6),
-    "zoomout": ("zoomout_data", "zoom_mask", 6, 6),
-    "hand": ("hand_data", "hand_mask", 9, 8),
-    "grabhand": ("grabhand_data", "grabhand_mask", 8, 7),
+    "zoomin": ("zoomin_data", "zoom_mask", 6, 6, gtk.gdk.SB_UP_ARROW),
+    "zoomout": ("zoomout_data", "zoom_mask", 6, 6, gtk.gdk.SB_DOWN_ARROW),
+    "hand": ("hand_data", "hand_mask", 9, 8, gtk.gdk.FLEUR),
+    "grabhand": ("grabhand_data", "grabhand_mask", 8, 7, gtk.gdk.FLEUR),
     "zoomin_data": (string.join(map(chr, [
 	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x62, 0x04, 0x00,
         0x61, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x61, 0x08, 0x00,
@@ -908,18 +908,26 @@ class PlotCursors:
     def __init__(self, win):
         self.window = win
     def make_pixmap(self, name):
-        if name + ".pix" not in _plot_cursors:
-            l = _plot_cursors[name]
-            _plot_cursors[name + ".pix"] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
+        pname = name + ".pix"
+        if pname not in _plot_cursors:
+            try:
+                l = _plot_cursors[name]
+                _plot_cursors[pname] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
+            except:
+                _plot_cursors[pname] = None
+        return _plot_cursors[pname]
     def __getitem__(self, name):
-        if name + ".cur" not in _plot_cursors:
-            data, mask, hotx, hoty = _plot_cursors[name]
-            self.make_pixmap(data)
-            self.make_pixmap(mask)
-            black = self.window.get_style().black
-            white = self.window.get_style().white
-            _plot_cursors[name + ".cur"] = gtk.gdk.Cursor(_plot_cursors[data + ".pix"], _plot_cursors[mask + ".pix"], black, white, hotx, hoty)
-        return _plot_cursors[name + ".cur"]
+        cname = name + ".cur"
+        if cname not in _plot_cursors:
+            data, mask, hotx, hoty, default = _plot_cursors[name]
+            dpix, mpix = self.make_pixmap(data), self.make_pixmap(mask)
+            if dpix is not None and mpix is not None:
+                black = self.window.get_style().black
+                white = self.window.get_style().white
+                _plot_cursors[cname] = gtk.gdk.Cursor(dpix, mpix, black, white, hotx, hoty)
+            else:
+                _plot_cursors[cname] = gtk.gdk.Cursor(default)
+        return _plot_cursors[cname]
 
 
 
