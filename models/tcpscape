@@ -1228,8 +1228,12 @@ class FlowSet:
         elif name == 'flow':
             self.reading_direction = None
 
+    def _flow_sorter(a, b):
+        return int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
+    _flow_sorter = staticmethod(_flow_sorter)
+
     def sort_by_loss_count(self):
-        self.flows.sort(lambda a, b: int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir))
+        self.flows.sort(self._flow_sorter)
         self.sorted = FlowSet.SORT_LOSS
 
     def __getitem__(self, k):
@@ -2001,8 +2005,9 @@ class PlotCanvas:
         self.adjusting = False
     def adj_value_changed(self, adj):
         if not self.adjusting:
+            self.beginseq = self.endseq = None
             self.set_time_range(adj.value)
-        
+    
     def zoom(self, when=None, factor=1):
         if when is None:
             when = (self.begin + self.end) / 2
@@ -2409,7 +2414,7 @@ class PlotCanvas:
             last_dupack, last_dupack_x = -1, None
             for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
-                if p.dup_acks > 0 and (p.ack != last_dupack or x < last_dupack_x):
+                if p.dup_acks > 1 and (p.ack != last_dupack or x < last_dupack_x):
                     text = str(p.dup_acks + 1)
                     w = drawable.text_size(small_playout, text)[0]
                     if p.ack != last_dupack or x + w/2 < last_dupack_x:
