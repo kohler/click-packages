@@ -10,6 +10,10 @@
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
 #include "elements/analysis/aggregateipflows.hh"
+#if TCPCOLLECTOR_XML
+# include <algorithm>
+# include <function>
+#endif
 CLICK_DECLS
 
 
@@ -396,6 +400,98 @@ TCPCollector::ConnInfo::kill(TCPCollector *cf)
     delete this;
 }
 
+
+
+
+#if TCPCOLLECTOR_XML
+
+/*******************************/
+/* XML HOOKS                   */
+/*                             */
+/*******************************/
+
+int
+TCPCollector::add_trace_xmlattr(const String &attrname, const String &value)
+{
+    if (std::find(_trace_xmlattr_name.begin(), _trace_xmlattr_name.end(), attrname) < _trace_xmlattr_name.end())
+	return -1;
+    _trace_xmlattr_name.push_back(attrname);
+    _trace_xmlattr_value.push_back(value);
+    return 0;
+}
+
+int
+TCPCollector::add_xmlattr(Vector<XMLHook> &v, const XMLHook &in_hook)
+{
+    if (std::find_if(v.begin(), v.end(), bind2nd(mem_fun(XMLHook::same_name), in_hook.name)) < v.end())
+	return -1;
+    v.push_back(in_hook);
+    return 0;
+}
+
+int
+TCPCollector::add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook hook, void *thunk)
+{
+    XMLAttr x;
+    x.name = attrname;
+    x.hook.connection = hook;
+    x.thunk = thunk;
+    return add_xmlattr(_conn_xmlattr, x);
+}
+
+int
+TCPCollector::add_stream_xmlattr(const String &attrname, StreamXMLAttrHook hook, void *thunk)
+{
+    XMLAttr x;
+    x.name = attrname;
+    x.hook.stream = hook;
+    x.thunk = thunk;
+    return add_xmlattr(_stream_xmlattr, x);
+}
+
+static String
+xmlprotect(const String &s)
+{
+    const char *begin = s.begin();
+    const char *s = begin;
+    StringAccum sa;
+    while (s < s.end()) {
+	if (*s == '\"' || *s == '&') {
+	    sa.append(begin, s);
+	    sa << (*s == '\"' ? "&quot;" : "&amp;");
+	    begin = s + 1;
+	}
+	s++;
+    }
+    if (begin == s.begin())
+	return s;
+    else
+	return sa.take_string();
+}
+
+
+void
+TCPCollector::write_traceopen_xml(FILE *f) const
+{
+    fprintf(f, "<trace");
+    for (int i = 0; i < _trace_xmlattr_name.size(); i++)
+	fprintf(f, " %s=\"%s\"", _trace_xmlattr_name[i].c_str(), _trace_xmlattr_value[i].c_str());
+    fprintf(f, ">\n");
+}
+
+void
+TCPCollector::write_traceclose_xml(FILE *f) const
+{
+    fprintf(f, "</trace>\n");
+}
+
+
+void
+TCPCollector::write_connection_xml(FILE *f, const ConnInfo &conn) const
+{
+}
+
+#endif
 
 
 

@@ -38,12 +38,14 @@ class TCPCollector : public Element, public AggregateListener { public:
     enum WriteFlags { WR_FULLRCVWND = 4, WR_WINDOWPROBE = 16, WR_PACKETS = 32 };
     WriteFlags write_flags() const	{ return (WriteFlags)_write_flags; }
 
+#if TCPCOLLECTOR_XML
     // XML writing functions
     int add_trace_xmlattr(const String &attrname, const String &value);
     typedef String (*ConnectionXMLAttrHook)(const ConnInfo &, const String &attrname, void *thunk);
     int add_connection_xmlattr(const String &attrname, ConnectionXMLAttrHook, void *thunk);
     typedef String (*StreamXMLAttrHook)(const ConnInfo &, const StreamInfo &, const String &attrname, void *thunk);
     int add_stream_xmlattr(const String &attrname, StreamXMLAttrHook, void *thunk);
+#endif
     
     typedef HashMap<unsigned, ConnInfo *> ConnMap;
     
@@ -63,6 +65,7 @@ class TCPCollector : public Element, public AggregateListener { public:
     Element *_packet_source;
     int _write_flags;
 
+#if TCPCOLLECTOR_XML
     // XML hooks
     Vector<String> _trace_xmlattr_name;
     Vector<String> _trace_xmlattr_value;
@@ -74,10 +77,14 @@ class TCPCollector : public Element, public AggregateListener { public:
 	    StreamXMLAttrHook stream;
 	} hook;
 	void *thunk;
+	bool same_name(const String &n) const	{ return name == n; }
     };
     Vector<XMLHook> _conn_xmlattr;
     Vector<XMLHook> _stream_xmlattr;
     
+    int add_xmlattr(Vector<XMLHook> &, const XMLHook &);
+#endif
+
     Pkt *new_pkt();
     inline void free_pkt(Pkt *);
     inline void free_pkt_list(Pkt *, Pkt *);
