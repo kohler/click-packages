@@ -6,6 +6,7 @@
 #include <math.h>
 #include "aggregatenotifier.hh"
 #include "toipflowdumps.hh"
+#undef CF_PKT
 
 /*
 =c
@@ -82,9 +83,9 @@ class CalculateFlows : public Element, public AggregateListener { public:
 	struct timeval time;
 	uint32_t start_byte;
 	uint32_t end_byte;
-	TimeInterval():start_byte(0), end_byte(0){ };
+	TimeInterval(): start_byte(0), end_byte(0) { }
     };
-    
+
     class LossInfo;
 
     typedef BigHashMap<unsigned, short int> MapS;
@@ -94,10 +95,18 @@ class CalculateFlows : public Element, public AggregateListener { public:
     
   private:
     
-    String _outfilename[2];	
+    String _outfilename[2];
     ToIPFlowDumps *_tipfd;
     
     MapLoss _loss_map;
+
+#if CF_PKT
+    Pkt *_free_pkt;
+    Vector<Pkt *> _pkt_bank;
+
+    Pkt *new_pkt();
+    inline void free_pkt(Pkt *);
+#endif
     
 };
 
@@ -115,15 +124,19 @@ class CalculateFlows::LossInfo {
     unsigned  _loss_events[2];
     unsigned  _p_loss_events[2];
     
+    double _prev_diff[2];
+    short _doubling[2];
+    short _prev_doubling[2];
+    bool _outoforder_pckt;
+
     String _outputdir;
     String _outfilename[2];	// Event output files using Jitu format 
     String _outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
     // 6,7 for Possible loss Events, 8,9 for Data Acks
     
-  public:
     uint32_t _aggregate;
-    bool _gnuplot;
-    bool _eventfiles;
+    
+  public:
     bool _has_syn[2];
     bool _has_fin[2];
     MapT time_by_firstseq[2];
@@ -133,12 +146,10 @@ class CalculateFlows::LossInfo {
     MapS rexmt[2];
     tcp_seq_t _init_seq[2];
     timeval _init_time;
-    double _prev_diff[2];
-    short _doubling[2];
-    short _prev_doubling[2];
-    bool _outoforder_pckt;
     tcp_seq_t _max_ack[2];
     
+    bool _gnuplot;
+    bool _eventfiles;
     
     void init() { 
 	_gnuplot = _eventfiles = false;
@@ -183,10 +194,7 @@ class CalculateFlows::LossInfo {
 	_loss_events[1] = 0;
 	_p_loss_events[1] = 0;
     }
-    LossInfo() { //Void constructor needed for Bighashmap structure
-	init();
-    }
-
+    
     LossInfo(String outfilename[2], uint32_t aggp, bool gnuplotp, bool eventfilesp) { //regular constructor
 	init();
 	LossInfoInit(outfilename, aggp, gnuplotp, eventfilesp);
@@ -195,7 +203,8 @@ class CalculateFlows::LossInfo {
     void LossInfoInit(String outfilename[2], uint32_t aggp, bool gnuplot, bool eventfiles);
     
     ~LossInfo() {
-	print_stats();
+	if (_eventfiles)
+	    print_stats();
 	
 	/*	if (gnuplot){  // check if gnuplot output is requested.
 		char tempstr[32];
@@ -286,5 +295,16 @@ class CalculateFlows::LossInfo {
     void gplotp_send_event(unsigned, const timeval &, tcp_seq_t);
     
 };
+
+#if CF_PKT
+inline void
+CalculateFlows::free_pkt(Pkt *p)
+{
+    if (p) {
+	p->next = _free_pkt;
+	_free_pkt = p;
+    }
+}
+#endif
 
 #endif

@@ -17,11 +17,12 @@
 void
 CalculateFlows::LossInfo::LossInfoInit(String outfilenamep[2], uint32_t aggp, bool gnuplot, bool eventfiles)
 {
-    _gnuplot = gnuplot;
-    _eventfiles = eventfiles;
+    _gnuplot = (gnuplot && outfilenamep[0] && outfilenamep[1]);
+    _eventfiles = (eventfiles && outfilenamep[0] && outfilenamep[1]);
     _aggregate = aggp;
     _outputdir = "./flown" + String(aggp);
-    system("mkdir -p ./" + _outputdir);
+    if (_gnuplot || _eventfiles)
+	system("mkdir -p ./" + _outputdir);
 
     // set filenames
     for (int i = 0; i < 2; i++) {
@@ -55,7 +56,9 @@ CalculateFlows::LossInfo::LossInfoInit(String outfilenamep[2], uint32_t aggp, bo
 void
 CalculateFlows::LossInfo::print_stats()
 {
-    for (int i = 0; i < 2; i++){
+    if (!_eventfiles)
+	return;
+    for (int i = 0; i < 2; i++) {
 	String outfilenametmp = _outfilename[i] + ".stats";
 	if (FILE *f = fopen(outfilenametmp.cc(), "w")) {
 	    const char *direction = i ? "B->A" : "A->B";
@@ -347,7 +350,10 @@ CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, unsigned block_size, uns
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1)
+    : Element(1, 1), _tipfd(0)
+#if CF_PKT
+    , _free_pkt(0)
+#endif
 {
     MOD_INC_USE_COUNT;
 }
@@ -359,6 +365,10 @@ CalculateFlows::~CalculateFlows()
 	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
 	delete losstmp;
     }
+#if CF_PKT
+    for (int i = 0; i < _pkt_bank.size(); i++)
+	delete[] _pkt_bank[i];
+#endif
 }
 
 void
@@ -393,6 +403,29 @@ CalculateFlows::initialize(ErrorHandler *)
 {
     return 0;
 }
+
+#if CF_PKT
+CalculateFlows::Pkt *
+CalculateFlows::new_pkt()
+{
+    if (!_free_pkt)
+	if (Pkt *pkts = new Pkt[1024]) {
+	    _pkt_bank.push_back(pkts);
+	    for (int i = 0; i < 1024; i++) {
+		pkts[i].next = _free_pkt;
+		_free_pkt = &pkts[i];
+	    }
+	}
+    if (!_free_pkt)
+	return 0;
+    else {
+	Pkt *p = _free_pkt;
+	_free_pkt = p->next;
+	p->next = p->prev = 0;
+	return p;
+    }
+}
+#endif
 
 Packet *
 CalculateFlows::simple_action(Packet *p)
@@ -441,17 +474,19 @@ CalculateFlows::simple_action(Packet *p)
 	  int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
 	  if (!timerisset(&loss->_init_time)) {
-	      unsigned short sport = ntohs(tcph->th_sport);
-	      unsigned short dport = ntohs(tcph->th_dport);
-	      String outfilenametmp;
-	      outfilenametmp = loss->output_directory() + "/flowhnames.info";
-	      if (FILE *f = fopen(outfilenametmp.cc(), "w")) {
-		  fprintf(f, "flow%u: %s:%d <-> %s:%d'\n", aggp, src.unparse().cc(), sport, dst.unparse().cc(), dport);
-		  fclose(f);
-	      }
 	      loss->_init_time = ts;
 	      ts.tv_usec = 1;
 	      ts.tv_sec = 0;
+	      if (loss->_eventfiles) {
+		  uint16_t sport = ntohs(tcph->th_sport);
+		  uint16_t dport = ntohs(tcph->th_dport);
+		  String outfilenametmp;
+		  outfilenametmp = loss->output_directory() + "/flowhnames.info";
+		  if (FILE *f = fopen(outfilenametmp.cc(), "w")) {
+		      fprintf(f, "flow%u: %s:%d <-> %s:%d'\n", aggp, src.unparse().cc(), sport, dst.unparse().cc(), dport);
+		      fclose(f);
+		  }
+	      }
 	  } else {
 	      ts.tv_usec++;
 	      ts = ts - loss->_init_time;
@@ -515,8 +550,8 @@ CalculateFlows::simple_action(Packet *p)
 		  loss->_max_ack[cpaint] = ack;
 	      }
 	      
-	      loss->set_last_ack(ack,cpaint);
-	      m_acks.insert(ack, m_acks.find(ack)+1 );
+	      loss->set_last_ack(ack, cpaint);
+	      m_acks.insert(ack, m_acks.find(ack)+1);
 	      if (loss->_eventfiles) {
 		  loss->print_ack_event(cpaint, type, ts, ack);	
 	      }
@@ -525,20 +560,9 @@ CalculateFlows::simple_action(Packet *p)
 		  //printf("[%u, %u]",ack,m_acks[ack]);
 	      }
 	  }
-	  
-	  /* for (MapS::Iterator iter = m_acks.first(); iter; iter++) {
-	     short int *value = const_cast<short int *>(&iter.value());
-	     const unsigned *temp = &m_acks.key_of_value(value);
-	     printf("%u:%hd \n",*temp,*value);
-	     
-	     }
-	     timeval tv2 = loss->Search_seq_interval(27 ,600, paint);
-	     printf("RESULT:[%ld.%06ld]: %u - %u \n",tv2.tv_sec, tv2.tv_usec,27, 600);*/
 	   
 	  loss->inc_packets(paint); // Increment the packets for this flow (forward or reverse)
 	  loss->set_total_bytes((loss->total_bytes(paint)+seqlen),paint); //Increase the number bytes transmitted
-	  //  printf("[%u] %u:%u:%u\n",paint,loss->packets(paint),loss->total_bytes(paint),seq);
-	  // }  
 	  break;
       }
       
@@ -552,13 +576,13 @@ CalculateFlows::simple_action(Packet *p)
 	  break;
       }
 	
-      default :{ // All other packets are not processed
+      default: { // All other packets are not processed
 	  printf("The packet is not a TCP or UDP");
 	  sa << src << " > " << dst << ": ip-proto-" << (int)iph->ip_p;
 	  printf("%s",sa.cc());
 	  break;
-	  
       }
+      
     }
     
     /*if (aggp == 1) {
