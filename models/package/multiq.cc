@@ -366,7 +366,7 @@ MultiQ::multiqcapacity_xmltag(FILE *f, const TCPCollector::StreamInfo &stream, c
 
 	// print results
 	for (Capacity *c = capacities.begin(); c < capacities.end(); c++)
-	    fprintf(f, "    <%s type='%s' scale='%g' time='%g' bandwidth='%g' commonbandwidth='%g' commontype='%s' bandwidth52='%g' commonbandwidth52='%g' commontype52='%s' />\n",
+	    fprintf(f, "    <%s type='%s' scale='%.1f' time='%.3f' bandwidth='%.3f' commonbandwidth='%.3f' commontype='%s' bandwidth52='%.3f' commonbandwidth52='%.3f' commontype52='%s' />\n",
 		    tagname.c_str(), (significant ? "data" : "ack"),
 		    c->scale, c->ntt,
 		    c->bandwidth, c->common_bandwidth, c->common_bandwidth_name,
