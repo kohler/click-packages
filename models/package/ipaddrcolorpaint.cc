@@ -42,8 +42,11 @@ IPAddrColorPaint::notify_noutputs(int n)
 int
 IPAddrColorPaint::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
+    _careful = false;
     if (cp_va_parse(conf, this, errh,
 		    cpFilename, "colors filename", &_filename,
+		    cpKeywords,
+		    "CAREFUL", cpBool, "be careful?", &_careful,
 		    0) < 0)
 	return -1;
     return 0;
@@ -66,8 +69,10 @@ IPAddrColorPaint::cleanup(CleanupStage)
 void
 IPAddrColorPaint::push(int, Packet *p)
 {
-    color_t c = color(ntohl(p->dst_ip_anno().addr()));
-    if (c <= 255) {
+    color_t c = color(ntohl(p->dst_ip_anno().addr())), d = c ^ 1;
+    if (_careful)
+	d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src)) : c + 2);
+    if (c <= 255 && c == (d ^ 1)) {
 	SET_PAINT_ANNO(p, c);
 	output(0).push(p);
     } else
@@ -79,8 +84,10 @@ IPAddrColorPaint::pull(int)
 {
     Packet *p = input(0).pull();
     if (p) {
-	color_t c = color(ntohl(p->dst_ip_anno().addr()));
-	if (c <= 255)
+	color_t c = color(ntohl(p->dst_ip_anno().addr())), d = c ^ 1;
+	if (_careful)
+	    d = (p->ip_header() ? color(ntohl(p->ip_header()->ip_src)): c + 2);
+	if (c <= 255 && c == (d ^ 1))
 	    SET_PAINT_ANNO(p, c);
 	else {
 	    checked_output_push(1, p);
