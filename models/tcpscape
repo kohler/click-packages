@@ -1325,7 +1325,6 @@ class FlowSet:
                 if len(x) >= 3:
                     t0, s1, t1 = x[0:3]
                     ft0 = float(t0)
-                    if ft0 > 900: print x, line
                     links.append(PacketLink(ft0, None, ft0 + float(t1), float(s1)))
         elif self.reading_state == FlowSet.READ_UNDELIVERED:
             undelivered = self.reading_connection.undelivered[self.reading_direction]
@@ -3333,6 +3332,7 @@ def initial_sort_flows():
 
 if __name__ == "__main__":
     all_connections = FlowSet()
+    initial_aggregate = None
     try:
         optlist, args = getopt.getopt(sys.argv[1:], "t:f:", ["time=", "flow="])
         window = PlotFlowWindow(all_connections)
