@@ -29,13 +29,13 @@ and Jinyang Li.
 
 	http://www.pdos.lcs.mit.edu/click/
 
-gre
-...
+iias/gre
+........
 
     GRE header elements, from Mark Huang.
 
-ppp
-...
+iias/ppp
+........
 
     PPP and PPTP elements, from Mark Huang. The PPTPServer element
     enables the user-level driver to act as a PPTP concentrator. Much of
@@ -43,8 +43,8 @@ ppp
     under the GPL, and the PPPD PPP package, distributed under the CMU
     BSD license.
 
-iias
-....
+iias/conf
+.........
 
     Internet-In-A-Slice, from Mark Huang. Sample configuration files for
     the gre and ppp packages, that enable an IP overlay network to be

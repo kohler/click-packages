@@ -11,7 +11,7 @@ srcdir = .
 
 
 CLICKDIR = $(HOME)/click
-SUBDIRS = ip6_natpt models
+SUBDIRS = ip6_natpt models iias
 
 
 distdir = $(PACKAGE)-$(VERSION)

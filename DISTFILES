@@ -3,8 +3,6 @@ LICENSE
 README
 ip6_natpt
 models
-gre
-ppp
 iias
 
 ./ip6_natpt:
@@ -88,7 +86,20 @@ testipaddrcolors.hh
 ./models/scripts:
 lossxml.sh
 
-./gre:
+./iias:
+conf
+gre
+Makefile.in
+acclick.m4
+aclocal.m4
+config.h.in
+configure.in
+install-sh
+missing
+mkinstalldirs
+ppp
+
+./iias/gre:
 Makefile.in
 acclick.m4
 aclocal.m4
@@ -105,7 +116,7 @@ mkinstalldirs
 stripgreheader.cc
 stripgreheader.hh
 
-./ppp:
+./iias/ppp:
 Makefile.in
 acclick.m4
 aclocal.m4
@@ -126,16 +137,3 @@ pppencap.hh
 pptpdefs.h
 pptpserver.cc
 pptpserver.hh
-
-./iias:
-Makefile.in
-acclick.m4
-aclocal.m4
-config.h.in
-configure.in
-egress.click
-ingress.click
-install-sh
-missing
-mkinstalldirs
-router.click
