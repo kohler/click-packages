@@ -133,6 +133,14 @@ def seqadj(seq, adj):
     else:
         return seq - adj
 
+def unparse_tcp_flags(flags):
+    return ("", "F", "S", "FS", "R", "FR", "SR", "FSR",
+            "P", "FP", "SP", "FSP", "RP", "FRP", "SRP", "FSRP")[flags & 15] \
+        + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
+           "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
+
+def unparse_ip(ip):
+    return "%d.%d.%d.%d" % ((ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, ip & 255)
 
 class Packet(object):
     __slots__ = ['time', 'seq', 'last_seq', 'ack', 'dup_acks', 'window']
@@ -205,12 +213,6 @@ def direction(dir):
     else:
         raise ConnectionFormatError, "bad direction " + `dir`
 
-
-def unparse_tcp_flags(flags):
-    return ("", "F", "S", "FS", "R", "FR", "SR", "FSR",
-            "P", "FP", "SP", "FSP", "RP", "FRP", "SRP", "FSRP")[flags & 15] \
-        + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
-           "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
 
 class Connection(object):
 
@@ -478,7 +480,7 @@ class ConnectionReader:
             code = 'fields = struct.unpack("' + unpack_format + '", data[pos+4:pos+' + str(unpack_size + 4) + '])\n'
             ifields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
             ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
-            ipfields = dict(map(lambda x: (x[0], 'join(".", struct.unpack("BBBB", fields[' + `x[1]` + ']))'), m.items()))
+            ipfields = dict(map(lambda x: (x[0], 'unparse_ip(fields[' + `x[1]` + '])'), m.items()))
         else:
             code = 'fields = line.split()\n'
             ifields = dict(map(lambda x: (x[0], 'int(fields[' + `x[1]` + '])'), m.items()))
@@ -629,6 +631,33 @@ except KeyError:\n\
         
         return self
 
+    def read_tcpdump(self, filename, f=None):
+        if f is None:
+            f = uncompressed_file(filename)
+        self.filename = filename
+        flowmap = { }
+        agg = 1
+
+        # actually read file
+        for p in TCPDumpFile(f).packets():
+            flowid = (p.src, p.sport, p.dst, p.dport)
+            try:
+                c, dir = flowmap[flowid]
+            except KeyError:
+                c = Connection(filename=filename, dynload=False, aggregate=agg, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
+                c.has_window = True
+                self.flowset.append(c)
+                dir = 0
+                flowmap[flowid] = (c, 0)
+                flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (c, 1)
+            c.s[dir].append(Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, 0, p.win))
+
+        for c in flowmap.values():
+            if c[1] == 0:
+                c[0].read_complete(True)
+        
+        return self
+
 
 class FlowRef(object):
 
@@ -678,6 +707,122 @@ class FlowRef(object):
     def __str__(self):
         fid = self.conn.flowid
         return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
+
+
+
+class TCPPacket:
+
+    def __init__(self, time, s, hl):
+        self.time = time
+        self.iph = iph = s[0:hl]
+        self.tcph = tcph = s[hl:]
+        self.src, self.dst = struct.unpack('!LL', self.iph[12:20])
+        self.sport, self.dport, self.seq, self.ack, crap, flags, self.win = \
+                    struct.unpack('!HHLLBBH', self.tcph[0:16])
+        self.flags = unparse_tcp_flags(flags)
+        tcp_off = ((crap >> 4) & 15) << 2
+        self.payload_len = struct.unpack('!H', self.iph[2:4])[0] - hl - tcp_off
+        
+
+class TCPDumpFile:
+
+    MAGIC = 0xA1B2C3D4L
+    MODIFIED_MAGIC = 0xA1B2CD34L
+    VMAJOR = 2
+    DLT_EN10MB = 1
+    DLT_RAW = 12
+
+    class Error(Exception):
+        def __init__(self, s=""):
+            self.str = s
+        def __str__(self):
+            return `self.str`
+
+    def __init__(self, f):
+        self.f = f
+        self.endian = '<'
+        try:
+            s = f.read(24)
+            magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                   struct.unpack('<LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                self.endian = '>'
+                magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                       struct.unpack('>LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                raise TCPDumpFile.Error("bad magic number " + `magic`)
+            if vmajor != self.VMAJOR:
+                raise TCPDumpFile.Error("bad major version")
+            
+            self.vminor = vminor
+            self.snaplen = snaplen
+            self.header = self.endian + 'LLLL'
+            self.header_size = 16
+            if magic == self.MODIFIED_MAGIC:
+                self.header_size += 8
+            self.s = ''
+            self.pos = 0
+
+            self.ip_filter = self.tcp_filter
+            if linktype == self.DLT_EN10MB:
+                self.dltfilter = self.ether_dltfilter
+            elif linktype == self.DLT_RAW:
+                self.dltfilter = self.ip_filter
+            else:
+                raise TCPDumpFile.Error("bad DLT")
+        except struct.error:
+            raise TCPDumpFile.Error("bad header length")
+
+    def seek(self, n):
+        self.s = ""
+        self.pos = 0
+        self.f.seek(n)
+
+    def tcp_filter(self, tsec, tusec, s):
+        vhl, p = ord(s[0:1]), ord(s[9:10])
+        v, hl = (vhl >> 4) & 0xF, (vhl & 0xF) << 2
+        if v == 4 and len(s) >= hl + 8 and p == 6:
+            return TCPPacket(tsec + tusec/1000000., s, hl)
+        else:
+            return None
+    
+    def ether_dltfilter(self, tsec, tusec, s):
+        if len(s) >= 14 + 20 and s[12:14] == "\x08\x00":
+            return self.ip_filter(tsec, tusec, s[14:])
+        else:
+            return None
+
+    def packets(self):
+        header_size, header, snaplen, vminor = self.header_size, self.header, self.snaplen, self.vminor
+        pos, s = self.pos, self.s
+        try:
+            while 1:
+                if pos + header_size > len(s):
+                    s = s[pos:] + self.f.read(32768)
+                    pos = 0
+                tsec, tusec, caplen, plen = struct.unpack(header, s[pos:pos+16])
+                if vminor < 3 or (vminor == 3 and caplen > len):
+                    caplen, plen = plen, caplen
+                if caplen > 65535:
+                    return
+                
+                skiplen = 0
+                if caplen > plen:
+                    skiplen = caplen - plen
+                
+                pos += header_size
+                if pos + caplen > len(s):
+                    s, pos = s[pos:], 0
+                    while caplen > len(s):
+                        oldlen = len(s)
+                        s += self.f.read(32768)
+                        if len(s) == oldlen: return
+                p = self.dltfilter(tsec, tusec, s[pos:pos + caplen - skiplen])
+                if p is not None:
+                    yield p
+                pos += caplen
+        except struct.error:
+            return
 
 
 class FlowSet:
@@ -2388,8 +2533,10 @@ if __name__ == "__main__":
             f.seek(0)
             if c == '<':
                 all_connections.read(f)
+            elif c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
+                ConnectionReader(flowset=all_connections).read(sys.argv[1], f)
             else:
-                ConnectionReader(flowset=all_connections).read(sys.argv[1])
+                ConnectionReader(flowset=all_connections).read_tcpdump(sys.argv[1], f)
         else:
             ConnectionReader(flowset=all_connections).read("<stdin>", sys.stdin)
         all_connections.sort_by_loss_count()
