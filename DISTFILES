@@ -12,6 +12,7 @@ acclick.m4
 aclocal.m4
 conf
 config.h.in
+configure
 configure.in
 gre
 install-sh
@@ -106,7 +107,6 @@ tcpaddresstranslator.hh
 ./models:
 Makefile.in
 README
-acclick.m4
 aclocal.m4
 config.h.in
 configure
@@ -115,6 +115,7 @@ double_arrow.png
 double_arrow_small.png
 examples
 install-sh
+m4
 mkinstalldirs
 package
 scripts
@@ -123,6 +124,9 @@ tcpscape
 ./models/examples:
 sample.dump
 sample.xml
+
+./models/m4:
+click.m4
 
 ./models/package:
 Makefile.in

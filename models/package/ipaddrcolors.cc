@@ -80,7 +80,7 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
 	(*nnz_ptr)++;
     
     if (n->child[0] && n->child[1]) {
-	int swivel = first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate);
+	int swivel = ffs_msb(n->child[0]->aggregate ^ n->child[1]->aggregate);
 	if (swivel <= last_swivel)
 	    return errh->error("%x: bad swivel %d <= %d (%x-%x)", n->aggregate, swivel, last_swivel, n->child[0]->aggregate, n->child[1]->aggregate);
 	
@@ -157,7 +157,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
     }
 
     // swivel is first bit 'a' and 'n->aggregate' differ
-    int swivel = first_bit_set(a ^ n->aggregate);
+    int swivel = ffs_msb(a ^ n->aggregate);
     // bitvalue is the value of that bit of 'a'
     int bitvalue;
     // mask masks off all bits before swivel
@@ -223,8 +223,8 @@ IPAddrColors::find_node(uint32_t a)
 	    n = make_peer(a, n);
 	else {
 	    // swivel is the first bit in which the two children differ
-	    int swivel = first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate);
-	    if (first_bit_set(a ^ n->aggregate) < swivel) // input differs earlier
+	    int swivel = ffs_msb(n->child[0]->aggregate ^ n->child[1]->aggregate);
+	    if (ffs_msb(a ^ n->aggregate) < swivel) // input differs earlier
 		n = make_peer(a, n);
 	    else if (a & (1 << (32 - swivel)))
 		n = n->child[1];
@@ -278,7 +278,7 @@ IPAddrColors::set_color_subtree(uint32_t a, int prefix, color_t color)
 
     Node *n = _root;
     while (n) {
-	int swivel = (n->child[0] ? first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate) : 33);
+	int swivel = (n->child[0] ? ffs_msb(n->child[0]->aggregate ^ n->child[1]->aggregate) : 33);
 	if (swivel <= prefix) {
 #ifndef NDEBUG
 	    uint32_t swivel_mask = (swivel < 2 ? 0 : 0xFFFFFFFFU << (33 - swivel));
@@ -425,7 +425,7 @@ IPAddrColors::node_nearest_colored_ancestors(Node *n, color_t color, int swivel,
     if (n->child[0]) {
 	if (n->color != NULLCOLOR) {
 	    color = n->color;
-	    swivel = first_bit_set(n->child[0]->aggregate ^ n->child[1]->aggregate);
+	    swivel = ffs_msb(n->child[0]->aggregate ^ n->child[1]->aggregate);
 	}
 	node_nearest_colored_ancestors(n->child[0], color, swivel, colors, swivels);
 	node_nearest_colored_ancestors(n->child[1], color, swivel, colors, swivels);
@@ -513,7 +513,7 @@ IPAddrColors::write_nodes(Node *n, FILE *f, bool binary,
 	    write_batch(f, binary, buffer, pos, errh);
 	buffer[pos++] = n->aggregate;
 	buffer[pos++] = SUBTREECOLOR;
-	buffer[pos++] = first_bit_set(parent->child[0]->aggregate ^ parent->child[1]->aggregate);
+	buffer[pos++] = ffs_msb(parent->child[0]->aggregate ^ parent->child[1]->aggregate);
 	buffer[pos++] = n->color;
     } else if (n->color <= BADCOLOR && !n->child[0]) {
 	buffer[pos++] = n->aggregate;

@@ -5,7 +5,7 @@ SHELL = /bin/sh
 
 
 PACKAGE = click-packages
-VERSION = 1.4
+VERSION = 1.4.2
 
 srcdir = .
 
@@ -20,7 +20,9 @@ dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)
 distdir:
 	for d in $(SUBDIRS); do \
-	  cp $(CLICKDIR)/acclick.m4 $(CLICKDIR)/aclocal.m4 $$d; done
+	  if [ -d $$d/m4 ]; then cp $(CLICKDIR)/m4/click.m4 $$d/m4; \
+	  else cp $(CLICKDIR)/m4/click.m4 $$d/acclick.m4; fi; \
+	  { cd $$d; autoconf; cd ..; }; done
 	cp $(CLICKDIR)/LICENSE .
 	-rm -rf $(distdir)
 	mkdir $(distdir)

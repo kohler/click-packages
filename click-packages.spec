@@ -1,5 +1,5 @@
 %define name click-packages
-%define version 1.4
+%define version 1.4.2
 %define release 1
 %define packages ip6_natpt models iias
 
