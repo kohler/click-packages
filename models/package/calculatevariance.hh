@@ -3,6 +3,7 @@
 
 #include <click/element.hh>
 #include <click/glue.hh>
+#include <click/bighashmap.hh>
 
 /* counts the variance of # of packets over intevals of _inteval size
  *                     or bytes over intevals of _inteval size
@@ -34,7 +35,15 @@ class CalculateVariance : public Element {
     void add_handlers();
 
     double variance(int) const;
-    uint32_t packet_count(int i) const	{ return _counters[i].pkt_count; }
+    uint32_t packet_count(int i) const	{ 
+	if (_use_hash) {
+	    CounterEntry *e = _hashed_counters.findp(i);
+	    if (!e) return 0;
+	    return e->pkt_count;
+	}else{
+	    return _counters[i].pkt_count; 
+	}
+    }
 
     Packet *simple_action(Packet *);
     void reset();
@@ -68,6 +77,9 @@ class CalculateVariance : public Element {
     unsigned _num_aggregates;
     unsigned _num_aggregates_bits;
     unsigned long long int _total_pkts;
+    bool _use_hash;
+    typedef BigHashMap<int, CounterEntry> counter_table;
+    counter_table _hashed_counters;
 
 };
 

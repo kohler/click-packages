@@ -25,22 +25,29 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
     unsigned naggregates = 1024;
     _interval.tv_sec = 0;
     _interval.tv_usec = 0;
+    _use_hash = false;
 
     if (cp_va_parse(conf, this, errh,
 		    cpTimeval, "interval in struct timeval", &_interval,
 		    cpUnsigned, "number of aggregates expected", &naggregates,
 		    cpKeywords,
 		    "BITS", cpBool, "number of aggregates is in bits?", &bits,
+		    "USEHASH",cpBool,"use hash table for classifying aggregates?",&_use_hash,
 		    0) < 0) 
 	return -1;
 
     if (bits) {
+	_num_aggregates_bits = naggregates;
 	if (naggregates > 28)
 	    return errh->error("too many aggregates! max 2^28");
 	_num_aggregates = 1 << naggregates;
-    } else
+    } else {
 	_num_aggregates = naggregates;
-    _counters.resize(_num_aggregates);
+	_num_aggregates_bits = 0;
+    }
+
+    if (!_use_hash) 
+	_counters.resize(_num_aggregates);
 
     return 0;
 }
@@ -51,12 +58,12 @@ CalculateVariance::reset()
    _end_time.tv_sec = 0;
    _end_time.tv_usec = 0;
    _num_intervals = 0;
+   _total_pkts = 0;
 }
 
 int
 CalculateVariance::initialize(ErrorHandler *)
 {
-    _total_pkts = 0;
     reset();
     return 0;
 }
@@ -64,6 +71,7 @@ CalculateVariance::initialize(ErrorHandler *)
 Packet *
 CalculateVariance::simple_action(Packet *p)
 {
+
     uint32_t row = AGGREGATE_ANNO(p);
 
     if (_num_aggregates == 1) row = 0;
@@ -72,31 +80,56 @@ CalculateVariance::simple_action(Packet *p)
 	timeradd(&p->timestamp_anno(),&_interval,&_end_time);
     }
 
-    if (row>_num_aggregates) {
+    if (_use_hash) {
 
-	click_chatter("aggregate %d is bigger than reserved value! counter resized!",row);
-	_counters.resize(row+1);
-	_num_aggregates = row+1;
-
-    }
-    
-    if(timercmp(&p->timestamp_anno(),&_end_time,>)) {
-	for (int i=0;i<_counters.size();i++) {
-	    _counters[i].pkt_sum += _counters[i].pkt_sum_interval;
-	    _counters[i].pkt_sum_sq += _counters[i].pkt_sum_interval * _counters[i].pkt_sum_interval;
-	    _counters[i].pkt_sum_interval = 0;
+	CalculateVariance::CounterEntry *ent = _hashed_counters.findp(row);
+	if (!ent) {
+	    _hashed_counters.insert(row,CalculateVariance::CounterEntry());
+	    ent = _hashed_counters.findp(row);
 	}
 
-	timeradd(&p->timestamp_anno(), &_interval, &_end_time);
-	_num_intervals++;
+	if(timercmp(&p->timestamp_anno(),&_end_time,>)) {
+	    for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+		CalculateVariance::CounterEntry e = iter.value();
+		e.pkt_sum += e.pkt_sum_interval;
+		e.pkt_sum_sq += e.pkt_sum_interval * e.pkt_sum_interval;
+		e.pkt_sum_interval = 0;
+	    }
+
+	    timeradd(&p->timestamp_anno(), &_interval, &_end_time);
+	    _num_intervals++;
+	}
+
+	ent->pkt_sum_interval++;
+	ent->pkt_count++;
+	ent->byte_count += p->length();
+
+    }else {
+
+	//the number of aggregates is stored in a vector intead of hash
+	if (row>_num_aggregates) {
+	    click_chatter("aggregate %d is bigger than reserved value! counter resized!",row);
+	    _counters.resize(row+1);
+	    _num_aggregates = row+1;
+	}
+    
+	if(timercmp(&p->timestamp_anno(),&_end_time,>)) {
+	    for (int i=0;i<_counters.size();i++) {
+		_counters[i].pkt_sum += _counters[i].pkt_sum_interval;
+		_counters[i].pkt_sum_sq += _counters[i].pkt_sum_interval * _counters[i].pkt_sum_interval;
+		_counters[i].pkt_sum_interval = 0;
+	    }
+
+	    timeradd(&p->timestamp_anno(), &_interval, &_end_time);
+	    _num_intervals++;
+	}
+
+	_counters[row].pkt_sum_interval++;
+	_counters[row].pkt_count++;
+	_counters[row].byte_count += p->length();
     }
 
-    _counters[row].pkt_sum_interval++;
-    _counters[row].pkt_count++;
-    _counters[row].byte_count += p->length();
-
     _total_pkts++;
-
     return p;
 }
 
@@ -110,7 +143,16 @@ CalculateVariance::variance(int row) const
 	click_chatter("number of intervals is zero for row %d!",row);
 	return 0.0;
     }else {
-	return _counters[row].get_pkt_variance(_num_intervals);
+	if (_use_hash) {
+	    CounterEntry *e = _hashed_counters.findp(row);
+	    if (!e) {
+		return 0.0;
+	    }else{
+		return e->get_pkt_variance(_num_intervals);
+	    }
+	}else {
+	    return _counters[row].get_pkt_variance(_num_intervals);
+	}
     }
 
 }
@@ -118,8 +160,15 @@ CalculateVariance::variance(int row) const
 void
 CalculateVariance::print_all_variance()
 {
-    for (int i=0;i<_counters.size();i++) {
-       printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",i,variance(i),_num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq,_counters[i].pkt_count);
+    if (_use_hash) {
+	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	    CounterEntry e = iter.value();
+	    printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",iter.key(),variance(iter.key()),_num_intervals,e.pkt_sum,e.pkt_sum_sq,e.pkt_count);
+	}
+    }else{ 
+	for (int i=0;i<_counters.size();i++) {
+	    printf("agg no: %d var: %.2f num intevals: %d pkt_sum %d pkt_sum_sq %d pkt_count %d\n",i,variance(i),_num_intervals,_counters[i].pkt_sum,_counters[i].pkt_sum_sq,_counters[i].pkt_count);
+	}
     }
 }
 
@@ -129,6 +178,8 @@ static CalculateVariance *sorting_cv;
 static int pktsorter(const void *av, const void *bv) {
     unsigned a = *((const unsigned *)av);
     unsigned b = *((const unsigned *)bv);
+    assert((a >= 0) && (a < sorting_cv->_num_aggregates));
+    assert((b>=0)&&(b<sorting_cv->_num_aggregates));
     return sorting_cv->packet_count(a) - sorting_cv->packet_count(b);
 }
 
@@ -137,7 +188,12 @@ CalculateVariance::print_edf_function()
 {
     String _filename;
 
-    _filename = String(_num_aggregates_bits) + "-bit-agg";
+    if (_num_aggregates_bits>0) {
+	_filename = String(_num_aggregates_bits) + "-bit-agg";
+    }else{
+	_filename = String(_num_aggregates) + "-agg";
+    }
+
     FILE *outfile = fopen(_filename.cc(), "w");
     if (!outfile) {
         click_chatter("%s: %s", _filename.cc(), strerror(errno));
@@ -148,23 +204,45 @@ CalculateVariance::print_edf_function()
     
     //to get edf i need to first sort the data
     unsigned *permutation = new unsigned[_num_aggregates];
-    for (unsigned i = 0; i < _num_aggregates; i++)
-	permutation[i] = i;
+
+    if (_use_hash) {
+	int i=0;
+	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
+	    permutation[i] = iter.key();
+	    i++;
+	}
+	assert(i < _num_aggregates);
+    }else{
+	for (unsigned i = 0; i < _num_aggregates; i++)
+	    permutation[i] = i;
+    }
+
     ::sorting_cv = this;
-    qsort(&permutation, _num_aggregates, sizeof(unsigned), &pktsorter);
+    qsort(permutation, _num_aggregates, sizeof(unsigned), &pktsorter);
 
     double step = (double) 1/_num_aggregates;
-    unsigned prev_edf_x_size = _counters[ permutation[0] ].pkt_count;
+    unsigned prev_edf_x_size;
     unsigned prev_count = 0;
     double edf_y_val = step;
 
-    assert(_num_aggregates == (unsigned)_counters.size());
+    if (_use_hash) 
+	prev_edf_x_size = (_hashed_counters.findp(permutation[0]))->pkt_count;
+    else
+	prev_edf_x_size = _counters[ permutation[0] ].pkt_count;
+
     unsigned i = 1;
+    CounterEntry *entry;
 
     do {
-	unsigned permi = permutation[i];
-	if (i == _num_aggregates
-	    || (_counters[permi].pkt_count != prev_edf_x_size)) {
+	if (i < _num_aggregates) {
+	    if (_use_hash)
+		entry = _hashed_counters.findp(permutation[i]);
+	    else
+		entry = &(_counters[permutation[i]]);
+	}
+
+	if ((i == _num_aggregates)
+	    || (entry ->pkt_count != prev_edf_x_size)) {
 	    fprintf(outfile,"%d\t %0.10f \t(%d)",prev_edf_x_size,edf_y_val,i-prev_count);
 	    if ((i-prev_count)<10) {
 		for (unsigned j = prev_count; j < i; j++) {
@@ -173,7 +251,8 @@ CalculateVariance::print_edf_function()
 	    }
 	    fprintf(outfile,"\n");
 	    if (i < _num_aggregates)
-		prev_edf_x_size = _counters[permi].pkt_count;
+		prev_edf_x_size = entry->pkt_count;
+
 	    prev_count = i;
 	}
 	edf_y_val += step;
@@ -181,9 +260,12 @@ CalculateVariance::print_edf_function()
 
     } while (i <= _num_aggregates);
 
+    delete[] permutation;
+
     if (fclose(outfile)) {
 	click_chatter("error closing file!");
     }
+
 }
 
 static String
@@ -230,3 +312,7 @@ CalculateVariance::add_handlers()
 EXPORT_ELEMENT(CalculateVariance)
 
 #include <click/vector.cc>
+#include <click/hashmap.cc>
+#if EXPLICIT_TEMPLATE_INSTANCES
+template class BigHashMap<IP6FlowID, CalculateVariance::CounterEntry>
+#endif
