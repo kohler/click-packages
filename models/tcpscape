@@ -1624,14 +1624,14 @@ class PlotCanvas_ScreenDrawable:
         return self.ANCHOR_OFFSET[anchor][0:2]
 
     def draw_text(self, gc, layout, text, x, y, anchor=ANCHOR_N):
-        layout.set_text(text, -1)
+        layout.set_text(text)
         ir, lr = layout.get_extents()
         w, h = lr[2]/1024., lr[3]/1024.
         xoff, yoff, xamt, yamt = self.ANCHOR_OFFSET[anchor]
         self.drawable.draw_layout(gc, int(x + xamt*w + xoff), int(y + yamt*h + yoff), layout)
 
     def text_size(self, layout, text):
-        layout.set_text(text, -1)
+        layout.set_text(text)
         ir, lr = layout.get_extents()
         return (lr[2]/1024., lr[3]/1024., 0)
     
@@ -2789,30 +2789,37 @@ class FindFlowDialog:
 
         # Printer frame
         hbox = gtk.HBox()
-        l = gtk.Label("Flow:")
+        l = gtk.Label("Flow: ")
         l.set_alignment(1, 0.5)
         hbox.pack_start(l)
 
         flowset = parent.get_flowset()
         self.adjustment = gtk.Adjustment(value=parent.get_aggregate(), lower=flowset.min_aggregate, upper=flowset.max_aggregate, step_incr=1, page_incr=10)
         self.w_aggregate = gtk.SpinButton(self.adjustment, 0.5)
+        self.w_aggregate.show()
+        self.w_aggregate.set_activates_default(gtk.TRUE)
         hbox.pack_start(self.w_aggregate)
 
         dialog.vbox.pack_start(hbox)
         hbox.show_all()
 
         # action area
-        ok = gtk.Button(stock=gtk.STOCK_OK)
-        ok.connect("clicked", self.cmd_done, 1)
-        dialog.action_area.pack_start(ok)
-        cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
-        cancel.connect("clicked", self.cmd_done, 0)
-        dialog.action_area.pack_start(cancel)
+        dialog.add_button(gtk.STOCK_OK, gtk.RESPONSE_OK)
+        dialog.add_button(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL)
+        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog.connect("response", self.cmd_done)
+        #         ok = gtk.Button(stock=gtk.STOCK_OK)
+        #         ok.connect("clicked", self.cmd_done, 1)
+        #         dialog.action_area.pack_start(ok)
+        #         ok.grab_default()
+        #         cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
+        #         cancel.connect("clicked", self.cmd_done, 0)
+        #         dialog.action_area.pack_start(cancel)
         
         dialog.show_all()
-        
+    
     def cmd_done(self, widget, data):
-        if data:                        # OK
+        if data == gtk.RESPONSE_OK:     # ok
             self.parent.set_flow(fref=self.parent.get_flowset().find_aggregate(self.w_aggregate.get_value_as_int()))
         self.dialog.destroy()
 
