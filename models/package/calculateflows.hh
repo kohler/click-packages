@@ -69,6 +69,11 @@ Default is false.
 Boolean. If true, then output absolute sequence numbers instead of relative
 ones (where each flow starts at sequence number 0). Default is false.
 
+=item ACK_MATCH
+
+Boolean. If true, then output comments about which packet each ACK matches to
+the FLOWDUMPS element. Default is false.
+
 =back
 
 =e
@@ -112,6 +117,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *stat_file() const		{ return _stat_file; }
     bool absolute_time() const		{ return _absolute_time; }
     bool absolute_seq() const		{ return _absolute_seq; }
+    bool ack_match() const		{ return _ack_match; }
 
     static double float_timeval(const struct timeval &);
     
@@ -127,6 +133,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     bool _absolute_time : 1;
     bool _absolute_seq : 1;
+    bool _ack_match : 1;
     
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;

@@ -328,6 +328,16 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	
 	// find acked packet
 	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(ack, k->timestamp)) {
+
+	    // output ack match
+	    if (cf->ack_match()) {
+		StringAccum sa;
+		sa << "ackm " << (direction ? '>' : '<') << ' '
+		   << k->timestamp << ' ' << ack << ' '
+		   << acked_pkt->timestamp << ' ' << acked_pkt->last_seq;
+		cf->flow_dumps()->add_note(_aggregate, sa.take_string());
+	    }
+	    
 	    acked_pkt->nacks++;
 	    struct timeval bounce = k->timestamp - acked_pkt->timestamp;
 	    if (!ack_stream.have_ack_bounce || bounce < ack_stream.min_ack_bounce) {
@@ -395,7 +405,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
-    bool absolute_time = false, absolute_seq = false;
+    bool absolute_time = false, absolute_seq = false, ack_match = false;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
@@ -404,6 +414,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "STATFILE", cpFilename, "filename for loss statistics", &_stat_filename,
 		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
 		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
+		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
 		    0) < 0)
         return -1;
     
@@ -418,6 +429,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 
     _absolute_time = absolute_time;
     _absolute_seq = absolute_seq;
+    _ack_match = (ack_match && _tipfd);
     return 0;
 }
 
