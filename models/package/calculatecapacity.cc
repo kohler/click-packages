@@ -238,7 +238,9 @@ CalculateCapacity::StreamInfo::histogram()
 	while(j < pkt_cnt &&
 	      (intervals[j].interval.tv_sec +
 	       intervals[j].interval.tv_usec * 1.0e-6) < curr){
-	    if(max_size == intervals[j].size){
+	    if(max_size == intervals[j].size ||
+	       (intervals[j].size < 100 &&
+		intervals[j].newack > 500)){
 		hist[i]++;
 		usedcnt++;
 	    }
