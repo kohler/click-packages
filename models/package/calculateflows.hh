@@ -69,6 +69,11 @@ Default is false.
 Boolean. If true, then output absolute sequence numbers instead of relative
 ones (where each flow starts at sequence number 0). Default is false.
 
+=item IP_ID
+
+Boolean. If true, then use IP ID to distinguish network duplicates from
+retransmissions. Default is true.
+
 =item ACK_MATCH
 
 Boolean. If true, then output comments about which packet each ACK matches to
@@ -134,6 +139,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     bool _absolute_time : 1;
     bool _absolute_seq : 1;
     bool _ack_match : 1;
+    bool _ip_id : 1;
     
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
@@ -155,17 +161,17 @@ struct CalculateFlows::Pkt {
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t last_seq;		// last sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
+    uint16_t ip_id;		// IP ID of this packet
 
-    // exactly one of these flags is true
-    enum Type { UNKNOWN, ALL_NEW, REXMIT, PARTIAL_REXMIT, ODD_REXMIT, REORDERED };
+    enum Type { UNKNOWN, ALL_NEW, REXMIT, PARTIAL_REXMIT, ODD_REXMIT, DUPLICATE, REORDERED };
     Type type;			// type of packet
 
     tcp_seq_t event_id;		// ID of loss event
     Pkt *rexmit_pkt;		// retransmission of this packet
 
     uint32_t nacks;		// number of times this packet was acked
-    
-    void init(tcp_seq_t seq, uint32_t seqlen, const struct timeval &, tcp_seq_t event_id);
+
+    void init(tcp_seq_t seq, uint32_t seqlen, uint16_t ip_id, const struct timeval &, tcp_seq_t event_id);
 };
 
 struct CalculateFlows::StreamInfo {
@@ -228,7 +234,7 @@ class CalculateFlows::LossInfo {  public:
     void handle_packet(const Packet *, CalculateFlows *);
     
     Pkt *pre_update_state(const Packet *, CalculateFlows *);
-    void calculate_loss_events2(Pkt *, unsigned dir, CalculateFlows *);
+    void calculate_loss_events(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
     
   private:
@@ -264,11 +270,12 @@ CalculateFlows::free_pkt_list(Pkt *head, Pkt *tail)
 }
 
 inline void
-CalculateFlows::Pkt::init(tcp_seq_t seq_, uint32_t seqlen_, const struct timeval &timestamp_, tcp_seq_t eid_)
+CalculateFlows::Pkt::init(tcp_seq_t seq_, uint32_t seqlen_, uint16_t ip_id_, const struct timeval &timestamp_, tcp_seq_t eid_)
 {
     next = prev = 0;
     seq = seq_;
     last_seq = seq_ + seqlen_;
+    ip_id = ip_id_;
     timestamp = timestamp_;
     type = UNKNOWN;
     event_id = eid_;

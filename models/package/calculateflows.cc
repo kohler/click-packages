@@ -57,8 +57,12 @@ CalculateFlows::StreamInfo::insert(Pkt *k)
     Pkt *x = pkt_tail->prev;
     while (k->type == Pkt::UNKNOWN && x) {
 	if (k->seq == x->seq && k->last_seq == x->last_seq) {
-	    // complete retransmission
-	    k->type = Pkt::REXMIT;
+	    if (k->ip_id && k->ip_id == x->ip_id)
+		// network duplicate
+		k->type = Pkt::DUPLICATE;
+	    else
+		// retransmission
+		k->type = Pkt::REXMIT;
 	    k->rexmit_pkt = x;
 	} else if (k->seq == x->seq) {
 	    // partial retransmission
@@ -202,7 +206,7 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *pare
     assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
-    // set TCP sequence number offsets
+    // set TCP sequence number offsets on first Pkt
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
     StreamInfo &stream = _stream[direction];
@@ -222,6 +226,7 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *pare
 	return 0;
     const click_ip *iph = p->ip_header();
     k->init(ntohl(tcph->th_seq) - stream.init_seq, calculate_seqlen(iph, tcph),
+	    (parent->_ip_id ? iph->ip_id : 0),
 	    p->timestamp_anno() - _init_time, stream.event_id);
     stream.insert(k);
     
@@ -231,7 +236,7 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *pare
 
 
 void
-CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, CalculateFlows *parent)
+CalculateFlows::LossInfo::calculate_loss_events(Pkt *k, unsigned direction, CalculateFlows *parent)
 {
     assert(direction < 2);
     StreamInfo &stream = _stream[direction];
@@ -240,7 +245,7 @@ CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, Cal
 
     // Return if this is new or out-of-order data
     if (SEQ_GEQ(seq, stream.max_seq) || k->type == Pkt::ALL_NEW
-	|| k->type == Pkt::REORDERED)
+	|| k->type == Pkt::REORDERED || k->type == Pkt::DUPLICATE)
 	return;
     
     // Return if this retransmission is due to a previous loss event
@@ -370,8 +375,7 @@ CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     int direction = (PAINT_ANNO(p) & 1);
     
     if (k->last_seq != k->seq) {
-	calculate_loss_events2(k, direction, parent); //calculate loss if any
-	// XXX calculate_loss(seq, seqlen, direction); //calculate loss if any
+	calculate_loss_events(k, direction, parent); //calculate loss if any
     }
 
     // update counters, maximum sequence numbers, and so forth
@@ -404,7 +408,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
-    bool absolute_time = false, absolute_seq = false, ack_match = false;
+    bool absolute_time = false, absolute_seq = false, ack_match = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
@@ -414,6 +418,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
 		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
 		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
+		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
         return -1;
     
@@ -429,6 +434,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     _absolute_time = absolute_time;
     _absolute_seq = absolute_seq;
     _ack_match = (ack_match && _tipfd);
+    _ip_id = ip_id;
     return 0;
 }
 
