@@ -376,6 +376,50 @@ CalculateCapacity::StreamInfo::fill_intervals()
 }
 
 void
+CalculateCapacity::StreamInfo::fill_shortrate()
+{
+    uint32_t i,j;
+    uint32_t ackbytes=0;
+    uint32_t databytes=0;
+    double time_windowsize = 1.0;
+    timeval start;
+
+    datarate = 0;
+    ackrate = 0;
+
+    for(i=0;i<pkt_cnt;i++){
+	ackbytes = 0;
+	databytes = 0;
+	start = intervals[i].time;
+	for(j=i+1 ; j<pkt_cnt ; j++){
+	    assert(j < pkt_cnt);
+	    if(float_timeval(start + intervals[j].time) < time_windowsize){
+		ackbytes += intervals[j].newack;
+		databytes += intervals[j].size;
+	    } else {
+		j--;
+		break;
+	    }
+	    //must be larger than any single flight
+	    double timetmp = j-i > 20 ?
+		float_timeval(intervals[j].time - start) : time_windowsize;
+	    double tmp = ackbytes / timetmp;
+	    if(tmp > ackrate)
+		ackrate = tmp;
+	    tmp = databytes / timetmp;
+	    if(tmp > datarate)
+		datarate = tmp;
+	}
+	
+	
+    }
+    datarate *=8;
+    ackrate *=8;
+        
+}
+
+
+void
 CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 {
     if (FILE *f = cf->traceinfo_file()) {
@@ -393,12 +437,32 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	fprintf(f, ">\n");
 	
 	_stream[0].fill_intervals();
+	_stream[0].fill_shortrate();
 	_stream[0].histogram();
 	_stream[0].findpeaks();
-	_stream[0].write_xml(f);
+
 	_stream[1].fill_intervals();
+	_stream[1].fill_shortrate();
 	_stream[1].histogram();
 	_stream[1].findpeaks();
+
+	uint32_t bigger = 0;
+	double drate = 0;
+	double arate = 0;
+
+	if(_stream[1].pkt_tail &&
+	   _stream[0].pkt_tail->last_seq < _stream[1].pkt_tail->last_seq){
+	    bigger = 1;
+	}
+
+	drate = _stream[bigger].datarate;
+	arate = _stream[!bigger].ackrate;
+	    
+	fprintf(f, "<rate data='%lf' ack='%lf' dir='%u' />",
+		drate, arate, bigger);
+	
+
+	_stream[0].write_xml(f);
 	_stream[1].write_xml(f);
 	fprintf(f, "</flow>\n");
     }

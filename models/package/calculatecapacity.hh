@@ -152,7 +152,8 @@ struct CalculateCapacity::StreamInfo {
     
     uint32_t mss;               //largest single packet here
     uint32_t rmss;              // mss in reverse direction
-
+    double datarate;
+    double ackrate;
 
     struct IntervalStream;
     struct IntervalStream *intervals;
@@ -172,6 +173,7 @@ struct CalculateCapacity::StreamInfo {
     //void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
     void findpeaks();
     void fill_intervals();
+    void fill_shortrate();
     void histogram();
     void write_xml(FILE *) const;
     
