@@ -176,4 +176,4 @@ dnl
 dnl Output
 dnl
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT(Makefile gre/Makefile ppp/Makefile)
