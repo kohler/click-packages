@@ -98,7 +98,7 @@ InferIPAddrColors::update(Packet *p)
 	    dnode->color = _color_mapping[dnode->color];
 
     if (snode->color == BADCOLOR || dnode->color == BADCOLOR)
-	snode->color = dnode->color = BADCOLOR;
+	/* skip this packet */;
     else if (snode->color == NULLCOLOR && dnode->color == NULLCOLOR) {
 	// allocate two colors
 	snode->color = _next_color;
@@ -122,8 +122,8 @@ InferIPAddrColors::update(Packet *p)
 	_compacted = false;
     } else if (snode->color == dnode->color) {
 	click_chatter("color conflict: src %s same color as dst %s", IPAddress(iph->ip_src).s().cc(), IPAddress(iph->ip_dst).s().cc());
-	// don't mark colors as bad, it kills too many addresses
-	//snode->color = dnode->color = BADCOLOR;
+	// maybe the source was spoofed?
+	snode->color = BADCOLOR;
     }
 
     return true;
