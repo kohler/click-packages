@@ -27,6 +27,7 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
     _interval.tv_usec = 0;
     _use_hash = false;
 
+    printf("bit %u\n",naggregates);
     if (cp_va_parse(conf, this, errh,
 		    cpTimeval, "interval in struct timeval", &_interval,
 		    cpUnsigned, "number of aggregates expected", &naggregates,
@@ -37,11 +38,15 @@ CalculateVariance::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    0) < 0) 
 	return -1;
 
+    printf("bit %u\n",naggregates);
     if (bits) {
 	_num_aggregates_bits = naggregates;
 	if (naggregates > 32)
 	    return errh->error("too many aggregates! max 2^32");
-	_num_aggregates = 1 << naggregates;
+	if (_num_aggregates_bits == 32) 
+	    _num_aggregates = 0;
+	else
+	    _num_aggregates = 0x00000001 << naggregates;
     } else {
 	_num_aggregates = naggregates;
 	_num_aggregates_bits = 0;
@@ -75,11 +80,20 @@ CalculateVariance::initialize(ErrorHandler *)
 Packet *
 CalculateVariance::simple_action(Packet *p)
 {
-
-    uint32_t row = AGGREGATE_ANNO(p);
+    uint32_t row;
+    if (_num_aggregates_bits == 32) {
+	const click_ip *iph = p->ip_header();
+	IPAddress dstaddr = IPAddress(iph->ip_dst);
+	row = (uint32_t) ntohl(dstaddr.addr());
+	//click_chatter("row %u %s\n",row,dstaddr.unparse().cc());
+	//click_chatter("haha! %ld %u\n",_num_aggregates,row);
+    }
+    else
+	row = AGGREGATE_ANNO(p);
 
     if (_num_aggregates == 1) row = 0;
 
+    //click_chatter("row %u\n",row);
     if ((_end_time.tv_sec == 0) && (_end_time.tv_usec == 0)) {
 	timeradd(&p->timestamp_anno(),&_interval,&_end_time);
     }
@@ -328,17 +342,17 @@ CalculateVariance::print_all_aggregates()
 	unsigned *permutation = new unsigned[_hashed_counters.size()];
 	int i=0;
 	for (counter_table::Iterator iter = _hashed_counters.first(); iter; iter++) {
-	    permutation[i] = iter.key();
+	    permutation[i] = (unsigned) iter.key();
 	    CounterEntry ent = iter.value();
 	    i++;
 	}
-	assert(i < _num_aggregates);
+	//assert(i < _num_aggregates);
 	qsort(permutation,i, sizeof(unsigned), &sorter);
 
 	CalculateVariance::CounterEntry *entry;
 	for (int j=0;j<i;j++) {
 	    entry = _hashed_counters.findp(permutation[j]);
-	    fprintf(outfile,"%d\t%d\n",  permutation[j], entry->pkt_count);
+	    fprintf(outfile,"%u\t%d\n",  permutation[j], entry->pkt_count);
 	}
 	
 	delete[] permutation;
