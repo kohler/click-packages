@@ -29,9 +29,6 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p, bool eventfiles, const Strin
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     
-    // initialize to empty
-    init();
-
     // set initial timestamp
     if (timerisset(&p->timestamp_anno()))
 	_init_time = p->timestamp_anno() - make_timeval(0, 1);
@@ -89,39 +86,31 @@ struct timeval
 CalculateFlows::LossInfo::Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint)
 {
     assert(paint < 2);
-    timeval tbstart = time_by_firstseq[paint].find(start_seq);
-    timeval tbend = time_by_lastseq[paint].find(end_seq);
-    MapInterval &ibtime = inter_by_time[paint];
-    
-    if (!tbend.tv_sec && !tbend.tv_usec) {
-	if (!tbstart.tv_sec && !tbstart.tv_usec) { // We have a partial retransmission ...
-	    for (MapInterval::Iterator iter = ibtime.first(); iter; iter++) {
-		TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
-		if (SEQ_LT(tinter->start_seq, start_seq) && SEQ_GT(tinter->end_seq, start_seq)) {
-		    return tinter->time;
-		}
-		//printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_seq, tinter->end_seq);
-	    }
-	    // nothing matches (that cannot be possible unless there is
-	    // reordering)
-	    _outoforder_pckt = true; //set the outoforder indicator
-	    printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
-		   _aggregate,
-		   paint, 
-		   start_seq,
-		   end_seq);
-	    timeval tv = timeval();
-	    return tv;
-	} else {
-	    //printf("Found in Start Byte Hash\n");
-	    return tbstart;
-	}
-	
-    } else {
-	//printf("Found in End Byte Hash\n");
+    struct timeval tbstart = time_by_firstseq[paint].find(start_seq);
+    struct timeval tbend = time_by_lastseq[paint].find(end_seq);
+
+    if (timerisset(&tbend))
 	return tbend;
+    else if (timerisset(&tbstart))
+	return tbstart;
+    else {			// We have a partial retransmission...
+	MapInterval &ibtime = inter_by_time[paint];
+	for (MapInterval::Iterator iter = ibtime.first(); iter; iter++) {
+	    const TimeInterval &tinter = iter.value();
+	    if (SEQ_LT(tinter.start_seq, start_seq)
+		&& SEQ_GT(tinter.end_seq, start_seq))
+		return tinter.time;
+	}
+	// nothing matches (that cannot be possible unless there is
+	// reordering)
+	_out_of_order = true;	// set the out-of-order indicator
+	printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
+	       _aggregate,
+	       paint, 
+	       start_seq,
+	       end_seq);
+	return make_timeval(0, 0);
     }
-    
 }
 
 void
@@ -142,27 +131,11 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p)
 	_stream[!direction].have_init_seq = true;
     }
 
+    // clear out-of-order indicator
+    _out_of_order = false;
+    
     // save everything else for later
 }
-
-
-// Questions for Angelos.
-
-// What does _last_seq mean? It sort of seems to mean "the last sequence
-// number sent by anyone", but that is not robust to reordering, and only
-// calculate_loss_events() used it. (Several people set it.) I'm going to get
-// rid of it, on the theory that calculate_loss_events() is a bad function.
-
-// It looks like all the _prev_diff stuff was left over from the Jitu
-// algorithm. No one uses it in the main algorithm. I got rid of it.
-
-// It looks like no one uses last_ack either. Removed it.
-
-// _doubling and _prev_doubling were only used by calculate_loss_events().
-// Removed them.
-
-// Should max_loss_seq (formerly _upper_wind_seq) contain information about
-// *all prior* loss events, or just the last one before this one?
 
 
 void
@@ -173,7 +146,7 @@ CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen,
 
     // Return if this is new or already-acknowledged data
     if (SEQ_GEQ(seq + 1, stream.max_seq) // Change to +1 for keep alives
-				// XXX Should be > ?
+				// XXX Should be SEQ_GT ?
 	|| SEQ_LEQ(seq + seqlen, stream.max_ack))
 	return;
 
@@ -183,7 +156,7 @@ CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen,
 	return;
 
     // XXX Return if packets are out of order
-    if (_outoforder_pckt)
+    if (_out_of_order)
 	return;
 
     // If we get this far, it is a new loss event.
@@ -192,40 +165,29 @@ CalculateFlows::LossInfo::calculate_loss_events2(tcp_seq_t seq, uint32_t seqlen,
 
     // Generate message
     StringAccum sa;
-    const char *direction = paint ? " < " : " > ";
-    struct timeval time_last_sent = Search_seq_interval(seq, seq+seqlen, paint);	
+    const char *direction_str = paint ? " < " : " > ";
+    struct timeval time_last_sent = Search_seq_interval(seq, seq + seqlen, paint);	
     short num_of_acks = _acks[paint].find(seq);
     bool possible_loss_event; // true if possible loss event
     if (SEQ_LT(seq + seqlen, stream.max_live_seq)) {
 	possible_loss_event = false;
-	sa << "loss" << direction << time_last_sent << " "
-	   << (seq+seqlen) << " " << time
-	   << " " << stream.max_live_seq << " " << num_of_acks;
+	sa << "loss" << direction_str << time_last_sent
+	   << ' ' << (seq + seqlen) << ' ' << time
+	   << ' ' << stream.max_live_seq << ' ' << num_of_acks;
 	stream.loss_events++;
     } else {
 	possible_loss_event = true;
-	sa << "ploss" << direction << time_last_sent << " "
-	   << seq << " " << time
-	   << " " << seqlen << " " << num_of_acks;
+	sa << "ploss" << direction_str << time_last_sent
+	   << ' ' << seq << ' ' << time
+	   << ' ' << seqlen << ' ' << num_of_acks;
 	stream.possible_loss_events++;
     }
     tipfdp->add_note(_aggregate, sa.cc());
 
-    if (!possible_loss_event) {
-	printf("We have a loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-	       _aggregate,
-	       time.tv_sec, 
-	       time.tv_usec, 
-	       seq,
-	       num_of_acks);
-    } else {
-	printf("We have a POSSIBLE loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-	       _aggregate,
-	       time.tv_sec, 
-	       time.tv_usec, 
-	       seq,
-	       num_of_acks);
-    }
+    if (!possible_loss_event)
+	printf("We have a loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u\n", _aggregate, time.tv_sec, time.tv_usec, seq, num_of_acks);
+    else
+	printf("We have a POSSIBLE loss Event/CWNDCUT in flow %u at time: [%ld.%06ld] seq:[%u], num_of_acks:%u\n", _aggregate, time.tv_sec, time.tv_usec, seq, num_of_acks);
     _acks[paint].insert(seq, -10000);
 
     // We just completed a loss event, so reset max_live_seq and max_loss_seq.
@@ -243,22 +205,17 @@ CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigne
     if (SEQ_LT(stream.max_seq + 1, seq) && stream.total_packets) {
 	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, stream.max_seq, seq);
     }
-    if (SEQ_LT(seq + 1, stream.max_seq) && !_outoforder_pckt) {  // we do a retransmission  (Bytes are lost...)
+
+    if (SEQ_LT(seq + 1, stream.max_seq) && !_out_of_order) {  // we do a retransmission  (Bytes are lost...)
 	MapS &m_rexmt = rexmt[paint];
-	//	printf("ok:%u:%u",seq,_max_seq[paint]);
-	m_rexmt.insert(seq, m_rexmt.find(seq) + 1);					
+	m_rexmt.insert(seq, m_rexmt.find(seq) + 1);
 	if (SEQ_LT(seq + seqlen, stream.max_seq)) { // are we transmiting totally new bytes also?
 	    stream.lost_seq += seqlen;
-	    
 	} else { // we retransmit something old but partial
 	    stream.lost_seq += stream.max_seq - seq;
 	}
 	stream.lost_packets++;
-    } else { // this is a first time send event
-	// no loss normal data transfer
-	_outoforder_pckt = false; //reset the indicator
-    }	
-    
+    }
 }
 
 void

@@ -121,10 +121,6 @@ struct CalculateFlows::StreamInfo {
 
 class CalculateFlows::LossInfo {  public:
     
-    void init() { 
-	_outoforder_pckt = 0;
-    }
-    
     LossInfo(const Packet *, bool eventfiles, const String *outfilenames);
 
     ~LossInfo() {
@@ -196,7 +192,7 @@ class CalculateFlows::LossInfo {  public:
     struct timeval _init_time;
     StreamInfo _stream[2];
     
-    bool _outoforder_pckt;
+    bool _out_of_order;
 
     MapT time_by_firstseq[2];
     MapT time_by_lastseq[2];
