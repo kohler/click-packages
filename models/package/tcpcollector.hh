@@ -5,6 +5,7 @@
 #include <click/bighashmap.hh>
 #include <click/ipflowid.hh>
 #include <clicknet/tcp.h>
+#include "tcpscoreboard.hh"
 #include "elements/analysis/aggregatenotifier.hh"
 CLICK_DECLS
 class HandlerCall;
@@ -260,6 +261,10 @@ struct TCPCollector::Pkt {
 	F_FRAGMENT = 0x1000,	// packet was a fragment
     };
     int flags;			// packet flags
+
+    inline void add_seq(TCPScoreboard&) const;
+    inline void add_ack(TCPScoreboard&) const;
+    inline bool seq_contained(const TCPScoreboard&) const;
 };
 
 struct TCPCollector::SACKBuf {
@@ -369,8 +374,7 @@ TCPCollector::calculate_seqlen(const click_ip *iph, const click_tcp *tcph)
     return (ntohs(iph->ip_len) - (iph->ip_hl << 2) - (tcph->th_off << 2)) + (tcph->th_flags & TH_SYN ? 1 : 0) + (tcph->th_flags & TH_FIN ? 1 : 0);
 }
 
-inline void
-TCPCollector::free_pkt(Pkt *p)
+inline void TCPCollector::free_pkt(Pkt *p)
 {
     if (p) {
 	p->next = _free_pkt;
@@ -378,8 +382,7 @@ TCPCollector::free_pkt(Pkt *p)
     }
 }
 
-inline void
-TCPCollector::free_pkt_list(Pkt *head, Pkt *tail)
+inline void TCPCollector::free_pkt_list(Pkt *head, Pkt *tail)
 {
     if (head) {
 	tail->next = _free_pkt;
@@ -387,10 +390,27 @@ TCPCollector::free_pkt_list(Pkt *head, Pkt *tail)
     }
 }
 
-inline tcp_seq_t
-TCPCollector::Pkt::max_ack() const
+inline tcp_seq_t TCPCollector::Pkt::max_ack() const
 {
     return sack ? sack[*sack] : ack;
+}
+
+inline void TCPCollector::Pkt::add_seq(TCPScoreboard& sb) const
+{
+    sb.add(seq, end_seq);
+}
+
+inline void TCPCollector::Pkt::add_ack(TCPScoreboard& sb) const
+{
+    sb.add_cumack(ack);
+    if (sack)
+	for (const uint32_t* s = sack + 1; s < sack + *sack; s += 2)
+	    sb.add(s[0], s[1]);
+}
+
+inline bool TCPCollector::Pkt::seq_contained(const TCPScoreboard& sb) const
+{
+    return sb.contains(seq, end_seq);
 }
 
 CLICK_ENDDECLS
