@@ -327,7 +327,7 @@ CollectTCPFlows::write_flow(const Flow *flow)
 	      
 	    }
 
-	    SET_PACKET_COUNT_ANNO(q, flow->_packet_count);
+	    SET_EXTRA_PACKETS_ANNO(q, flow->_packet_count - 1);
 	    SET_EXTRA_LENGTH_ANNO(q, flow->_byte_count - q->length());
 	    q->set_timestamp_anno(flow->_first_ts);
 	    checked_output_push(1, q);
