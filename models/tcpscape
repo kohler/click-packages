@@ -2479,8 +2479,8 @@ class PlotCanvas:
             gc = drawable.gc("data")
             for p in self.conn.packets(self.dir, t0, t1):
                 drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
-                if p.flags & (TH_SYN | TH_FIN):
-                    s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+                if p.flags & (TH_SYN | TH_FIN | TH_RST):
+                    s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
                     drawable.draw_text(label_gc, flags_playout, s, p.time * tscale + toff, p.last_seq * sscale + soff, anchor=ANCHOR_S)
             
         else:
@@ -2505,8 +2505,8 @@ class PlotCanvas:
                 layout = drawable.layout("small")
                 w, h = drawable.text_size(layout, str(p.dup_acks + 1))[:2]
                 bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
-        if p.flags & (TH_SYN | TH_FIN):
-            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+        if p.flags & (TH_SYN | TH_FIN | TH_RST):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
             layout = drawable.layout("flags")
             w, h = drawable.text_size(layout, s)[:2]
             bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_S)[1] - 2 - h, w + 4, h + 4))
@@ -2528,8 +2528,8 @@ class PlotCanvas:
             if p.dup_acks > 0 and gctype == "H":
                 layout = drawable.layout("small")
                 drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y2, anchor=ANCHOR_N)
-        if p.flags & (TH_SYN | TH_FIN):
-            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN))
+        if p.flags & (TH_SYN | TH_FIN | TH_RST):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
             layout = drawable.layout("flags")
             drawable.draw_text(drawable.gc("label"), layout, s, x, y2, anchor=ANCHOR_S)
     
