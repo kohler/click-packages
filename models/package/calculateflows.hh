@@ -114,13 +114,13 @@ class CalculateFlows::LossInfo {
     unsigned  _packets[2];
     unsigned  _loss_events[2];
     unsigned  _p_loss_events[2];
-		   
+    
     String _outputdir;
     String _outfilename[2];	// Event output files using Jitu format 
     String _outfilenameg[10]; // 0,1 for Pure acks , 2,3 for xmts , 4,5 for loss Events 
     // 6,7 for Possible loss Events, 8,9 for Data Acks
     
-  public:	
+  public:
     uint32_t _aggregate;
     bool _gnuplot;
     bool _eventfiles;
