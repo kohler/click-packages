@@ -5,7 +5,7 @@ SHELL = /bin/sh
 
 
 PACKAGE = click-packages
-VERSION = 1.4.2
+VERSION = 1.5pre
 
 srcdir = .
 

@@ -134,8 +134,6 @@ calculatecapacity.cc
 calculatecapacity.hh
 calculateflows.cc
 calculateflows.hh
-collectflows.cc
-collectflows.hh
 inferipaddrcolors.cc
 inferipaddrcolors.hh
 ipaddrcolorpaint.cc
