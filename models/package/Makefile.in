@@ -150,6 +150,9 @@ install: $(TARGETS) elementmap.$(package) install-man
 	for i in $(TARGETS); do $(INSTALL_DATA) $$i $(libdir)/$$i; done
 	$(mkinstalldirs) $(datadir)
 	$(INSTALL_DATA) elementmap.$(package) $(datadir)/elementmap.$(package)
+install-obj: $(TARGETS)
+	$(mkinstalldirs) $(libdir)
+	for i in $(TARGETS); do $(INSTALL_DATA) $$i $(libdir)/$$i; done
 install-man:
 	$(mkinstalldirs) $(mandir)
 	$(mkinstalldirs) $(mandir)/mann
@@ -160,4 +163,4 @@ clean:
 distclean: clean
 	-rm -f Makefile
 
-.PHONY: all always clean distclean elemlist install install-man
+.PHONY: all always clean distclean elemlist install install-obj install-man
