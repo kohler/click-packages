@@ -62,6 +62,7 @@ AggregateIP, AggregateCounter */
 class CalculateFlows : public Element { public:
 
     CalculateFlows();
+	
     ~CalculateFlows();
 
     const char *class_name() const	{ return "CalculateFlows"; }
@@ -83,12 +84,13 @@ class CalculateFlows : public Element { public:
 	typedef BigHashMap<unsigned, short int> MapS;
 	typedef BigHashMap<unsigned, timeval> MapT;
 	typedef BigHashMap <unsigned, TimeInterval> MapInterval;
-   
-		
+	class LossInfo;
+		LossInfo *loss;
+	String outfilename[2];	
+	
 	class LossInfo {
 
 	private:	
-
 		unsigned  _last_seq[2];
 		unsigned  _upper_wind_seq[2];
 		unsigned  _lower_wind_seq[2];
@@ -101,7 +103,7 @@ class CalculateFlows : public Element { public:
 		unsigned  _loss_events[2];
 		   
 	public:	
-
+		FILE *outfile[2];
 		MapT time_by_firstseq[2];
 		MapT time_by_lastseq[2];
 		MapInterval inter_by_time[2];
@@ -111,9 +113,8 @@ class CalculateFlows : public Element { public:
 		double prev_diff[2];
 		short int doubling[2];
 		short int prev_doubling[2];
-			
-		LossInfo() { 
-			
+		
+		void init() { 
 			prev_diff[0] = 0;
 			doubling[0] = -1;
 			prev_doubling[0] = 0;
@@ -143,8 +144,26 @@ class CalculateFlows : public Element { public:
 			_packets[1] = 0;
 			_loss_events[1] = 0;
 		};
+			
+		LossInfo(String *outfilename) { 
+			init();
+			for (int i = 0 ; i < 2 ; i++){
+				//printf("%s",outfilename[i].cc());
+				outfile[i] = fopen(outfilename[i].cc(), "w");
+	    		if (!outfile[i]){
+    	    		click_chatter("%s: %s", outfilename[i].cc(), strerror(errno));
+	        		return;
+				}
+			}
+    	};
+		
 		~LossInfo(){
 			print_stats();
+			for (int i = 0 ; i < 2 ; i++){
+				if (fclose(outfile[i])){ 
+    		    	click_chatter("error closing file!");
+				}
+			}			
 		}
 		 
 		void print_stats(){
@@ -477,10 +496,7 @@ class CalculateFlows : public Element { public:
 
 		
 	};
-	LossInfo loss;
-	String _outfilename[2];
-	
-    
+
 };
 
 #endif
