@@ -1,3 +1,6 @@
+THE MODELS PACKAGE FOR CLICK
+============================
+
 This directory contains the 'models' addons to the Click modular router.
 First make and install Click, then run './configure
 --prefix=CLICKINSTALLPREFIX' in this directory, and finally make install.
@@ -28,3 +31,16 @@ provides:
 
 	./tcpscape examples/sample.dump
 	./tcpscape examples/sample.xml
+
+
+COPYRIGHT AND LICENSE
+---------------------
+
+    Copyright (c) 2001-2004 Eddie Kohler unless otherwise specified.
+Distributed under the Click license.
+
+AUTHORS
+-------
+
+    Eddie Kohler <kohler@cs.ucla.edu>
+    Some elements by Jinyang Li <jinyang@csail.mit.edu>

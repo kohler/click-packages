@@ -1,0 +1,37 @@
+CLICK MODULAR ROUTER PACKAGES 1.4
+=================================
+
+    This source release consists of several independent "packages" for
+the Click modular software router.  You will need to compile and run
+Click 1.4 before compiling these packages.
+
+    These packages were written by independent developers and are
+distributed COMPLETELY WITHOUT WARRANTY.  In particular, the main Click
+developers ARE NOT RESPONSIBLE for these packages.  Send mail concerning
+these packages to the individual package developers, with a cc: to the
+Click mailing list <click@pdos.lcs.mit.edu>.
+
+CONTENTS
+--------
+
+ip6_natpt
+.........
+
+    NAT port translation elements for IPv6 <-> IPv4 gateways, from Juan
+Luis Baptiste and Fabian Gonzalez.  Includes application-level gateway
+elements for DNS queries.
+
+models
+......
+
+    Trace analysis elements, particularly for TCP flows, from Eddie Kohler
+and Jinyang Li.
+
+	http://www.pdos.lcs.mit.edu/click/
+
+COPYRIGHT AND LICENSE
+---------------------
+
+    Unless otherwise specified, the Click packages are distributed under
+the Click license, which is a version of the "MIT License" (BSD-like).  See
+the LICENSE file in this directory.

@@ -21,6 +21,7 @@ dist: distdir
 distdir:
 	for d in $(SUBDIRS); do \
 	  cp $(CLICKDIR)/acclick.m4 $(CLICKDIR)/aclocal.m4 $$d; done
+	cp $(CLICKDIR)/LICENSE .
 	-rm -rf $(distdir)
 	mkdir $(distdir)
 	chmod 777 $(distdir)
