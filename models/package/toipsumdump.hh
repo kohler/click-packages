@@ -35,14 +35,16 @@ contain those fields. Valid field names, with examples, are:
    ip src       IP source address: `192.150.187.37'
    ip dst       IP destination address: `192.168.1.100'
    len          Packet length: `132'
-   proto        IP protocol: `10', or `I' for ICMP, `T' for TCP, `U' for UDP
+   proto        IP protocol: `10', or `I' for ICMP, `T' for
+                TCP, `U' for UDP
    ip id        IP ID: `48759'
    sport        TCP/UDP source port: `22'
    dport        TCP/UDP destination port: `2943'
    tcp seq      TCP sequence number: `93167339'
    tcp ack      TCP acknowledgement number: `93178192'
    tcp flags    TCP flags: `SA', `.'
-   payload len  Payload length (not including IP/TCP/UDP headers): `34'
+   payload len  Payload length (not including IP/TCP/UDP
+                headers): `34'
    count        Number of packets: `1'
 
 If a field does not apply to a particular packet -- for example, `C<sport>' on
@@ -71,7 +73,24 @@ that packet in the dump. False by default.
 
 =back
 
+=e
+
+Here are a couple lines from the start of a sample verbose dump.
+
+  !creator "aciri-ipsumdump -i wvlan0"
+  !host no.lcdf.org
+  !starttime 996022410.322317 (Tue Jul 24 17:53:30 2001)
+  !data 'ip src' 'ip dst'
+  63.250.213.167 192.150.187.106
+  63.250.213.167 192.150.187.106
+
+The end of the dump may contain a comment `C<!drops N>', meaning that C<N>
+packets were dropped before they could be entered into the dump.
+
 =n
+
+The `C<len>' and `C<payload len>' content types use the extra length
+annotation. The `C<count>' content type uses the packet count annotation.
 
 The characters corresponding to TCP flags are as follows:
 
@@ -89,36 +108,20 @@ The characters corresponding to TCP flags are as follows:
 Some old IP summary dumps might contain an unsigned integer, representing the
 flags byte, instead.
 
-=e
-
-Here are a couple lines from the start of a sample verbose dump.
-
-  !creator "aciri-ipsumdump -i wvlan0"
-  !host no.lcdf.org
-  !starttime 996022410.322317 (Tue Jul 24 17:53:30 2001)
-  !data 'ip src' 'ip dst'
-  63.250.213.167 192.150.187.106
-  63.250.213.167 192.150.187.106
-
-=n
-
-The `C<len>' and `C<payload len>' content types use the extra length
-annotation. The `C<count>' content type uses the packet count annotation.
-
 =a
 
 FromDump, ToDump */
 
 class ToIPSummaryDump : public Element { public:
-  
+
     ToIPSummaryDump();
     ~ToIPSummaryDump();
-  
+
     const char *class_name() const	{ return "ToIPSummaryDump"; }
     const char *processing() const	{ return AGNOSTIC; }
     const char *flags() const		{ return "S2"; }
     ToIPSummaryDump *clone() const	{ return new ToIPSummaryDump; }
-  
+
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void uninitialize();
@@ -126,6 +129,8 @@ class ToIPSummaryDump : public Element { public:
 
     void push(int, Packet *);
     void run_scheduled();
+
+    void write_string(const String &);
 
     enum Content {		// must agree with FromIPSummaryDump
 	W_NONE, W_TIMESTAMP, W_TIMESTAMP_SEC, W_TIMESTAMP_USEC,
@@ -138,7 +143,7 @@ class ToIPSummaryDump : public Element { public:
     static const char *unparse_content(int);
 
     static const char * const tcp_flags_word = "FSRPAUXY";
-    
+
   private:
 
     String _filename;
