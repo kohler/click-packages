@@ -1,0 +1,94 @@
+dnl -*- mode: shell-script -*-
+dnl `configure.in' file for a sample package
+dnl Process this file with autoconf to produce a configure script.
+dnl
+dnl Permission is hereby granted, free of charge, to any person obtaining a
+dnl copy of this software and associated documentation files (the "Software"),
+dnl to deal in the Software without restriction, subject to the conditions
+dnl listed in the Click LICENSE file. These conditions include: you must
+dnl preserve this copyright notice, and you cannot mention the copyright
+dnl holders in advertising related to the Software without their permission.
+dnl The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
+dnl notice is a summary of the Click LICENSE file; the license in that file is
+dnl legally binding.
+
+dnl
+dnl the usual `configure.in' boilerplate
+dnl
+
+AC_INIT(tcpscape)
+AC_SUBST(ac_configure_args)
+
+CLICK_INIT('$(top_srcdir)')
+
+
+dnl
+dnl locate Click install directory
+dnl
+
+AC_ARG_WITH(click, [  --with-click[=DIR]      Click install path is DIR [$prefix]],
+  [clickprefix=$withval; if test -z "$withval" -o "$withval" = yes; then clickprefix=$prefix; fi],
+  clickprefix=NONE)
+
+dnl Preset $prefix and $exec_prefix.
+test "x$prefix" = xNONE && prefix=$ac_default_prefix
+test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
+
+if test "$clickprefix" = NONE; then
+  clickprefix=$prefix
+fi
+
+clickbindir='${clickprefix}/bin'
+clicksbindir='${clickprefix}/sbin'
+
+AC_SUBST(clickprefix)
+AC_SUBST(clickbindir)
+AC_SUBST(clicksbindir)
+
+if test ! -r $clickprefix/include/click/pathvars.h ; then
+    AC_MSG_ERROR([
+==============================================
+
+'$clickprefix/include/click/pathvars.h' not found.
+Are you sure '$clickprefix' is a Click install directory?
+
+==============================================])
+fi
+
+
+dnl
+dnl The rest of this file is based on Click `configure.in'. You shouldn't
+dnl generally need to change it, although you may want to add to it.
+dnl
+
+CLICK_PROG_CC
+AC_PROG_CPP
+CLICK_PROG_CXX
+AC_PROG_CXXCPP
+
+AC_PATH_PROG(AR, ar)
+AC_PATH_PROG(LD, ld)
+AC_PATH_PROG(RANLIB, ranlib, :)
+AC_PATH_PROG(STRIP, strip, :)
+
+CLICK_PROG_INSTALL
+CLICK_PROG_AUTOCONF
+CLICK_PROG_GMAKE
+
+if test -z "$GMAKE"; then
+    AC_MSG_ERROR([
+==============================================
+
+I can't find GNU make. Either put "'`'"gmake' on your PATH and
+rerun "'`'"./configure', or set the GMAKE environment variable to
+GNU make's pathname.
+
+==============================================])
+fi
+
+
+dnl
+dnl Output
+dnl
+
+AC_OUTPUT(Makefile package/Makefile)

@@ -1,4 +1,3 @@
-#include <config.h>
 #include <click/config.h>
 
 #include "calculatevariance.hh"

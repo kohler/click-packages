@@ -9,7 +9,7 @@ package := models
 
 # Set these variables appropriately.
 top_builddir := ..
-subdir := elements
+subdir := package
 
 # Set `clicksharedir' to the Click share directory.
 # Generally, you will provide a `--with-click=CLICKPREFIX' option, and set:
@@ -150,7 +150,7 @@ endif
 all: $(TARGETS)
 
 $(package).uo: Makefile $(U_OBJS)
-	$(LD) -shared -o $(package).uo $(U_OBJS)
+	$(U_CC) -shared -o $(package).uo $(U_OBJS)
 	$(STRIP_UPACKAGE) $(package).uo
 
 $(package).ko: Makefile $(K_OBJS)
