@@ -266,7 +266,7 @@ def idle_remove(num):
 #
 
 class Packet(object):
-    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'flags', 'dup_acks', 'window', 'anno']
+    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'flags', 'dup_count', 'window', 'anno']
     def __init__(self, time, flags, seq, payloadlen, ack, window=0):
         self.time = time
         self.seq = seq
@@ -274,7 +274,7 @@ class Packet(object):
         self.ack = ack
         self.flags = flags
         self.last_seq += ((flags & TH_SYN) != 0) + ((flags & TH_FIN) != 0)
-        self.dup_acks = 0
+        self.dup_count = 0
         self.window = window
         self.anno = None
     def pure_ack(self):
@@ -522,7 +522,7 @@ class Connection(object):
     def append(self, dir, p):
         try:
             if self.s[dir][-1].ack == p.ack:
-                p.dup_acks = self.s[dir][-1].dup_acks + 1
+                p.dup_count = self.s[dir][-1].dup_count + 1
         except IndexError:
             pass
         self.s[dir].append(p)
@@ -2453,8 +2453,8 @@ class PlotCanvas:
             last_dupack, last_dupack_x = -1, None
             for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
-                if p.dup_acks > 1 and (p.ack != last_dupack or x < last_dupack_x):
-                    text = str(p.dup_acks + 1)
+                if p.dup_count > 1 and (p.ack != last_dupack or x < last_dupack_x):
+                    text = str(p.dup_count)
                     w = drawable.text_size(small_playout, text)[0]
                     if p.ack != last_dupack or x + w/2 < last_dupack_x:
                         drawable.draw_text(label_gc, small_playout, text, x, y, anchor=ANCHOR_N)
@@ -2501,9 +2501,9 @@ class PlotCanvas:
         else:
             x, y2 = self._transform(p.time, p.ack)
             bounds = (x - 5, y2 - 5, 10, 10)
-            if p.dup_acks > 0 and gctype == "H":
+            if p.dup_count > 0 and gctype == "H":
                 layout = drawable.layout("small")
-                w, h = drawable.text_size(layout, str(p.dup_acks + 1))[:2]
+                w, h = drawable.text_size(layout, str(p.dup_count))[:2]
                 bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
         if p.flags & (TH_SYN | TH_FIN | TH_RST):
             s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
@@ -2525,9 +2525,9 @@ class PlotCanvas:
                 drawable.draw_ack(drawable.gc("ack." + gctype), x, y2)
             else:
                 drawable.draw_dataack(drawable.gc("dataack." + gctype), x, y2)
-            if p.dup_acks > 0 and gctype == "H":
+            if p.dup_count > 0 and gctype == "H":
                 layout = drawable.layout("small")
-                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_acks + 1), x, y2, anchor=ANCHOR_N)
+                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_count), x, y2, anchor=ANCHOR_N)
         if p.flags & (TH_SYN | TH_FIN | TH_RST):
             s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
             layout = drawable.layout("flags")
@@ -3150,8 +3150,8 @@ class PlotFlowWindow:
                 desc = "%.06fs: <b>Data</b> at %d:%d (+%d)" % (p.time, int(p.seq), int(p.last_seq), int(p.last_seq - p.seq))
             else:
                 desc = "%.06fs: <b>Ack</b> for %d" % (p.time, int(p.ack))
-                if p.dup_acks > 0:
-                    desc += " (" + ordinal(p.dup_acks + 1) + " dup)"
+                if p.dup_count > 0:
+                    desc += " (" + ordinal(p.dup_count) + " dup)"
                 if not p.pure_ack():
                     desc += " with data (+%d)" % (p.last_seq - p.seq)
             self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
