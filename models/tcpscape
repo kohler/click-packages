@@ -8,7 +8,7 @@ from math import *
 import gtk, gobject, pango, xml.parsers.expat
 
 _screen_fill_colors = {
-    "data": "red", "ack": "dark green", "dataack": "blue",
+    "data": "red", "ack": "olive drab", "dataack": "blue",
     "loss": "gold", "loss.bg": "khaki",
     "ploss": "mint cream",
     "floss": "grey80", "floss.bg": "grey90",
@@ -17,6 +17,10 @@ _screen_fill_colors = {
 }
 _screen_dashes = {
     "lossborder": [4, 4]
+}
+_postscript_fill_colors = { }
+_postscript_line_widths = {
+    "data": 0.5, "ack": 0.5, "dataack": 0.5
 }
 
 
@@ -810,6 +814,13 @@ class PlotCanvas_ScreenDrawable:
 
     def prepare(self):
         self.drawable = self.plotcanvas.canvas.window
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
+        p = self.plotcanvas
+        return (p.left_margin, p.top_margin, p.plot_width, p.plot_height)
+
+    def complete(self):
+        pass
     
     def clear(self):
         self.drawable.clear()
@@ -842,6 +853,159 @@ class PlotCanvas_ScreenDrawable:
             return (x - 4 - lr[2]/1024.0, y - lr[3]/2048.0, x - 4, y + lr[3]/2048.0)
         else:
             raise RuntimeError("bad anchor " + str(anchor))
+
+    def draw_data(self, gc, x, y1, y2):
+        self.draw_line(gc, x - 2, y1, x + 2, y1)
+        self.draw_line(gc, x - 2, y2, x + 2, y2)
+        self.draw_line(gc, x, y1, x, y2)
+
+    def draw_ack(self, gc, x, y):
+        self.draw_line(gc, x - 2, y - 2, x + 3, y + 3)
+        self.draw_line(gc, x - 2, y + 2, x + 3, y - 3)
+    
+    def draw_dataack(self, gc, x, y):
+        self.draw_line(gc, x - 2, y - 2, x + 3, y + 3)
+        self.draw_line(gc, x - 2, y + 2, x + 3, y - 3)
+        self.draw_line(gc, x - 2, y, x + 2, y)
+        self.draw_line(gc, x, y + 2, x, y - 2)
+
+
+class Helvetica:
+    WIDTHS = { '0': 0.556, '1': 0.556, '2': 0.556, '3': 0.556, '4': 0.556,
+               '5': 0.556, '6': 0.556, '7': 0.556, '8': 0.556, '9': 0.556,
+               'K': 0.667, '.': 0.278, '+': 0.584, '-': 0.584 }
+
+    def __init__(self, size):
+        self.size = size
+
+    def write_define(f):
+        f.write("/Helvetica findfont dup length dict begin {\n\
+  1 index /FID ne {def} {pop pop} ifelse\n\
+} forall\n\
+/Encoding[StandardEncoding aload pop]dup 45/minus put def\n\
+currentdict end /Helvetica-PlotFlow exch definefont pop\n")
+    write_define = staticmethod(write_define)
+
+    def write_select(self, f):
+        f.write('/Helvetica-PlotFlow ' + str(self.size) + ' selectfont\n')
+
+    def height(self):
+        return 0.718 * self.size
+        
+    def extents(self, str):
+        w = reduce(lambda x, y: x + self.WIDTHS[y], str, 0)
+        if w == 0:
+            return (0, 0, 0, 0)
+        else:
+            return (0, 0, w * self.size, self.height())
+
+
+class PlotCanvas_PostScriptDrawable:
+
+    FONT = Helvetica
+
+    def __init__(self, plotcanvas, f):
+        self.plotcanvas = plotcanvas
+        self.f = f
+        self.cur_font = None
+
+    def gc(self, name):
+        return name
+
+    def layout(self, name=""):
+        if name == "small":
+            return self.FONT(8)
+        elif name == "":
+            return self.FONT(12)
+        else:
+            raise RuntimeError("bad layout name " + name)
+
+    def prepare(self):
+        self.f.write("%!PS-Adobe-3.0\n")
+        self.FONT.write_define(self.f)
+        self.f.write("/m/moveto load def/l{lineto stroke}bind def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
+        if "data" not in _postscript_fill_colors:
+            for key in _screen_fill_colors:
+                _postscript_fill_colors[key] = gtk.gdk.color_parse(_screen_fill_colors[key])
+        for key in _postscript_fill_colors:
+            c = _postscript_fill_colors[key]
+            self.f.write("/GC" + key + "{" + str(c.red / 65535.0) + " " + str(c.green / 65535.0) + " " + str(c.blue / 65535.0) + " setrgbcolor")
+            if key in _screen_dashes:
+                self.f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), _screen_dashes[key]) + "]0 setdash ")
+            else:
+                self.f.write("[]0 setdash ")
+            if key in _postscript_line_widths:
+                self.f.write(str(_postscript_line_widths[key]) + " setlinewidth")
+            else:
+                self.f.write("1 setlinewidth")
+            self.f.write("}bind def\n")
+        self.f.write("/Pd{moveto -2 0 rmoveto 4 0 rlineto 0 1 index rmoveto -4 0 rlineto 2 0 rmoveto 0 exch neg rlineto stroke}bind def\n\
+/Pa{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto stroke}bind def\n\
+/Pda{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto 0 -2 rmoveto 4 0 rlineto -2 -2 rmoveto 0 4 rlineto stroke}bind def\n\
+90 rotate 0 -612 translate\n")
+        self.cur_gc = None
+        self.top = 612
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
+        return (72, 72, 684, 504)
+    
+    def complete(self):
+        self.f.write("showpage\n")
+        
+    def clear(self):
+        pass
+
+    def select_gc(self, gc):
+        self.f.write("GC" + gc + "\n")
+        self.cur_gc = gc
+    
+    def select_font(self, font):
+        font.write_select(self.f)
+        self.cur_font = font
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x1) + " " + str(self.top - y1) + " m " + str(x2) + " " + str(self.top - y2) + " l\n")
+
+    def fill_rectangle(self, gc, x1, y1, w, h):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x1) + " " + str(self.top - y1 - h) + " " + str(w) + " " + str(h) + " rf\n")
+
+    def draw_rectangle(self, gc, x1, y1, w, h):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x1) + " " + str(self.top - y1 - h) + " " + str(w) + " " + str(h) + " rd\n")
+
+    def draw_text(self, gc, font, text, x, y, anchor=ANCHOR_N):
+        if self.cur_font is not font: self.select_font(font)
+        if self.cur_gc is not gc: self.select_gc(gc)
+        lr = font.extents(text)
+        if anchor == ANCHOR_N:
+            self.f.write(str(x - lr[2]/2.0) + " " + str(self.top - y - lr[3] - 4) + " m(" + text + ")s\n")
+        elif anchor == ANCHOR_E:
+            self.f.write(str(x - 4 - lr[2]) + " " + str(self.top - y - lr[3]/2.0) + " m(" + text + ")s\n")
+        else:
+            raise RuntimeError("bad anchor " + str(anchor))
+
+    def text_extents(self, font, text, x, y, anchor=ANCHOR_N):
+        lr = font.extents(text)
+        if anchor == ANCHOR_N:
+            return (x - lr[2]/2.0, y + 2, x + lr[2]/2.0, y + 2 + lr[3])
+        elif anchor == ANCHOR_E:
+            return (x - 4 - lr[2], y - lr[3]/2.0, x - 4, y + lr[3]/2.0)
+        else:
+            raise RuntimeError("bad anchor " + str(anchor))
+
+    def draw_data(self, gc, x, y1, y2):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(y2 - y1) + " " + str(x) + " " + str(self.top - y1) + " Pd\n")
+
+    def draw_ack(self, gc, x, y):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x) + " " + str(self.top - y) + " Pa\n")
+    
+    def draw_dataack(self, gc, x, y):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x) + " " + str(self.top - y) + " Pda\n")
 
 
 class PlotCanvas:
@@ -1040,10 +1204,11 @@ class PlotCanvas:
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
 
             # get transformation
-            tscale = self.plot_width / float(t1 - t0)
-            sscale = self.plot_height / float(s0 - s1)
-            toff = self.left_margin - (t0 * tscale)
-            soff = self.top_margin - (s1 * sscale)
+            left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
+            tscale = plot_width / float(t1 - t0)
+            sscale = plot_height / float(s0 - s1)
+            toff = left_margin - (t0 * tscale)
+            soff = top_margin - (s1 * sscale)
             self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
 
             # variables
@@ -1051,7 +1216,7 @@ class PlotCanvas:
             small_playout = drawable.layout("small")
 
             # clear background
-            drawable.fill_rectangle(drawable.gc("bg"), self.left_margin, self.top_margin, self.plot_width, self.plot_height)
+            drawable.fill_rectangle(drawable.gc("bg"), left_margin, top_margin, plot_width, plot_height)
 
             # losses
             gc = drawable.gc("lossborder")
@@ -1061,25 +1226,22 @@ class PlotCanvas:
                 y0 = max(s0, l.seq) * sscale + soff
                 y1 = min(s1, l.end_seq) * sscale + soff
                 gc_fg, gc_bg = drawable.gc(l.type), drawable.gc(l.type + ".bg")
-                drawable.fill_rectangle(gc_bg, x0, self.top_margin, x1 - x0 + 1, self.plot_height)
+                drawable.fill_rectangle(gc_bg, x0, top_margin, x1 - x0 + 1, plot_height)
                 drawable.fill_rectangle(gc_fg, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
                 drawable.draw_rectangle(gc, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
             
             # border box
             border_gc = drawable.gc("border")
-            drawable.draw_rectangle(border_gc, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
+            drawable.draw_rectangle(border_gc, left_margin, top_margin, plot_width, plot_height)
 
             # axes
-            self._draw_axis(tscale, toff, t0, t1, tstep, self.top_margin, self.wheight - self.bottom_margin, self._draw_tic_x, self._draw_label_x, drawable, border_gc, playout)
-            self._draw_axis(sscale, soff, s0, s1, sstep, self.left_margin, self.wwidth - self.right_margin, self._draw_tic_y, self._draw_label_y, drawable, border_gc, playout)
+            self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, playout)
+            self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, playout)
             
             # data packets
             gc = drawable.gc("data")
             for p in self.conn.packets(self.dir, t0, t1):
-                x, y, yy = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
-                drawable.draw_line(gc, x - 2, y, x + 3, y)
-                drawable.draw_line(gc, x - 2, yy, x + 3, yy)
-                drawable.draw_line(gc, x, y, x, yy)
+                drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
             
             # ack packets
             gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
@@ -1094,17 +1256,17 @@ class PlotCanvas:
                         last_dupack = p.ack
                         last_dupack_x = extents[0] - 4
                 if p.pure_ack():
-                    drawable.draw_line(gc1, x - 2, y - 2, x + 2, y + 2)
-                    drawable.draw_line(gc1, x - 2, y + 2, x + 2, y - 2)
+                    drawable.draw_ack(gc1, x, y)
                 else:
-                    drawable.draw_line(gc2, x - 2, y - 2, x + 2, y + 2)
-                    drawable.draw_line(gc2, x - 2, y + 2, x + 2, y - 2)
+                    drawable.draw_dataack(gc2, x, y)
 
             self.plotted = True
 
         else:
             self.plotted = False
 
+        drawable.complete()
+            
 
 class PlotBox:
     def __init__(self, master):
@@ -1218,6 +1380,7 @@ class PlotFlowWindow:
    	    ( "/File/_Open",    "<control>O", None, 0, None ),
    	    ( "/File/_Save",    "<control>S", None, 0, None ),
    	    ( "/File/Save _As", None,         None, 0, None ),
+            ( "/File/Print",    "<control>P", self.cmd_print, 0, None ),
    	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
    	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, None ),
             ( "/_View",		None,		None, 0, "<Branch>" ),
@@ -1235,6 +1398,11 @@ class PlotFlowWindow:
     def cmd_exit(self, *args):
         gtk.main_quit()
 
+    def cmd_print(self, widget, event):
+        f = file("/tmp/plotflow.ps", "w")
+        self.plotbox.canvas.plot(PlotCanvas_PostScriptDrawable(self.plotbox.canvas, f))
+        f.close()
+        
     def cmd_zoom_in(self, widget, event):
         self.plotbox.zoom_in()
 
