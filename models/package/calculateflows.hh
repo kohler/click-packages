@@ -3,20 +3,25 @@
 #define CLICK_CALCULATEFLOWS_HH
 #include <click/element.hh>
 #include <click/bighashmap.hh>
-#include <math.h>
 #include "aggregatenotifier.hh"
 #include "toipflowdumps.hh"
+CLICK_DECLS
 
 /*
 =c
 
-CalculateFlows([I<KEYWORDS>])
+CalculateTCPLossEvents([I<KEYWORDS>])
 
 =s
 
-calculates loss events in flows
+analyzes TCP flows for loss events
 
 =d
+
+Expects TCP packets with aggregate annotations set as if by AggregateIPFlows.
+Packets must have timestamps in increasing order. Analyzes these TCP flows and
+figures out where the loss events are. Loss events may be reported to a
+ToIPFlowDumps element, and/or to a loss-event or loss-statistics file.
 
 Keywords are:
 
@@ -24,17 +29,55 @@ Keywords are:
 
 =item NOTIFIER
 
-An AggregateNotifier element.
+An AggregateNotifier element, such as AggregateIPFlows. CalculateTCPLossEvents
+registers with the notifier to receive "delete aggregate" messages. It uses
+these messages to delete state. If you don't provide a NOTIFIER,
+CalculateTCPLossEvents will keep some state for every aggregate it sees until
+the router quits.
 
 =item FLOWDUMPS
 
-A ToIPFlowDumps element. Not optional.
+A ToIPFlowDumps element. If provided, CalculateTCPLossEvents
 
 =item LOSSFILE
 
+Filename. If given, then output information about each loss event (or possible
+or false loss event) to that file, in the following format:
+
+  loss_type aggregate_number direction time1 seq1 time2 seq2
+
+where C<loss_type> is the loss type, "loss" or "ploss" or "floss", and
+C<direction> is either ">" or "<".
+
 =item STATFILE
 
+Filename. If given, then output summary information about each aggregate to
+that file, in the following format:
+
+   aggregate_number direction num_packets num_seq \
+       num_loss_events num_possible_loss_events num_false_loss_events
+
+where C<direction_number> is 0 for direction ">", and 1 for direction "<".
+
+=item ABSOLUTE_TIME
+
+Boolean. If true, then output absolute timestamps instead of relative ones.
+Default is false.
+
+=item ABSOLUTE_SEQ
+
+Boolean. If true, then output absolute sequence numbers instead of relative
+ones (where each flow starts at sequence number 0). Default is false.
+
 =back
+
+=e
+
+   FromDump(-, STOP true, FORCE_IP true)
+      -> IPClassifier(tcp)
+      -> af :: AggregateIPFlows
+      -> CalculateTCPLossEvents(NOTIFIER af, FLOWDUMPS flowd)
+      -> flowd :: ToIPFlowDumps(/tmp/flow%04n, NOTIFIER af);
 
 =a
 
@@ -45,7 +88,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     CalculateFlows();
     ~CalculateFlows();
 
-    const char *class_name() const	{ return "CalculateFlows"; }
+    const char *class_name() const	{ return "CalculateTCPLossEvents"; }
     const char *processing() const	{ return "a/ah"; }
     CalculateFlows *clone() const	{ return new CalculateFlows; }
 
@@ -67,6 +110,8 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPFlowDumps *flow_dumps() const	{ return _tipfd; }
     FILE *loss_file() const		{ return _loss_file; }
     FILE *stat_file() const		{ return _stat_file; }
+    bool absolute_time() const		{ return _absolute_time; }
+    bool absolute_seq() const		{ return _absolute_seq; }
     
     typedef BigHashMap<unsigned, LossInfo *> MapLoss;
     
@@ -77,6 +122,9 @@ class CalculateFlows : public Element, public AggregateListener { public:
     ToIPFlowDumps *_tipfd;
     FILE *_loss_file;
     FILE *_stat_file;
+
+    bool _absolute_time : 1;
+    bool _absolute_seq : 1;
     
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
@@ -138,9 +186,6 @@ struct CalculateFlows::StreamInfo {
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
 
-    uint32_t lost_packets;	// number of packets lost (incl. multiple loss)
-    uint32_t lost_seq;		// sequence space lost
-
     struct timeval min_ack_bounce; // minimum time between packet and ACK
 
     Pkt *pkt_head;		// first packet record
@@ -158,7 +203,7 @@ struct CalculateFlows::StreamInfo {
     void insert(Pkt *insertion);
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
 
-    void output_loss(uint32_t aggregate, unsigned direction, CalculateFlows *);
+    void output_loss(LossInfo *, unsigned direction, CalculateFlows *);
     
 };
 
@@ -167,45 +212,14 @@ class CalculateFlows::LossInfo {  public:
     LossInfo(const Packet *);
     void kill(CalculateFlows *);
 
+    uint32_t aggregate() const		{ return _aggregate; }
+    const struct timeval &init_time() const { return _init_time; }
+
     void handle_packet(const Packet *, CalculateFlows *);
     
     Pkt *pre_update_state(const Packet *, CalculateFlows *);
     void calculate_loss_events2(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
-    
-    static double timesub(const timeval &end_time, const timeval &start_time) {
-	return (end_time.tv_sec - start_time.tv_sec) + 0.000001 * (end_time.tv_usec - start_time.tv_usec);
-    }
-    static double timeadd(const timeval &end_time, const timeval &start_time) {
-	return (end_time.tv_sec + start_time.tv_sec) + 0.000001 * (end_time.tv_usec + start_time.tv_usec);
-    }
-    
-    unsigned total_seq(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].total_seq;
-    }
-    uint32_t total_packets(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].total_packets;
-    }
-    unsigned loss_events(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].loss_events;
-    }
-    unsigned ploss_events(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].possible_loss_events;
-    }
-    unsigned lost_packets(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].lost_packets;
-    }
-    unsigned lost_seq(unsigned paint) const {
-	assert(paint < 2);
-	return _stream[paint].lost_seq;
-    }
-
-    //void calculate_loss_events(tcp_seq_t seq, uint32_t seqlen, const timeval &time, unsigned paint);
     
   private:
 
@@ -251,4 +265,5 @@ CalculateFlows::Pkt::init(tcp_seq_t seq_, uint32_t seqlen_, const struct timeval
     nacks = 0;
 }
 
+CLICK_ENDDECLS
 #endif

@@ -11,8 +11,7 @@
 #include <clicknet/udp.h>
 #include <click/packet_anno.hh>
 #include "aggregateipflows.hh"
-
-#include <limits.h>
+CLICK_DECLS
 
 CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
@@ -21,7 +20,6 @@ CalculateFlows::StreamInfo::StreamInfo()
       total_packets(0), total_seq(0),
       loss_events(0), possible_loss_events(0), false_loss_events(0),
       event_id(0),
-      lost_packets(0), lost_seq(0),
       pkt_head(0), pkt_tail(0),
       loss_type(NO_LOSS)
 {
@@ -105,10 +103,12 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
 }
 
 void
-CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, CalculateFlows *cf)
+CalculateFlows::StreamInfo::output_loss(LossInfo *loss_info, unsigned direction, CalculateFlows *cf)
 {
     assert(direction < 2);
     if (loss_type != NO_LOSS) {
+	// figure out loss type, make accounting
+	uint32_t aggregate = loss_info->aggregate();
 	const char *direction_str = (direction ? " < " : " > ");
 	const char *loss_type_str;
 	if (loss_type == LOSS) {
@@ -122,18 +122,40 @@ CalculateFlows::StreamInfo::output_loss(uint32_t aggregate, unsigned direction, 
 	    loss_type_str = "floss";
 	    false_loss_events++;
 	}
-	if (cf->flow_dumps()) {
+
+	// output to ToIPFlowDumps
+	if (ToIPFlowDumps *flowd = cf->flow_dumps()) {
 	    StringAccum sa;
-	    sa << loss_type_str << direction_str << loss_time
-	       << ' ' << loss_seq << ' ' << loss_end_time
-	       << ' ' << loss_last_seq << ' ' << '0'; // XXX nacks
+	    sa << loss_type_str << direction_str;
+	    if (!flowd->absolute_time() && !flowd->absolute_seq())
+		// common case
+		sa << loss_time << ' ' << loss_seq << ' '
+		   << loss_end_time << ' ' << loss_last_seq;
+	    else {
+		struct timeval time_adj = (flowd->absolute_time() ? loss_info->init_time() : make_timeval(0, 0));
+		uint32_t seq_adj = (flowd->absolute_seq() ? init_seq : 0);
+		sa << (loss_time + time_adj) << ' '
+		   << (loss_seq + seq_adj) << ' '
+		   << (loss_end_time + time_adj) << ' '
+		   << (loss_last_seq + seq_adj);
+	    }
+	    sa << ' ' << '0'; // XXX nacks
 	    cf->flow_dumps()->add_note(aggregate, sa.take_string());
 	}
-	if (cf->loss_file())
+
+	// output to loss file
+	if (cf->loss_file()) {
+	    if (cf->absolute_time())
+		loss_time += loss_info->init_time(), loss_end_time += loss_info->init_time();
+	    if (cf->absolute_seq())
+		loss_seq += init_seq, loss_last_seq += init_seq;
 	    fprintf(cf->loss_file(), "%s %u%s%ld.%06ld %u %ld.%06ld %u\n",
 		    loss_type_str, aggregate, direction_str,
 		    loss_time.tv_sec, loss_time.tv_usec, loss_seq,
 		    loss_end_time.tv_sec, loss_end_time.tv_usec, loss_last_seq);
+	}
+
+	// clear loss
 	loss_type = NO_LOSS;
     }
 }
@@ -158,16 +180,16 @@ CalculateFlows::LossInfo::LossInfo(const Packet *p)
 void
 CalculateFlows::LossInfo::kill(CalculateFlows *cf)
 {
-    _stream[0].output_loss(_aggregate, 0, cf);
-    _stream[1].output_loss(_aggregate, 1, cf);
+    _stream[0].output_loss(this, 0, cf);
+    _stream[1].output_loss(this, 1, cf);
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
     cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
     if (cf->stat_file()) {
-	fprintf(cf->stat_file(), "%u 0\t%u\t%u\t%u\t%u\t%u\n",
+	fprintf(cf->stat_file(), "%u >\t%u\t%u\t%u\t%u\t%u\n",
 		_aggregate, _stream[0].total_packets, _stream[0].total_seq,
 		_stream[0].loss_events, _stream[0].possible_loss_events,
 		_stream[0].false_loss_events);
-	fprintf(cf->stat_file(), "%u 1\t%u\t%u\t%u\t%u\t%u\n",
+	fprintf(cf->stat_file(), "%u <\t%u\t%u\t%u\t%u\t%u\n",
 		_aggregate, _stream[1].total_packets, _stream[1].total_seq,
 		_stream[1].loss_events, _stream[1].possible_loss_events,
 		_stream[1].false_loss_events);
@@ -217,11 +239,13 @@ CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, Cal
     tcp_seq_t seq = k->seq;
     tcp_seq_t last_seq = k->last_seq;
 
-    // Return if this is new or already-acknowledged data
-    if (SEQ_GEQ(seq, stream.max_seq))
+    // Return if this is new or out-of-order data
+    if (SEQ_GEQ(seq, stream.max_seq) || k->type == Pkt::ALL_NEW
+	|| k->type == Pkt::REORDERED)
 	return;
-
+    
     // Return if this retransmission is due to a previous loss event
+    assert(k->rexmit_pkt);
     if (k->event_id != k->rexmit_pkt->event_id)
 	return;
 
@@ -229,10 +253,6 @@ CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, Cal
     if (stream.max_seq == k->last_seq && k->last_seq == k->seq + 1)
 	return;
     
-    // Return if packets are out of order
-    if (k->type == Pkt::REORDERED)
-	return;
-
     // If we get this far, it is a new loss event.
     
     // Update the event ID
@@ -240,8 +260,8 @@ CalculateFlows::LossInfo::calculate_loss_events2(Pkt *k, unsigned direction, Cal
     k->event_id = stream.event_id;
 
     // Store information about the loss event
-    if (stream.loss_type != NO_LOSS) // get rid of the last loss event
-	stream.output_loss(_aggregate, direction, parent);
+    if (stream.loss_type != NO_LOSS) // output any previous loss event
+	stream.output_loss(this, direction, parent);
     if (SEQ_GT(stream.max_ack, seq))
 	stream.loss_type = FALSE_LOSS;
     else if (SEQ_GEQ(last_seq, stream.max_live_seq))
@@ -322,7 +342,7 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		// could have seen the retransmitted packet yet
 		if (k->timestamp - ack_stream.loss_end_time < ack_stream.min_ack_bounce)
 		    ack_stream.loss_type = FALSE_LOSS;
-		ack_stream.output_loss(_aggregate, !direction, cf);
+		ack_stream.output_loss(this, !direction, cf);
 	    }
 	}
     }
@@ -374,12 +394,15 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
+    bool absolute_time = false, absolute_seq = false;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    "LOSSFILE", cpFilename, "filename for loss info", &_loss_filename,
 		    "STATFILE", cpFilename, "filename for loss statistics", &_stat_filename,
+		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
+		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
 		    0) < 0)
         return -1;
     
@@ -391,7 +414,9 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     
     if (!tipfd_element || !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("first element not an ToIPFlowDumps");
-    
+
+    _absolute_time = absolute_time;
+    _absolute_seq = absolute_seq;
     return 0;
 }
 
@@ -414,7 +439,8 @@ CalculateFlows::initialize(ErrorHandler *errh)
     else if (!(_stat_file = fopen(_stat_filename.cc(), "w")))
 	return errh->error("%s: %s", _stat_filename.cc(), strerror(errno));
     if (_stat_file)
-	fprintf(_stat_file, "#agg d\ttot_pkt\ttot_seq\tloss_e\tploss_e\tfloss_e\n");    
+	fprintf(_stat_file, "#agg d\ttot_pkt\ttot_seq\tloss_e\tploss_e\tfloss_e\n");
+
     return 0;
 }
 
@@ -456,166 +482,38 @@ CalculateFlows::new_pkt()
 Packet *
 CalculateFlows::simple_action(Packet *p)
 {
-    const click_ip *iph = p->ip_header();
-    if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from AggregateIPFlows
-	|| !IP_FIRSTFRAG(iph)
-	|| !AGGREGATE_ANNO(p)
-	|| p->transport_length() < (int)sizeof(click_udp)) {
+    uint32_t aggregate = AGGREGATE_ANNO(p);
+    if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP) {
+	LossInfo *loss = _loss_map.find(aggregate);
+	if (!loss) {
+	    if ((loss = new LossInfo(p)))
+		_loss_map.insert(aggregate, loss);
+	    else {
+		click_chatter("out of memory!");
+		p->kill();
+		return 0;
+	    }
+	}
+	loss->handle_packet(p, this);
+	return p;
+    } else {
 	checked_output_push(1, p);
 	return 0;
     }
-  
-    uint32_t aggregate = AGGREGATE_ANNO(p);
-  
-    IPAddress src(iph->ip_src.s_addr); //for debugging
-    IPAddress dst(iph->ip_dst.s_addr); //for debugging
-  
-    int ip_len = ntohs(iph->ip_len);
-    
-    StringAccum sa; // just for debugging
-    sa << p->timestamp_anno() << ": ";
-    sa << "ttl " << (int)iph->ip_ttl << ' ';
-    sa << "tos " << (int)iph->ip_tos << ' ';
-    sa << "length " << ip_len << ' ';
-    
-    switch (iph->ip_p) { 
-	 
-      case IP_PROTO_TCP: {
-	  LossInfo *loss = _loss_map.find(aggregate);
-	  if (!loss) {
-	      if ((loss = new LossInfo(p)))
-		  _loss_map.insert(aggregate, loss);
-	      else {
-		  click_chatter("out of memory!");
-		  p->kill();
-		  return 0;
-	      }
-	  }
-	  loss->handle_packet(p, this);
-	  break;
-      }
-      
-      case IP_PROTO_UDP: { // For future use...
-	  const click_udp *udph = p->udp_header();
-	  unsigned short srcp = ntohs(udph->uh_sport);
-	  unsigned short dstp = ntohs(udph->uh_dport);
-	  unsigned len = ntohs(udph->uh_ulen);
-	  sa << src << '.' << srcp << " > " << dst << '.' << dstp << ": udp " << len;
-	  printf("%s",sa.cc());
-	  break;
-      }
-	
-      default: { // All other packets are not processed
-	  printf("The packet is not a TCP or UDP");
-	  sa << src << " > " << dst << ": ip-proto-" << (int)iph->ip_p;
-	  printf("%s",sa.cc());
-	  break;
-      }
-      
-    }
-    
-    return p;
 }
 
 void 
 CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
-    if (event == DELETE_AGG) {
+    if (event == DELETE_AGG)
 	if (LossInfo *tmploss = _loss_map.find(aggregate)) {
 	    _loss_map.remove(aggregate);
 	    tmploss->kill(this);
 	}
-    }
 }
 
 
-
-#if 0
-void
-CalculateFlows::LossInfo::calculate_loss_events(tcp_seq_t seq, uint32_t seqlen, const struct timeval &time, unsigned paint)
-{
-    assert(paint < 2);
-    double curr_diff;
-    short int num_of_acks = acks[paint].find(seq);
-    if (SEQ_LT(seq, _max_seq[paint])) { // then we may have a new event.
-	if (SEQ_LT(seq, _last_seq[paint])) { // We have a new event ...
-	    timeval time_last_sent = Search_seq_interval(seq, seq + seqlen, paint);	
-	    if (_prev_diff[paint] == 0) { // first time
-		_prev_diff[paint] = timesub(time, time_last_sent);
-		curr_diff = _prev_diff[paint];
-	    } else {
-		_prev_diff[paint] = (_prev_diff[paint] < 0.000001 ? 0.000001 : _prev_diff[paint]);
-		curr_diff = timesub(time,time_last_sent);
-		if ((_doubling[paint] == 32) && (fabs(1-curr_diff/_prev_diff[paint]) < 0.1)) {
-		    printf("Doubling threshold reached %ld.%06ld \n",time.tv_sec,time.tv_sec);
-		} else {
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) < 0.1) && (!(num_of_acks > 3))) {
-			if (_doubling[paint] < 1) {
-			    _doubling[paint] = _prev_doubling[paint];
-			}
-			_doubling[paint] = 2*_doubling[paint];
-		    }
-		    if ((fabs(2.-curr_diff/_prev_diff[paint]) > 0.1) && (!(num_of_acks > 3))) {
-			_prev_doubling[paint] = _doubling[paint];
-			_doubling[paint] = 0;
-		    }
-		}
-	    }					
-	    
-	    if (num_of_acks > 3) { //triple dup.
-		printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-		       time.tv_sec,
-		       time.tv_usec,
-		       seq,
-		       num_of_acks);
-		_loss_events[paint]++;
-		acks[paint].insert(seq, -10000);
-	    } else { 					
-		acks[paint].insert(seq, -10000);
-		_doubling[paint] = (_doubling[paint] < 1 ? 1 : _doubling[paint]);
-		printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-			(log(_doubling[paint])/log(2)),
-			time.tv_sec,
-			time.tv_usec,
-			seq,
-			num_of_acks);
-		_loss_events[paint]++;
-		_prev_diff[paint] = curr_diff;
-	    }
-	}
-    } else { // this is a first time send event
-	if (SEQ_LT(_max_seq[paint], _last_seq[paint])) {
-	    _max_seq[paint] = _last_seq[paint];
-	}
-    }	
-    
-}
-#endif
-
-#if 0
-void
-CalculateFlows::LossInfo::calculate_loss(tcp_seq_t seq, uint32_t seqlen, unsigned paint)
-{
-    assert(paint < 2);
-    StreamInfo &stream = _stream[paint];
-    
-    if (SEQ_LT(stream.max_seq + 1, seq) && stream.total_packets) {
-	printf("Possible gap in Byte Sequence flow %u:%u %u - %u\n", _aggregate, paint, stream.max_seq, seq);
-    }
-
-    // XXX this code is broken
-    if (SEQ_LT(seq + 1, stream.max_seq) && !_out_of_order) {  // we do a retransmission  (Bytes are lost...)
-	if (SEQ_LT(seq + seqlen, stream.max_seq)) { // are we transmiting totally new bytes also?
-	    stream.lost_seq += seqlen;
-	} else { // we retransmit something old but partial
-	    stream.lost_seq += stream.max_seq - seq;
-	}
-	stream.lost_packets++;
-    }
-}
-#endif
-
-ELEMENT_REQUIRES(userlevel)
+ELEMENT_REQUIRES(userlevel ToIPFlowDumps AggregateNotifier)
 EXPORT_ELEMENT(CalculateFlows)
-
 #include <click/bighashmap.cc>
+CLICK_ENDDECLS
