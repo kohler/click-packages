@@ -231,7 +231,7 @@ struct CalculateFlows::Pkt {
 
     tcp_seq_t event_id;		// ID of loss event
 
-    Pkt *ack_cause;		// packet that caused this ack
+    Pkt *cumack_pkt;		// packet that this ack cumacks
 };
 
 struct CalculateFlows::LossInfo {
@@ -308,13 +308,15 @@ struct CalculateFlows::StreamInfo {
     void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
     void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
+    void update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const;
+    
     Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
 #if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
 #endif
     Pkt *find_ack_cause2(const Pkt *ackk, Pkt *&k, tcp_seq_t &) const;
 
-    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const;
+    bool mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const;
 
     void finish(ConnInfo*, CalculateFlows*);
 

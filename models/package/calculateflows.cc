@@ -334,6 +334,43 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 }
 #endif
 
+void
+CalculateFlows::StreamInfo::update_cur_min_ack_latency(struct timeval &cur_min_ack_latency, struct timeval &running_min_ack_latency, const Pkt *cur_ack, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
+{
+    // find the relevant RTT
+    bool refind_min_ack_latency = false;
+    if (!ackwindow_begin && !ackwindow_end) {
+	refind_min_ack_latency = true;
+	ackwindow_begin = cur_ack;
+    }
+    
+    while (ackwindow_begin
+	   && (cur_ack->timestamp - ackwindow_begin->timestamp).tv_sec > 2) {
+	if (ackwindow_begin->cumack_pkt
+	    && ackwindow_begin->timestamp - ackwindow_begin->cumack_pkt->timestamp <= running_min_ack_latency)
+	    refind_min_ack_latency = true;
+	ackwindow_begin = ackwindow_begin->next;
+    }
+
+    if (refind_min_ack_latency) {
+	running_min_ack_latency.tv_sec = 10000;	
+	ackwindow_end = ackwindow_begin;
+    }
+    
+    while (ackwindow_end
+	   && (ackwindow_end->timestamp - cur_ack->timestamp).tv_sec < 2) {
+	if (ackwindow_end->cumack_pkt
+	    && ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp < running_min_ack_latency)
+	    running_min_ack_latency = ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp;
+	ackwindow_end = ackwindow_end->next;
+    }
+
+    if (running_min_ack_latency.tv_sec >= 10000)
+	cur_min_ack_latency = min_ack_latency;
+    else
+	cur_min_ack_latency = running_min_ack_latency;
+}
+
 CalculateFlows::Pkt *
 CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_seq_t &max_ack) const
 {
@@ -408,10 +445,14 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 }
 
 bool
-CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time) const
+CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end) const
 {
+    // update current RTT
+    struct timeval cur_min_ack_latency;
+    update_cur_min_ack_latency(cur_min_ack_latency, running_min_ack_latency, ackk, ackwindow_begin, ackwindow_end);
+    
     // move k_time forward
-    while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * min_ack_latency)
+    while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
 	k_time = k_time->next;
 
     // go over previous packets, marking them as delivered
@@ -473,10 +514,12 @@ void
 CalculateFlows::StreamInfo::finish(ConnInfo *conn, CalculateFlows *)
 {
     Pkt *k_cumack = 0, *k_time = pkt_head;
+    struct timeval running_min_ack_latency;
+    const Pkt *ackwindow_begin = 0, *ackwindow_end = 0;
     uint32_t last_ack = 0;
     for (Pkt *ackk = conn->stream(1-direction)->pkt_head; ackk; ackk = ackk->next)
 	if (last_ack != ackk->ack) {
-	    if (!mark_delivered(ackk, k_cumack, k_time))
+	    if (!mark_delivered(ackk, k_cumack, k_time, running_min_ack_latency, ackwindow_begin, ackwindow_end))
 		break;
 	    else
 		last_ack = ackk->ack;
@@ -873,7 +916,7 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	
 	// find acked packet
 	if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k)) {
-	    
+	    k->cumack_pkt = acked_pkt;
 	    struct timeval latency = k->timestamp - acked_pkt->timestamp;
 	    if (!ack_stream.have_ack_latency || latency < ack_stream.min_ack_latency) {
 		ack_stream.have_ack_latency = true;
@@ -1048,7 +1091,7 @@ CalculateFlows::new_pkt()
     else {
 	Pkt *p = _free_pkt;
 	_free_pkt = p->next;
-	p->next = p->prev = 0;
+	p->next = p->prev = p->cumack_pkt = 0;
 	return p;
     }
 }
