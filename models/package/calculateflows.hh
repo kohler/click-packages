@@ -52,12 +52,7 @@ C<direction> is either ">" or "<".
 =item STATFILE
 
 Filename. If given, then output summary information about each aggregate to
-that file, in the following format:
-
-   aggregate_number direction num_packets num_seq \
-       num_loss_events num_possible_loss_events num_false_loss_events
-
-where C<direction_number> is 0 for direction ">", and 1 for direction "<".
+that file, in an XML format.
 
 =item ABSOLUTE_TIME
 
@@ -103,16 +98,18 @@ class CalculateFlows : public Element, public AggregateListener { public:
     CalculateFlows *clone() const	{ return new CalculateFlows; }
 
     void notify_noutputs(int);
+    int configure_phase() const		{ return ToIPFlowDumps::CONFIGURE_PHASE + 1; } // just after ToIPFlowDumps
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
+    void add_handlers();
     
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
     
     Packet *simple_action(Packet *);
     
     struct StreamInfo;
-    class LossInfo;
+    class ConnInfo;
     struct Pkt;
     enum LossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
 
@@ -126,11 +123,11 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     static double float_timeval(const struct timeval &);
     
-    typedef BigHashMap<unsigned, LossInfo *> MapLoss;
+    typedef BigHashMap<unsigned, ConnInfo *> ConnMap;
     
   private:
     
-    MapLoss _loss_map;
+    ConnMap _conn_map;
 
     ToIPFlowDumps *_tipfd;
     FILE *_loss_file;
@@ -151,7 +148,10 @@ class CalculateFlows : public Element, public AggregateListener { public:
     inline void free_pkt(Pkt *);
     inline void free_pkt_list(Pkt *, Pkt *);
 
-    friend class LossInfo;
+    static int write_handler(const String &, Element *, void *, ErrorHandler*);
+    
+    friend class ConnInfo;
+    
 };
 
 struct CalculateFlows::Pkt {
@@ -160,21 +160,18 @@ struct CalculateFlows::Pkt {
 
     tcp_seq_t seq;		// sequence number of this packet
     tcp_seq_t last_seq;		// last sequence number of this packet
+    tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
     uint16_t ip_id;		// IP ID of this packet
 
-    enum Type { UNKNOWN, ALL_NEW, REXMIT, PARTIAL_REXMIT, ODD_REXMIT, DUPLICATE, REORDERED };
-    Type type;			// type of packet
+    enum Flags { F_NEW = 1, F_REXMIT = 2, F_DUPLICATE = 4, F_REORDER = 8, F_STRANGE = 16, F_PARTIAL_REXMIT = 32, F_KEEPALIVE = 64 };
+    int flags;			// packet flags
 
     tcp_seq_t event_id;		// ID of loss event
-    Pkt *rexmit_pkt;		// retransmission of this packet
-
-    uint32_t nacks;		// number of times this packet was acked
-
-    void init(tcp_seq_t seq, uint32_t seqlen, uint16_t ip_id, const struct timeval &, tcp_seq_t event_id);
 };
 
 struct CalculateFlows::StreamInfo {
+    unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
     bool have_syn : 1;		// have we seen a SYN?
     bool have_fin : 1;		// have we seen a FIN?
@@ -216,16 +213,19 @@ struct CalculateFlows::StreamInfo {
     
     StreamInfo();
 
-    void insert(Pkt *insertion);
+    void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
+    void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
+    void update_counters(const Pkt *np, const click_tcp *);
+    
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
 
-    void output_loss(LossInfo *, unsigned direction, CalculateFlows *);
+    void output_loss(ConnInfo *, CalculateFlows *);
     
 };
 
-class CalculateFlows::LossInfo {  public:
+class CalculateFlows::ConnInfo {  public:
     
-    LossInfo(const Packet *);
+    ConnInfo(const Packet *);
     void kill(CalculateFlows *);
 
     uint32_t aggregate() const		{ return _aggregate; }
@@ -233,13 +233,14 @@ class CalculateFlows::LossInfo {  public:
 
     void handle_packet(const Packet *, CalculateFlows *);
     
-    Pkt *pre_update_state(const Packet *, CalculateFlows *);
+    Pkt *create_pkt(const Packet *, CalculateFlows *);
     void calculate_loss_events(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
     
   private:
 
     uint32_t _aggregate;
+    IPFlowID _flowid;
     struct timeval _init_time;
     StreamInfo _stream[2];
     
@@ -267,19 +268,6 @@ CalculateFlows::free_pkt_list(Pkt *head, Pkt *tail)
 	tail->next = _free_pkt;
 	_free_pkt = head;
     }
-}
-
-inline void
-CalculateFlows::Pkt::init(tcp_seq_t seq_, uint32_t seqlen_, uint16_t ip_id_, const struct timeval &timestamp_, tcp_seq_t eid_)
-{
-    next = prev = 0;
-    seq = seq_;
-    last_seq = seq_ + seqlen_;
-    ip_id = ip_id_;
-    timestamp = timestamp_;
-    type = UNKNOWN;
-    event_id = eid_;
-    nacks = 0;
 }
 
 inline struct timeval

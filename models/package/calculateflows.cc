@@ -25,64 +25,123 @@ CalculateFlows::StreamInfo::StreamInfo()
 }
 
 void
-CalculateFlows::StreamInfo::insert(Pkt *k)
+CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *parent)
 {
-    // check for empty list
-    if (!pkt_tail) {
-	assert(!pkt_head);
-	pkt_head = pkt_tail = k;
-	k->type = Pkt::ALL_NEW;
-	return;
-    }
+    assert(np->flags == 0);
 
     // check that timestamp makes sense
-    if (k->timestamp < pkt_tail->timestamp) {
+    if (np->prev && np->timestamp < np->prev->timestamp) {
 	click_chatter("timestamp confusion");
-	k->timestamp = pkt_tail->timestamp;
+	np->timestamp = np->prev->timestamp;
     }
 
-    // insert packet into list
-    k->prev = pkt_tail;
-    k->next = 0;
-    k->prev->next = pkt_tail = k;
-
-    // check for retransmissions
-    if (SEQ_GEQ(k->seq, max_seq)) {
-	k->type = Pkt::ALL_NEW;
+    // exit if this is a pure ack
+    if (np->seq == np->last_seq)
+	// NB pure acks will not include IP ID check for network duplicates
+	return;
+    
+    // exit if there is any new data
+    if (SEQ_GT(np->last_seq, max_seq)) {
+	np->flags |= Pkt::F_NEW;
+	if (SEQ_LT(np->seq, max_seq))
+	    np->flags |= Pkt::F_REXMIT;
 	return;
     }
 
     // Otherwise, it is a reordering, or possibly a retransmission.
     // Find the most recent retransmission of overlapping data.
-    Pkt *x = pkt_tail->prev;
-    while (k->type == Pkt::UNKNOWN && x) {
-	if (k->seq == x->seq && k->last_seq == x->last_seq) {
-	    if (k->ip_id && k->ip_id == x->ip_id)
+    Pkt *x = np->prev;
+    while (x) {
+	if (np->seq == x->seq) {
+	    np->flags |= Pkt::F_REXMIT;
+	    if (np->ip_id && np->ip_id == x->ip_id
+		&& np->last_seq == x->last_seq)
 		// network duplicate
-		k->type = Pkt::DUPLICATE;
+		np->flags |= Pkt::F_DUPLICATE;
+	    else if (np->last_seq == max_seq && np->seq + 1 == np->last_seq)
+		// keepalive XXX
+		np->flags |= Pkt::F_KEEPALIVE;
+	    else if (np->event_id != x->event_id)
+		// retransmission of something from an old loss event
+		/* nada */;
 	    else
-		// retransmission
-		k->type = Pkt::REXMIT;
-	    k->rexmit_pkt = x;
-	} else if (k->seq == x->seq) {
-	    // partial retransmission
-	    k->type = Pkt::PARTIAL_REXMIT;
-	    k->rexmit_pkt = x;
-	} else if (x->type == Pkt::ALL_NEW && SEQ_LEQ(x->last_seq, k->seq))
+		// new loss event
+		register_loss_event(x, np, conn, parent);
+	    return;
+	} else if (x->flags == Pkt::F_NEW && SEQ_LEQ(x->last_seq, np->seq)) {
 	    // reordering
-	    k->type = Pkt::REORDERED;
-	else if ((SEQ_LEQ(x->seq, k->seq) && SEQ_LT(k->seq, x->last_seq))
-		 || (SEQ_LT(x->seq, k->last_seq) && SEQ_LEQ(k->last_seq, x->last_seq))) {
+	    np->flags |= Pkt::F_REORDER;
+	    return;
+	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->last_seq))
+		   || (SEQ_LT(x->seq, np->last_seq) && SEQ_LEQ(np->last_seq, x->last_seq))) {
 	    // odd partial retransmission
-	    k->type = Pkt::ODD_REXMIT;
-	    k->rexmit_pkt = x;
+	    np->flags |= Pkt::F_REXMIT | Pkt::F_STRANGE;
+	    return;
 	} else
 	    x = x->prev;
     }
     
     // If we ran out of packets, it's a reordering.
-    if (k->type == Pkt::UNKNOWN)
-	k->type = Pkt::REORDERED;
+    np->flags |= Pkt::F_REORDER;
+}
+
+void
+CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *conn, CalculateFlows *parent)
+{
+    // Update the event ID
+    event_id++;
+    endk->event_id = event_id;
+
+    // Store information about the loss event
+    if (loss_type != NO_LOSS) // output any previous loss event
+	output_loss(conn, parent);
+    if (SEQ_GT(max_ack, endk->seq))
+	loss_type = FALSE_LOSS;
+    else if (SEQ_GEQ(endk->last_seq, max_live_seq))
+	loss_type = POSSIBLE_LOSS;
+    else
+	loss_type = LOSS;
+    loss_time = startk->timestamp;
+    loss_seq = startk->seq;
+    loss_end_time = endk->timestamp;
+    loss_last_seq = max_live_seq;
+
+    // We just completed a loss event, so reset max_live_seq and max_loss_seq.
+    max_live_seq = endk->last_seq;
+    if (SEQ_GT(max_seq, max_loss_seq))
+	max_loss_seq = max_seq;
+}
+
+void
+CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph)
+{
+    // update counters
+    total_packets++;
+    total_seq += np->last_seq - np->seq;
+    
+    // mark SYN and FIN packets
+    if (tcph->th_flags & TH_SYN) {
+	if (have_syn && syn_seq != np->seq)
+	    click_chatter("different SYN seqnos!"); // XXX report error
+	else {
+	    syn_seq = np->seq;
+	    have_syn = true;
+	}
+    }
+    if (tcph->th_flags & TH_FIN) {
+	if (have_fin && fin_seq != np->last_seq - 1)
+	    click_chatter("different FIN seqnos!"); // XXX report error
+	else {
+	    fin_seq = np->last_seq - 1;
+	    have_fin = true;
+	}
+    }
+
+    // update max_seq and max_live_seq
+    if (SEQ_GT(np->last_seq, max_seq))
+	max_seq = np->last_seq;
+    if (SEQ_GT(np->last_seq, max_live_seq))
+	max_live_seq = np->last_seq;    
 }
 
 CalculateFlows::Pkt *
@@ -92,7 +151,7 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
     Pkt *potential_answer = 0;
     for (Pkt *k = pkt_tail; k; k = k->prev) {
 	if (k->last_seq == ack) {
-	    if (k->type == Pkt::REXMIT
+	    if ((k->flags & Pkt::F_REXMIT)
 		&& have_ack_bounce
 		&& timestamp - k->timestamp < min_ack_bounce)
 		potential_answer = k;
@@ -106,9 +165,8 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
 }
 
 void
-CalculateFlows::StreamInfo::output_loss(LossInfo *loss_info, unsigned direction, CalculateFlows *cf)
+CalculateFlows::StreamInfo::output_loss(ConnInfo *loss_info, CalculateFlows *cf)
 {
-    assert(direction < 2);
     if (loss_type != NO_LOSS) {
 	// figure out loss type, make accounting
 	uint32_t aggregate = loss_info->aggregate();
@@ -143,7 +201,7 @@ CalculateFlows::StreamInfo::output_loss(LossInfo *loss_info, unsigned direction,
 		   << (loss_last_seq + seq_adj);
 	    }
 	    sa << ' ' << '0'; // XXX nacks
-	    cf->flow_dumps()->add_note(aggregate, sa.take_string());
+	    flowd->add_note(aggregate, sa.take_string());
 	}
 
 	// output to loss file
@@ -166,44 +224,58 @@ CalculateFlows::StreamInfo::output_loss(LossInfo *loss_info, unsigned direction,
 
 // LOSSINFO
 
-CalculateFlows::LossInfo::LossInfo(const Packet *p)
+CalculateFlows::ConnInfo::ConnInfo(const Packet *p)
     : _aggregate(AGGREGATE_ANNO(p))
 {
     assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
+    _flowid = IPFlowID(p);
     
     // set initial timestamp
     if (timerisset(&p->timestamp_anno()))
 	_init_time = p->timestamp_anno() - make_timeval(0, 1);
     else
 	timerclear(&_init_time);
+
+    // initialize streams
+    _stream[0].direction = 0;
+    _stream[1].direction = 1;
 }
 
 void
-CalculateFlows::LossInfo::kill(CalculateFlows *cf)
+CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 {
-    _stream[0].output_loss(this, 0, cf);
-    _stream[1].output_loss(this, 1, cf);
-    cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
-    cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
+    _stream[0].output_loss(this, cf);
+    _stream[1].output_loss(this, cf);
     if (cf->stat_file()) {
-	fprintf(cf->stat_file(), "%u >\t%u\t%u\t%u\t%u\t%u\n",
-		_aggregate, _stream[0].total_packets, _stream[0].total_seq,
+	timeval end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
+	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
+	    end_time = _stream[1].pkt_tail->timestamp;
+
+	fprintf(cf->stat_file(), "<connection aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'>\n\
+  <flow dir='0' loss='%u' ploss='%u' floss='%u' />\n\
+  <flow dir='1' loss='%u' ploss='%u' floss='%u' />\n\
+</connection>\n",
+		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
+		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
+		_init_time.tv_sec, _init_time.tv_usec,
+		end_time.tv_sec, end_time.tv_usec,
 		_stream[0].loss_events, _stream[0].possible_loss_events,
-		_stream[0].false_loss_events);
-	fprintf(cf->stat_file(), "%u <\t%u\t%u\t%u\t%u\t%u\n",
-		_aggregate, _stream[1].total_packets, _stream[1].total_seq,
+		_stream[0].false_loss_events,
 		_stream[1].loss_events, _stream[1].possible_loss_events,
 		_stream[1].false_loss_events);
     }
+    cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
+    cf->free_pkt_list(_stream[1].pkt_head, _stream[1].pkt_tail);
     delete this;
 }
 
 CalculateFlows::Pkt *
-CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *parent)
+CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 {
-    assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
+    assert(p->ip_header()->ip_p == IP_PROTO_TCP
+	   && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
     // set TCP sequence number offsets on first Pkt
@@ -221,107 +293,39 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p, CalculateFlows *pare
     }
 
     // introduce a Pkt
-    Pkt *k = parent->new_pkt();
-    if (!k)
+    if (Pkt *np = parent->new_pkt()) {
+	const click_ip *iph = p->ip_header();
+
+	// set fields appropriately
+	np->seq = ntohl(tcph->th_seq) - stream.init_seq;
+	np->last_seq = np->seq + calculate_seqlen(iph, tcph);
+	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
+	np->ip_id = (parent->_ip_id ? iph->ip_id : 0);
+	np->timestamp = p->timestamp_anno() - _init_time;
+	np->flags = 0;
+	np->event_id = stream.event_id;
+
+	// hook up to packet list
+	np->next = 0;
+	np->prev = stream.pkt_tail;
+	if (stream.pkt_tail)
+	    stream.pkt_tail = stream.pkt_tail->next = np;
+	else
+	    stream.pkt_head = stream.pkt_tail = np;
+
+	return np;
+    } else
 	return 0;
-    const click_ip *iph = p->ip_header();
-    k->init(ntohl(tcph->th_seq) - stream.init_seq, calculate_seqlen(iph, tcph),
-	    (parent->_ip_id ? iph->ip_id : 0),
-	    p->timestamp_anno() - _init_time, stream.event_id);
-    stream.insert(k);
-    
-    // save everything else for later
-    return k;
-}
-
-
-void
-CalculateFlows::LossInfo::calculate_loss_events(Pkt *k, unsigned direction, CalculateFlows *parent)
-{
-    assert(direction < 2);
-    StreamInfo &stream = _stream[direction];
-    tcp_seq_t seq = k->seq;
-    tcp_seq_t last_seq = k->last_seq;
-
-    // Return if this is new or out-of-order data
-    if (SEQ_GEQ(seq, stream.max_seq) || k->type == Pkt::ALL_NEW
-	|| k->type == Pkt::REORDERED || k->type == Pkt::DUPLICATE)
-	return;
-    
-    // Return if this retransmission is due to a previous loss event
-    assert(k->rexmit_pkt);
-    if (k->event_id != k->rexmit_pkt->event_id)
-	return;
-
-    // Return if this is a keepalive (XXX)
-    if (stream.max_seq == k->last_seq && k->last_seq == k->seq + 1)
-	return;
-    
-    // If we get this far, it is a new loss event.
-    
-    // Update the event ID
-    stream.event_id++;
-    k->event_id = stream.event_id;
-
-    // Store information about the loss event
-    if (stream.loss_type != NO_LOSS) // output any previous loss event
-	stream.output_loss(this, direction, parent);
-    if (SEQ_GT(stream.max_ack, seq))
-	stream.loss_type = FALSE_LOSS;
-    else if (SEQ_GEQ(last_seq, stream.max_live_seq))
-	stream.loss_type = POSSIBLE_LOSS;
-    else
-	stream.loss_type = LOSS;
-    stream.loss_time = k->rexmit_pkt->timestamp;
-    stream.loss_seq = seq;
-    stream.loss_end_time = k->timestamp;
-    stream.loss_last_seq = stream.max_live_seq;
-
-    // We just completed a loss event, so reset max_live_seq and max_loss_seq.
-    stream.max_live_seq = last_seq;
-    if (SEQ_GT(stream.max_seq, stream.max_loss_seq))
-	stream.max_loss_seq = stream.max_seq;
 }
 
 void
-CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFlows *cf)
+CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFlows *cf)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
 
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
-    StreamInfo &stream = _stream[direction];
-    tcp_seq_t seq = ntohl(tcph->th_seq) - stream.init_seq;
-    uint32_t seqlen = calculate_seqlen(p->ip_header(), tcph);
-
-    // update counters
-    stream.total_packets++;
-    stream.total_seq += seqlen;
-    
-    // mark SYN and FIN packets
-    if (tcph->th_flags & TH_SYN) {
-	if (stream.have_syn && stream.syn_seq != seq)
-	    click_chatter("%u: different SYN seqnos!", _aggregate); // XXX report error
-	else {
-	    stream.syn_seq = seq;
-	    stream.have_syn = true;
-	}
-    }
-    if (tcph->th_flags & TH_FIN) {
-	if (stream.have_fin && stream.fin_seq != seq + seqlen - 1)
-	    click_chatter("different FIN seqnos!"); // XXX report error
-	else {
-	    stream.fin_seq = seq + seqlen - 1;
-	    stream.have_fin = true;
-	}
-    }
-
-    // update max_seq and max_live_seq
-    if (SEQ_GT(seq + seqlen, stream.max_seq))
-	stream.max_seq = seq + seqlen;
-    if (SEQ_GT(seq + seqlen, stream.max_live_seq))
-	stream.max_live_seq = seq + seqlen;
 
     // update acknowledgment information for other half-connection
     StreamInfo &ack_stream = _stream[!direction];
@@ -342,7 +346,6 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		cf->flow_dumps()->add_note(_aggregate, sa.take_string());
 	    }
 	    
-	    acked_pkt->nacks++;
 	    struct timeval bounce = k->timestamp - acked_pkt->timestamp;
 	    if (!ack_stream.have_ack_bounce || bounce < ack_stream.min_ack_bounce) {
 		ack_stream.have_ack_bounce = true;
@@ -357,29 +360,27 @@ CalculateFlows::LossInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		if (k->timestamp - ack_stream.loss_end_time < 0.6 * ack_stream.min_ack_bounce
 		    && ack_stream.have_ack_bounce)
 		    ack_stream.loss_type = FALSE_LOSS;
-		ack_stream.output_loss(this, !direction, cf);
+		ack_stream.output_loss(this, cf);
 	    }
 	}
     }
 }
 
 void
-CalculateFlows::LossInfo::handle_packet(const Packet *p, CalculateFlows *parent)
+CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
     // update timestamp and sequence number offsets at beginning of connection
-    Pkt *k = pre_update_state(p, parent);
+    if (Pkt *k = create_pkt(p, parent)) {
+	int direction = (PAINT_ANNO(p) & 1);
+	_stream[direction].categorize(k, this, parent);
+	_stream[direction].update_counters(k, p->tcp_header());
 
-    int direction = (PAINT_ANNO(p) & 1);
-    
-    if (k->last_seq != k->seq) {
-	calculate_loss_events(k, direction, parent); //calculate loss if any
+	// update counters, maximum sequence numbers, and so forth
+	post_update_state(p, k, parent);
     }
-
-    // update counters, maximum sequence numbers, and so forth
-    post_update_state(p, k, parent);
 }
 
 
@@ -408,13 +409,14 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0;
+    _tipfd = 0;
     bool absolute_time = false, absolute_seq = false, ack_match = false, ip_id = true;
     if (cp_va_parse(conf, this, errh,
 		    cpKeywords,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd_element,
 		    "LOSSFILE", cpFilename, "filename for loss info", &_loss_filename,
-		    "STATFILE", cpFilename, "filename for loss statistics", &_stat_filename,
+		    "STATFILE", cpFilename, "filename for XML loss statistics", &_stat_filename,
 		    "ABSOLUTE_TIME", cpBool, "output absolute timestamps?", &absolute_time,
 		    "ABSOLUTE_SEQ", cpBool, "output absolute sequence numbers?", &absolute_seq,
 		    "ACK_MATCH", cpBool, "output ack matches?", &ack_match,
@@ -424,12 +426,12 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
     
     AggregateIPFlows *af = 0;
     if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
-	return errh->error("first element not an AggregateIPFlows");
+	return errh->error("NOTIFIER must be an AggregateIPFlows element");
     else if (af)
 	af->add_listener(this);
     
-    if (!tipfd_element || !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
-	return errh->error("first element not an ToIPFlowDumps");
+    if (tipfd_element && !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
+	return errh->error("FLOWDUMPS must be a ToIPFlowDumps element");
 
     _absolute_time = absolute_time;
     _absolute_seq = absolute_seq;
@@ -456,8 +458,14 @@ CalculateFlows::initialize(ErrorHandler *errh)
 	_stat_file = stdout;
     else if (!(_stat_file = fopen(_stat_filename.cc(), "w")))
 	return errh->error("%s: %s", _stat_filename.cc(), strerror(errno));
-    if (_stat_file)
-	fprintf(_stat_file, "#agg d\ttot_pkt\ttot_seq\tloss_e\tploss_e\tfloss_e\n");
+    if (_stat_file) {
+	fprintf(_stat_file, "<?xml version='1.0' standalone='yes'?>\n\
+<connections");
+	if (_tipfd)
+	    fprintf(_stat_file, " filepattern='%s'",
+		    _tipfd->output_pattern().cc());
+	fprintf(_stat_file, ">\n");
+    }
 
     return 0;
 }
@@ -465,15 +473,17 @@ CalculateFlows::initialize(ErrorHandler *errh)
 void
 CalculateFlows::cleanup(CleanupStage)
 {
-    for (MapLoss::iterator iter = _loss_map.begin(); iter; iter++) {
-	LossInfo *losstmp = const_cast<LossInfo *>(iter.value());
+    for (ConnMap::iterator iter = _conn_map.begin(); iter; iter++) {
+	ConnInfo *losstmp = const_cast<ConnInfo *>(iter.value());
 	losstmp->kill(this);
     }
-    _loss_map.clear();
+    _conn_map.clear();
     if (_loss_file)
 	fclose(_loss_file);
-    if (_stat_file)
+    if (_stat_file) {
+	fprintf(_stat_file, "</connections>\n");
 	fclose(_stat_file);
+    }
 }
 
 CalculateFlows::Pkt *
@@ -502,10 +512,10 @@ CalculateFlows::simple_action(Packet *p)
 {
     uint32_t aggregate = AGGREGATE_ANNO(p);
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP) {
-	LossInfo *loss = _loss_map.find(aggregate);
+	ConnInfo *loss = _conn_map.find(aggregate);
 	if (!loss) {
-	    if ((loss = new LossInfo(p)))
-		_loss_map.insert(aggregate, loss);
+	    if ((loss = new ConnInfo(p)))
+		_conn_map.insert(aggregate, loss);
 	    else {
 		click_chatter("out of memory!");
 		p->kill();
@@ -524,10 +534,34 @@ void
 CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
-	if (LossInfo *tmploss = _loss_map.find(aggregate)) {
-	    _loss_map.remove(aggregate);
+	if (ConnInfo *tmploss = _conn_map.find(aggregate)) {
+	    _conn_map.remove(aggregate);
 	    tmploss->kill(this);
 	}
+}
+
+
+enum { H_CLEAR };
+
+int
+CalculateFlows::write_handler(const String &, Element *e, void *thunk, ErrorHandler *)
+{
+    CalculateFlows *cf = static_cast<CalculateFlows *>(e);
+    switch ((intptr_t)thunk) {
+      case H_CLEAR:
+	for (ConnMap::iterator i = cf->_conn_map.begin(); i; i++)
+	    i.value()->kill(cf);
+	cf->_conn_map.clear();
+	return 0;
+      default:
+	return -1;
+    }
+}
+
+void
+CalculateFlows::add_handlers()
+{
+    add_write_handler("clear", write_handler, (void *)H_CLEAR);
 }
 
 
