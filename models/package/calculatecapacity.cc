@@ -252,7 +252,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 		continue;
 	    if(cnt > 0 && ft > p->right)
 		break;
-	    if(i->size > mss / 2 || i->newack < 0.5 * rmss){
+	    if(i->size > rmss / 2 || i->newack < 0.5 * rmss){
 		none++;
 	    } else if (i->newack < 1.5 * rmss){
 		one++;
@@ -265,7 +265,11 @@ CalculateCapacity::StreamInfo::findpeaks()
 	}
 	if(cnt == 0){
 	    printf("empty peak %d\n", peak->area);
+	} 
+	if(cnt != p->area){
+	    //printf("missing %d peak packets %d %d\n", p->area - cnt, p->area, cnt);
 	}
+
 	p->acknone = none / (double)cnt;
 	p->ackone = one / (double)cnt;
 	p->acktwo = two / (double)cnt;
