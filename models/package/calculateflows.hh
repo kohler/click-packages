@@ -6,6 +6,7 @@
 #include <math.h>
 #include "aggregatenotifier.hh"
 #include "aggregateflows.hh"
+#include "toipflowdumps.hh"
 
 /*
 =c
@@ -94,6 +95,7 @@ class CalculateFlows : public Element, public AggregateListener {
 		LossInfo *loss;
 	String outfilename[2];	
 	class AggregateFlows *af;
+	class ToIPFlowDumps *tipfd;
 	typedef BigHashMap<unsigned, short int> MapS;
 	typedef BigHashMap<unsigned, timeval> MapT;
 	typedef BigHashMap <unsigned, TimeInterval> MapInterval;
@@ -201,7 +203,7 @@ class CalculateFlows : public Element, public AggregateListener {
 			gnuplot = gnuplotp;
 			eventfiles = eventfilesp;
 			agganno = aggp;
-			outputdir = "./flow"+ *strtmp;
+			outputdir = "./flown"+ *strtmp;
 			system(" mkdir -p ./"+outputdir);
 			if (eventfiles){	
 				for (int i = 0 ; i < 2 ; i++){
@@ -339,8 +341,8 @@ class CalculateFlows : public Element, public AggregateListener {
 			timeval tbend = time_by_lastseq[paint].find(end_seq);
 			MapInterval &ibtime = inter_by_time[paint];
 
-				if (!tbend.tv_sec){ 
-					if (!tbstart.tv_sec){ // We have a partial retransmission ...
+				if (!tbend.tv_sec && !tbend.tv_usec ){ 
+					if (!tbstart.tv_sec && !tbstart.tv_usec){ // We have a partial retransmission ...
 						for (MapInterval::Iterator iter = ibtime.first(); iter; iter++){
 	   						TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
 						   	if (tinter->start_byte < start_seq && tinter->end_byte > start_seq){
@@ -440,7 +442,7 @@ class CalculateFlows : public Element, public AggregateListener {
 			
 		};
 
-		void calculate_loss_events2(unsigned seq, unsigned seqlen, timeval time, unsigned paint){
+		void calculate_loss_events2(unsigned seq, unsigned seqlen, timeval time, unsigned paint, ToIPFlowDumps *tipfdp){
 			double curr_diff;
 	   	    short int num_of_acks = acks[paint].find(seq);
 			short int  num_of_rexmt = rexmt[paint].find(seq);
@@ -452,9 +454,14 @@ class CalculateFlows : public Element, public AggregateListener {
 				timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
 				if (!outoforder_pckt){
 					rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
-
-					if (gnuplot){
-						if (_max_wind_seq[paint] > (seq+seqlen)){
+				    StringAccum sa;
+					String direction = paint ? " < " : " > ";
+			 		if (_max_wind_seq[paint] > (seq+seqlen)){
+						  sa << "loss" << direction << time_last_sent << " " <<
+						  (seq+seqlen) << " " << time <<
+						   " " << _max_wind_seq[paint] << " " << num_of_acks;
+						  tipfdp->add_note(agganno, sa.cc());
+						  if (gnuplot){
 							outfileg[paint+4] = fopen(outfilenameg[paint+4].cc(), "a");
 							fprintf(outfileg[paint+4],"%f %.1f %f %.1f\n",
 									timeadd(time,time_last_sent)/2.,
@@ -464,9 +471,15 @@ class CalculateFlows : public Element, public AggregateListener {
 							if (fclose(outfileg[paint+4])){ 
 								click_chatter("error closing file!");
 							}	
-						}
-						else{
-							possible_loss_event = 1; // possible loss event
+						  }
+					}
+					else{
+						  possible_loss_event = 1; // possible loss event
+						  sa << "ploss" << direction << time_last_sent << " " << seq << " " << time <<
+								" " << seqlen << " " << num_of_acks  ;
+						  tipfdp->add_note(agganno, sa.cc());
+						  
+						  if (gnuplot){
 							outfileg[paint+6] = fopen(outfilenameg[paint+6].cc(), "a");
 							fprintf(outfileg[paint+6],"%f %.1f %f %.1f\n",
 									timeadd(time,time_last_sent)/2.,
@@ -476,8 +489,8 @@ class CalculateFlows : public Element, public AggregateListener {
 							if (fclose(outfileg[paint+6])){ 
 				   				click_chatter("error closing file!");
 							}
-						}
-					}					
+						  }	
+					}						
 					if (prev_diff[paint] == 0){ //first time
 				        prev_diff[paint] = timesub(time, time_last_sent);
 						curr_diff = prev_diff[paint];

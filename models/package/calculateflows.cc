@@ -38,11 +38,12 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 	if (cp_va_parse(conf, this, errh,
-                    cpElement,  "AggregateFlows element pointer", &af,
+                    cpElement,  "AggregateFlows element pointer (notifier)", &af,
+					cpElement,  "ToIPFlowDumps element pointer (notifier)", &tipfd,
+					cpOptional,
 					cpFilename, "filename for output flow1",&outfilename[0],
-					cpFilename, "filename for output flow2",&outfilename[1]
-					
-					,0) < 0)
+					cpFilename, "filename for output flow2",&outfilename[1],
+					0) < 0)
         return -1;
 		af->add_listener(this); // this is a handler to AggregateFlows Element
 	return 0;
@@ -101,7 +102,7 @@ CalculateFlows::simple_action(Packet *p)
        unsigned seqlen = payload_len - (tcph->th_off << 2); // sequence length 
        int ackp = tcph->th_flags & TH_ACK; // 1 if the packet has the ACK bit
 
-	   if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ){ 
+	  if ( (loss->init_time.tv_usec == 0) && (loss->init_time.tv_sec == 0) ){ 
 	  	 unsigned short sport = ntohs(tcph->th_sport);
   	  	 unsigned short dport = ntohs(tcph->th_dport);
   	  	 String outfilenametmp;
@@ -110,25 +111,23 @@ CalculateFlows::simple_action(Packet *p)
 		 fprintf(loss->outfile[4],"flow%u: %s:%d <-> %s:%d'\n",aggp,src.unparse().cc(),sport,dst.unparse().cc(),dport);
 	  	 fclose(loss->outfile[4]);
 		 loss->init_time = ts;
-		 ts.tv_sec = 1;
-	   	 ts.tv_usec = 0;
+		 ts.tv_usec = 1;
+	   	 ts.tv_sec = 0;
 	   }
+	   
 	   else{
-	   	ts.tv_sec++;
+	   	ts.tv_usec++;
 		ts = ts - loss->init_time;
-		//if ((ts.tv_usec == 0) && (ts.tv_sec == 0)){
-		//	ts.tv_usec = 1;
-	   	//}
 	   }			
 	   //printf("%u,%u[%ld.%06ld]:[%ld.%06ld] \n",aggp,paint,loss->init_time.tv_sec,loss->init_time.tv_usec,ts.tv_sec,ts.tv_usec);
 	   
 	   // converting the Sequences from Absolute to Relative
 	   if ( !loss->init_seq[paint]){ //first time case 
 	   	loss->init_seq[paint] = seq;
-	   	seq = 0;
+	   	seq = loss->has_syn[paint];
 	   }
 	   else{
-	   	if (seq > loss->init_seq[paint]){//hmm we may have a "wrap around" case
+	   	if (seq < loss->init_seq[paint]){//hmm we may have a "wrap around" case
 			seq = seq + (UINT_MAX - loss->init_seq[paint]);
 		}
 		else { //normal case no "wrap around"
@@ -146,7 +145,7 @@ CalculateFlows::simple_action(Packet *p)
 	   }  
 	   if (seqlen > 0) {
 		   type=1;
-	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint); //calculate loss if any
+	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint, tipfd); //calculate loss if any
 		   loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
    	       if (loss->eventfiles){
 		   	print_send_event(paint, ts, seq, (seq+seqlen));
@@ -168,11 +167,11 @@ CalculateFlows::simple_action(Packet *p)
 		   // for acks also!)
 			if ( !loss->init_seq[cpaint]){ //first time case
 	   	   		loss->init_seq[cpaint] = ack;
-				ack = 0;
+				ack = loss->has_syn[cpaint];
 			}
 			else {
-				if (ack > loss->init_seq[cpaint]){//hmm we may have a "wrap around" case
-					ack = ack + (UINT_MAX - loss->init_seq[cpaint]);
+				if (ack < loss->init_seq[cpaint]){//hmm we may have a "wrap around" case
+					ack = ack  + (UINT_MAX - loss->init_seq[cpaint]);
 				}
 				else { //normal case no "wrap around"
 					ack = ack - loss->init_seq[cpaint];
@@ -229,7 +228,7 @@ CalculateFlows::simple_action(Packet *p)
 	 }
 	}
 	
-	 /*if (aggp == 905){
+	 /*if (aggp == 1){
 	 printf("Timestamp Anno = [%ld.%06ld] " , ts.tv_sec,ts.tv_usec);
 	 printf("Sequence Number =[%u,%u]", loss->last_seq(0),loss->last_seq(1));
 	 printf("ACK Number =[%u,%u]", loss->last_ack(0),loss->last_ack(1));
