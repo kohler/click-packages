@@ -80,7 +80,9 @@ int
 CollectTCPFlows::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     _gen_packets = false;
+    _filename = String();
     if (cp_va_parse(conf, this, errh,
+		    cpOptional,
 		    cpFilename, "dump filename", &_filename,
 		    cpKeywords,
 		    "SESSION_PACKETS", cpBool, "generate session packets?", &_gen_packets,
@@ -95,7 +97,9 @@ int
 CollectTCPFlows::initialize(ErrorHandler *errh)
 {
     assert(!_f);
-    if (_filename != "-") {
+    if (!_filename)
+	/* nada */;
+    else if (_filename != "-") {
 	_f = fopen(_filename, "wb");
 	if (!_f)
 	    return errh->error("%s: %s", _filename.cc(), strerror(errno));
@@ -343,7 +347,7 @@ CollectTCPFlows::write_session(const Flow *flow)
 }
 
 int
-CollectTCPFlows::clear_handler(const String &, Element *e, void *, ErrorHandler *)
+CollectTCPFlows::flush_handler(const String &, Element *e, void *, ErrorHandler *)
 {
     CollectTCPFlows *ctf = static_cast<CollectTCPFlows *>(e);
     ctf->clear(true);
@@ -353,7 +357,7 @@ CollectTCPFlows::clear_handler(const String &, Element *e, void *, ErrorHandler 
 void
 CollectTCPFlows::add_handlers()
 {
-    add_write_handler("clear", clear_handler, 0);
+    add_write_handler("flush", flush_handler, 0);
 }
 
 ELEMENT_REQUIRES(userlevel)

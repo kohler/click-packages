@@ -5,6 +5,18 @@
 #include <click/ipflowid.hh>
 #include <click/bighashmap.hh>
 
+/*
+=c
+
+CollectTCPFlows([FILENAME, I<KEYWORDS>])
+
+=s
+
+collects information about TCP flows
+
+
+*/
+
 class CollectTCPFlows : public Element { public:
 
     class Flow;
@@ -48,7 +60,7 @@ class CollectTCPFlows : public Element { public:
     void clear(bool write);
     void write_flow(const Flow *);
 
-    static int clear_handler(const String &, Element*, void*, ErrorHandler*);
+    static int flush_handler(const String &, Element*, void*, ErrorHandler*);
     
 };
 
