@@ -1256,13 +1256,13 @@ class PlotCanvas:
         self.canvas.connect("enter_notify_event", self.cmd_check_state)
         self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
-        master.pack_start(self.canvas, expand=1, fill=1)
+        master.pack_start(self.canvas, expand=1, fill=1, padding=4)
         self.canvas.show()
 
-        self.left_margin = 40
-        self.right_margin = 20
-        self.top_margin = 10
-        self.bottom_margin = 20
+        self.left_margin = 4
+        self.right_margin = 4
+        self.top_margin = 0
+        self.bottom_margin = 0
         self.plotted = False
         self.press = None
         self.press_state = 0
@@ -1360,6 +1360,16 @@ class PlotCanvas:
         x, y, self.wwidth, self.wheight = widget.get_allocation()
         self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
         self.backing_store_updated = False
+
+        # set margins from layout
+        drawable = PlotCanvas_ScreenDrawable(self)
+        playout = drawable.layout()
+        w, h = drawable.text_extents(playout, "4000K", 0, 0)[2:4]
+        self.left_margin = int(w + 8)
+        self.right_margin = int(w/2 + 4)
+        self.top_margin = int(h/2)
+        self.bottom_margin = int(h + 4)
+        
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
         self._check_tool(0)
@@ -1405,7 +1415,7 @@ class PlotCanvas:
         if event.button == 1:
             try:
                 if self.show_tool == PlotCanvas.TOOL_IDENTIFY and self.highlight[0] == "packet":
-                    self.press = self._transform_packet(self.highlight[1], self.highlight[2])
+                    self.press = self._transform_packet(self.highlight[1], self.highlight[2], top=True)
                 else:
                     self._itransform(event.x, event.y) # for signal
                     self.press = (event.x, event.y)
@@ -1547,18 +1557,24 @@ class PlotCanvas:
         drawable.clear()
         if self.conn is not None:
 
+            # variables
+            playout = drawable.layout()
+            small_playout = drawable.layout("small")
+
+            # plottable area
+            left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
+
             # analyze time ranges
-            ranges = fix_range(self.begin, self.end, 30.0 / self.plot_width)
+            ranges = fix_range(self.begin, self.end, 30.0 / plot_width)
             t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
 
             # analyze sequence ranges
             s0, s1 = self.conn.get_seq_range(self.dir, t0, t1)
             if s1 <= s0: s0 = 0; s1 = 1
-            ranges = fix_range(s0, s1, 30.0 / self.plot_height)
+            ranges = fix_range(s0, s1, 30.0 / plot_height)
             s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
 
             # get transformation
-            left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
             tscale = plot_width / float(t1 - t0)
             sscale = plot_height / float(s0 - s1)
             toff = left_margin - (t0 * tscale)
@@ -1568,10 +1584,6 @@ class PlotCanvas:
             # mark that self.tscale, self.sscale, etc. are available
             self.plotted = True
             
-            # variables
-            playout = drawable.layout()
-            small_playout = drawable.layout("small")
-
             # clear background
             drawable.fill_rectangle(drawable.gc("bg"), left_margin, top_margin, plot_width, plot_height)
 
