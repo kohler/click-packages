@@ -420,7 +420,6 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
 	k_cumack = k;
 
-    // If this is a dupack,
     // From this point on, we are shifting over packets that might, indeed,
     // cause ack latencies later, so don't change the stable k_cumack hint.
 
