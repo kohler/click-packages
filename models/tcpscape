@@ -31,8 +31,10 @@ class Packet:
         self.seq = int(seq)
         self.last_seq = self.seq + int(payloadlen)
         self.ack = int(ack)
-        if flags != "A" and flags != "AU":
-            if flags.find("S") or flags.find("F"):
+        if flags != "A" and flags != "PA":
+            if flags.find("S") >= 0:
+                self.last_seq += 1
+            if flags.find("F") >= 0:
                 self.last_seq += 1
         self.dup_acks = int(dup_acks)
     def pure_ack(self):
@@ -440,6 +442,7 @@ class PlotCanvas:
         self.gc = {}
         self.plotted = False
         self.press_x = None
+        self.press_state = 0
         self.mod_state = 0
 
     # getting properties
@@ -530,27 +533,36 @@ class PlotCanvas:
     def cmd_release(self, widget, event):
         try:
             if event.button == 1 and self.press_x is not None:
-                if self.press_state & gtk.gdk.SHIFT_MASK:
-                    self._zoom_click(event, 0.25)
-                elif self.press_state & gtk.gdk.CONTROL_MASK:
-                    self._zoom_click(event, 4)
+                if self.press_state & gtk.gdk.CONTROL_MASK:
+                    if self.press_state & gtk.gdk.MOD1_MASK:
+                        self._zoom_click(event, 4)
+                    else:
+                        self._zoom_click(event, 0.25)
                 else:
-                    self.mod_state = gtk.gdk.CONTROL_MASK # lie
+                    self.mod_state = -1 # lie
         except ValueError:
             pass
         self._state2cursor(self.canvas.window.get_pointer()[2])
         self.press_x = None
         return 1
+    def _state2cursorname(self, state):
+        if state < 0:
+            return ""
+        elif not state & gtk.gdk.CONTROL_MASK:
+            return "hand"
+        elif state & gtk.gdk.MOD1_MASK:
+            return "zoomout"
+        else:
+            return "zoomin"
     def _state2cursor(self, state):
-        if state & gtk.gdk.BUTTON1_MASK:
+        if state & gtk.gdk.BUTTON1_MASK and not (self.press_state & gtk.gdk.CONTROL_MASK):
             pass
-        elif (state & gtk.gdk.SHIFT_MASK) and not (self.mod_state & gtk.gdk.SHIFT_MASK):
-            self.canvas.window.set_cursor(PlotCursors(self.canvas)["zoomin"])
-        elif (state & gtk.gdk.CONTROL_MASK) and not (self.mod_state & gtk.gdk.CONTROL_MASK):
-            self.canvas.window.set_cursor(PlotCursors(self.canvas)["zoomout"])
-        elif not (state & (gtk.gdk.SHIFT_MASK|gtk.gdk.CONTROL_MASK)) and (self.mod_state & (gtk.gdk.SHIFT_MASK|gtk.gdk.CONTROL_MASK)):
-            self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
-        self.mod_state = state
+        else:
+            s1 = self._state2cursorname(self.mod_state)
+            s2 = self._state2cursorname(state)
+            if s1 != s2:
+                self.canvas.window.set_cursor(PlotCursors(self.canvas)[s2])
+            self.mod_state = state
     def cmd_check_state(self, widget, event):
         self._state2cursor(widget.window.get_pointer()[2])
         return 1
