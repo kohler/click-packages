@@ -1,4 +1,4 @@
-// -*- mode: c++; c-basic-offset: 4 -*-
+// -*- c-basic-offset: 4 -*-
 #include <config.h>
 #include <click/config.h>
 
@@ -67,7 +67,6 @@ CollectTCPFlows::CollectTCPFlows()
 CollectTCPFlows::~CollectTCPFlows()
 {
     MOD_DEC_USE_COUNT;
-    uninitialize();
 }
 
 void
@@ -114,7 +113,7 @@ CollectTCPFlows::initialize(ErrorHandler *errh)
 }
 
 void
-CollectTCPFlows::uninitialize()
+CollectTCPFlows::cleanup(CleanupStage)
 {
     if (_f && _f != stdout)
 	fclose(_f);
@@ -125,7 +124,7 @@ CollectTCPFlows::uninitialize()
 void
 CollectTCPFlows::clear(bool write_flows)
 {
-    Vector<Flow *>poo;
+    Vector<Flow *> poo;
     Flow *to_free = 0;
 
     for (Map::Iterator iter = _map.first(); iter; iter++)

@@ -1,4 +1,4 @@
-// -*- mode: c++; c-basic-offset: 4 -*-
+// -*- c-basic-offset: 4 -*-
 #ifndef CLICK_COLLECTTCPFLOWS_HH
 #define CLICK_COLLECTTCPFLOWS_HH
 #include <click/element.hh>
@@ -30,7 +30,7 @@ class CollectTCPFlows : public Element { public:
     void notify_noutputs(int);
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
-    void uninitialize();
+    void cleanup(CleanupStage);
     void add_handlers();
 
     Packet *handle_packet(Packet *);
