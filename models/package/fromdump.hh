@@ -22,10 +22,6 @@ Keyword arguments are:
 
 =over 8
 
-=item TIMING
-
-Boolean. Same as the TIMING argument.
-
 =item SAMPLE
 
 Unsigned real number between 0 and 1. FromDump will output each packet with
@@ -34,10 +30,20 @@ actual sampling probability may differ substantially from the requested
 sampling probability. Use the C<sampling_prob> handler to find out the actual
 probability.
 
+=item FORCE_IP
+
+Boolean. If true, then FromDump will emit only IP packets with their IP header
+annotations correctly set. (If FromDump has two outputs, non-IP packets are
+pushed out on output 1; otherwise, they are dropped.) Default is false.
+
 =item STOP
 
 Boolean. If true, then FromDump will ask the router to stop when it is done
 reading its tcpdump file. Default is false.
+
+=item TIMING
+
+Boolean. Same as the TIMING argument.
 
 =item MMAP
 
@@ -70,15 +76,17 @@ class FromDump_Fast : public Element { public:
     ~FromDump_Fast();
 
     const char *class_name() const		{ return "FromDump"; }
-    const char *processing() const		{ return PUSH; }
+    const char *processing() const		{ return "a/ah"; }
     FromDump_Fast *clone() const		{ return new FromDump_Fast; }
-  
+
+    void notify_noutputs(int);
     int configure(const Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);
     void uninitialize();
     void add_handlers();
 
     void run_scheduled();
+    Packet *pull(int);
   
   private:
 
@@ -95,6 +103,7 @@ class FromDump_Fast : public Element { public:
     bool _swapped : 1;
     bool _timing : 1;
     bool _stop : 1;
+    bool _force_ip : 1;
 #ifdef ALLOW_MMAP
     bool _mmap : 1;
 #endif
@@ -119,6 +128,7 @@ class FromDump_Fast : public Element { public:
 #endif
     int read_buffer(ErrorHandler *);
     int read_into(void *, uint32_t, ErrorHandler *);
+    bool check_force_ip(Packet *);
     Packet *read_packet(ErrorHandler *);
 
     static String read_handler(Element *, void *);

@@ -26,6 +26,7 @@
 #include <click/error.hh>
 #include <click/glue.hh>
 #include <click/click_ip.h>
+#include <click/click_ether.h>
 #include "elements/userlevel/fakepcap.h"
 #include <unistd.h>
 #include <sys/types.h>
@@ -53,10 +54,16 @@ FromDump_Fast::~FromDump_Fast()
     uninitialize();
 }
 
+void
+FromDump_Fast::notify_noutputs(int n)
+{
+    set_noutputs(n <= 1 ? 1 : 2);
+}
+
 int
 FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
-    bool timing = false, stop = false;
+    bool timing = false, stop = false, force_ip = false;
 #ifdef __linux__
     bool mmap = false;
 #else
@@ -73,6 +80,7 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    "STOP", cpBool, "stop driver when done?", &stop,
 		    "MMAP", cpBool, "access file with mmap()?", &mmap,
 		    "SAMPLE", cpUnsignedReal2, "sampling probability", 28, &_sampling_prob,
+		    "FORCE_IP", cpBool, "emit IP packets only?", &force_ip,
 		    0) < 0)
 	return -1;
     if (_sampling_prob > (1 << 28)) {
@@ -83,6 +91,7 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
     
     _timing = timing;
     _stop = stop;
+    _force_ip = force_ip;
 #ifdef ALLOW_MMAP
     _mmap = mmap;
     _mmap_unit = 0;
@@ -183,7 +192,9 @@ FromDump_Fast::read_buffer(ErrorHandler *errh)
     if (_data_packet)
 	_data_packet->kill();
     _data_packet = 0;
-    _pos = _len = 0;
+    _pos -= _len;		// adjust _pos by _len: it might validly point
+				// beyond _len
+    _len = 0;
 
 #ifdef ALLOW_MMAP
     if (_mmap) {
@@ -193,7 +204,7 @@ FromDump_Fast::read_buffer(ErrorHandler *errh)
 	// else, try a regular read
 	_mmap = false;
 	(void) lseek(_fd, _mmap_off, SEEK_SET);
-	_pos = _len = 0;
+	_len = 0;
     }
 #endif
     
@@ -224,12 +235,14 @@ FromDump_Fast::read_into(void *vdata, uint32_t dlen, ErrorHandler *errh)
     uint32_t dpos = 0;
 
     while (dpos < dlen) {
-	uint32_t howmuch = dlen - dpos;
-	if (howmuch > _len - _pos)
-	    howmuch = _len - _pos;
-	memcpy(data + dpos, _buffer + _pos, howmuch);
-	dpos += howmuch;
-	_pos += howmuch;
+	if (_pos < _len) {
+	    uint32_t howmuch = dlen - dpos;
+	    if (howmuch > _len - _pos)
+		howmuch = _len - _pos;
+	    memcpy(data + dpos, _buffer + _pos, howmuch);
+	    dpos += howmuch;
+	    _pos += howmuch;
+	}
 	if (dpos < dlen && read_buffer(errh) <= 0)
 	    return dpos;
     }
@@ -248,6 +261,7 @@ FromDump_Fast::initialize(ErrorHandler *errh)
     if (_fd < 0)
 	return errh->error("%s: %s", _filename.cc(), strerror(errno));
 
+    _pos = 0;
     int result = read_buffer(errh);
     if (result < 0) {
 	uninitialize();
@@ -283,15 +297,23 @@ FromDump_Fast::initialize(ErrorHandler *errh)
     _linktype = fh->linktype;
     _pos = sizeof(fake_pcap_file_header);
 
+    // if forcing IP packets, check datalink type: only Ethernet and IP are
+    // allowed
+    if (_force_ip) {
+	if (_linktype != FAKE_DLT_RAW && _linktype != FAKE_DLT_EN10MB)
+	    return errh->error("%s: unknown linktype %d; can't force IP packets", _filename.cc(), _linktype);
+	if (_timing)
+	    return errh->error("FORCE_IP and TIMING options are incompatible");
+    }
+
+    // try reading a packet
     if ((_packet = read_packet(errh))) {
 	struct timeval now;
 	click_gettimeofday(&now);
 	timersub(&now, &_packet->timestamp_anno(), &_time_offset);
+    }
 
-	ScheduleInfo::join_scheduler(this, &_task, errh);
-    } else
-	errh->warning("%s: contains no packets", _filename.cc());
-  
+    ScheduleInfo::join_scheduler(this, &_task, errh);
     return 0;
 }
 
@@ -309,16 +331,38 @@ FromDump_Fast::uninitialize()
     _packet = _data_packet = 0;
 }
 
+bool
+FromDump_Fast::check_force_ip(Packet *p)
+{
+    if (_linktype == FAKE_DLT_RAW) {
+	if (!p->ip_header())
+	    // packet was too small for an IP header
+	    return (p->kill(), false);
+    } else {
+	/* assert(_linktype == FAKE_DLT_EN10MB); */
+	const click_ether *ethh = (const click_ether *)p->data();
+	const click_ip *iph = (const click_ip *)(ethh + 1);
+	if (p->length() < 14 + 20
+	    || (ethh->ether_type != htons(ETHERTYPE_IP)
+		&& ethh->ether_type != htons(ETHERTYPE_IP6))
+	    || (int)p->length() < 14 + (iph->ip_hl << 2))
+	    return (p->kill(), false);
+	p->set_ip_header(iph, iph->ip_hl << 2);
+    }
+    return true;
+}
+
 Packet *
 FromDump_Fast::read_packet(ErrorHandler *errh)
 {
     fake_pcap_pkthdr swapped_ph;
     const fake_pcap_pkthdr *ph;
     int len, caplen;
+    Packet *p;
 
   retry:
     // we may need to read bits of the file
-    if (_len - _pos >= sizeof(*ph)) {
+    if (_pos + sizeof(*ph) <= _len) {
 	ph = reinterpret_cast<const fake_pcap_pkthdr *>(_buffer + _pos);
 	_pos += sizeof(*ph);
     } else {
@@ -354,7 +398,6 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
     }
     
     // create packet
-    Packet *p;
     if (_pos + caplen <= _len) {
 	p = _data_packet->clone();
 	if (!p) {
@@ -387,6 +430,9 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
 	const click_ip *iph = reinterpret_cast<const click_ip *>(p->data());
 	p->set_ip_header(iph, iph->ip_hl << 2);
     }
+
+    if (_force_ip && !check_force_ip(p))
+	goto retry;
     
     return p;
 }
@@ -394,6 +440,12 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
 void
 FromDump_Fast::run_scheduled()
 {
+    if (!_packet) {
+	if (_stop)
+	    router()->please_stop_driver();
+	return;
+    }
+    
     if (_timing) {
 	struct timeval now;
 	click_gettimeofday(&now);
@@ -406,10 +458,29 @@ FromDump_Fast::run_scheduled()
 
     output(0).push(_packet);
     _packet = read_packet(0);
-    if (_packet)
-	_task.fast_reschedule();
-    else if (_stop)
-	router()->please_stop_driver();
+    _task.fast_reschedule();
+}
+
+Packet *
+FromDump_Fast::pull(int)
+{
+    if (!_packet) {
+	if (_stop)
+	    router()->please_stop_driver();
+	return 0;
+    }
+    
+    if (_timing) {
+	struct timeval now;
+	click_gettimeofday(&now);
+	timersub(&now, &_time_offset, &now);
+	if (timercmp(&_packet->timestamp_anno(), &now, >))
+	    return 0;
+    }
+
+    Packet *old_packet = _packet;
+    _packet = read_packet(0);
+    return old_packet;
 }
 
 String
