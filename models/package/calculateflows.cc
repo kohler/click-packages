@@ -469,7 +469,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
 {
-    //click_chatter("mark_delivered at %{timeval}: %u  %{timeval}:%u  %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
+    //click_chatter("mark_delivered at %{timeval}: %u  CA %{timeval}:%u  TH %{timeval}:%u  %{timeval}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
     
     // update current RTT
     struct timeval cur_min_ack_latency = min_ack_latency;
@@ -1236,7 +1236,7 @@ Packet *
 CalculateFlows::simple_action(Packet *p)
 {
     uint32_t aggregate = AGGREGATE_ANNO(p);
-    if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP) {
+    if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())) {
 	ConnInfo *loss = _conn_map.find(aggregate);
 	if (!loss) {
 	    if ((loss = new ConnInfo(p, _filepos_h)))
