@@ -154,8 +154,6 @@ class CalculateFlows::LossInfo {
     
     uint32_t _aggregate;
 
-    bool _have_init_time : 1;
-    
   public:
     MapT time_by_firstseq[2];
     MapT time_by_lastseq[2];
@@ -170,8 +168,6 @@ class CalculateFlows::LossInfo {
     
     void init() { 
 	_gnuplot = _eventfiles = false;
-	_aggregate = 0;
-	_have_init_time = false;
 	_init_time.tv_usec = 0;
 	_init_time.tv_sec = 0;
 	_outoforder_pckt = 0;
@@ -205,13 +201,8 @@ class CalculateFlows::LossInfo {
 	_p_loss_events[1] = 0;
     }
     
-    LossInfo(String outfilename[2], uint32_t aggp, bool gnuplotp, bool eventfilesp) { //regular constructor
-	init();
-	LossInfoInit(outfilename, aggp, gnuplotp, eventfilesp);
-    }
+    LossInfo(const Packet *, bool gnuplot, bool eventfiles, const String *outfilenames);
 
-    void LossInfoInit(String outfilename[2], uint32_t aggp, bool gnuplot, bool eventfiles);
-    
     ~LossInfo() {
 	if (_eventfiles)
 	    print_stats();

@@ -20,13 +20,26 @@ CalculateFlows::HalfConnectionInfo::HalfConnectionInfo()
 {
 }
 
-void
-CalculateFlows::LossInfo::LossInfoInit(String outfilenamep[2], uint32_t aggp, bool gnuplot, bool eventfiles)
+CalculateFlows::LossInfo::LossInfo(const Packet *p, bool gnuplot, bool eventfiles, const String *outfilenamep)
+    : _aggregate(AGGREGATE_ANNO(p))
 {
+    assert(_aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP
+	   && !IP_FIRSTFRAG(p->ip_header())
+	   && p->transport_length() >= (int)sizeof(click_udp));
+    
+    // initialize to empty
+    init();
+
+    // set initial timestamp
+    if (timerisset(&p->timestamp_anno()))
+	_init_time = p->timestamp_anno() - make_timeval(0, 1);
+    else
+	timerclear(&_init_time);
+
+    // plot variables
     _gnuplot = (gnuplot && outfilenamep[0] && outfilenamep[1]);
     _eventfiles = (eventfiles && outfilenamep[0] && outfilenamep[1]);
-    _aggregate = aggp;
-    _outputdir = "./flown" + String(aggp);
+    _outputdir = "./flown" + String(_aggregate);
     if (_gnuplot || _eventfiles)
 	system("mkdir -p ./" + _outputdir);
 
@@ -131,10 +144,6 @@ CalculateFlows::LossInfo::pre_update_state(const Packet *p)
 	   && AGGREGATE_ANNO(p) == _aggregate);
     
     // set timestamp offset
-    if (!_have_init_time) {
-	_init_time = p->timestamp_anno() - make_timeval(0, 1);
-	_have_init_time = true;
-    }
 
     // set TCP sequence number offsets
     const click_tcp *tcph = p->tcp_header();
@@ -561,12 +570,13 @@ CalculateFlows::simple_action(Packet *p)
     const click_ip *iph = p->ip_header();
     if (!iph || (iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP) // Sanity check copied from AggregateIPFlows
 	|| !IP_FIRSTFRAG(iph)
+	|| !AGGREGATE_ANNO(p)
 	|| p->transport_length() < (int)sizeof(click_udp)) {
 	checked_output_push(1, p);
 	return 0;
     }
   
-    unsigned aggp = AGGREGATE_ANNO(p);
+    uint32_t aggregate = AGGREGATE_ANNO(p);
   
     IPAddress src(iph->ip_src.s_addr); //for debugging
     IPAddress dst(iph->ip_dst.s_addr); //for debugging
@@ -582,7 +592,16 @@ CalculateFlows::simple_action(Packet *p)
     switch (iph->ip_p) { 
 	 
       case IP_PROTO_TCP: {
-	  LossInfo *loss = _loss_map.find(aggp);
+	  LossInfo *loss = _loss_map.find(aggregate);
+	  if (!loss) {
+	      if ((loss = new LossInfo(p, true, true, _outfilename)))
+		  _loss_map.insert(aggregate, loss);
+	      else {
+		  click_chatter("out of memory!");
+		  p->kill();
+		  return 0;
+	      }
+	  }
 	  loss->handle_packet(p, _tipfd);
 	  break;
       }
@@ -657,15 +676,13 @@ CalculateFlows::LossInfo::gplotp_send_event(unsigned paint, const timeval &tstam
 }
 
 void 
-CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *p)
+CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
-    if (event == NEW_AGG) {
-	LossInfo *tmploss = new LossInfo(_outfilename, aggregate, true, true);
-	_loss_map.insert(aggregate, tmploss);
-    } else if (event == DELETE_AGG) {
-	LossInfo *tmploss = _loss_map.find(aggregate);
-	_loss_map.remove(aggregate);
-	delete tmploss;
+    if (event == DELETE_AGG) {
+	if (LossInfo *tmploss = _loss_map.find(aggregate)) {
+	    _loss_map.remove(aggregate);
+	    delete tmploss;
+	}
     }
 }
 
