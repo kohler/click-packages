@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+
+from __future__ import generators
+from bisect import bisect
+import sys, re
+
+class Packet:
+    def __init__(self, time, seq, seqlen, ack):
+        self.time = float(time)
+        self.seq = int(seq)
+        self.last_seq = self.seq + int(seqlen)
+        self.ack = int(ack)
+    def pure_ack(self):
+        return self.seq == self.last_seq
+    def has_data(self):
+        return self.seq != self.last_seq
+    def __cmp__(self, other):
+        print "cmp", self.time, "<=>", other.time
+        return self.time.__cmp__(other.time)
+    def __str__(self):
+        result = "[" + str(self.time) + " "
+        if self.pure_ack():
+            result += "A" + str(self.ack)
+        else:
+            result += str(self.seq) + ":" + str(self.last_seq)
+        return result + "]"
+
+class LossEvent:
+    def __init__(self, type, time, seq, end_time, end_seq):
+        self.type, self.time, self.seq, self.end_time, self.end_seq = \
+                   type, float(time), int(seq), float(end_time), int(end_seq)
+
+def _direction(dir):
+    if dir == '>':
+        return 0
+    elif dir == '<':
+        return 1
+    elif dir == 0 or dir == 1:
+        return dir
+    else:
+        raise RuntimeError, "bad direction"
+
+class Connection:
+    def __init__(self):
+        self.s = ([], [])
+        self.loss = ([], [])
+        self.flow_id = []
+        self.aggregate = -1
+    def read(self, f):
+        for line in f:
+            if not re.match('[\!\#]', line):
+                time, dir, flags, seq, seqlen, ack = line.split()
+                self.s[_direction(dir)].append(Packet(time, seq, seqlen, ack))
+            elif re.match('\\#[pf]?loss', line):
+                type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
+                self.loss[_direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+            elif re.match('!flowid', line):
+                self.flow_id = line.split()[1:]
+            elif re.match('!aggregate', line):
+                self.aggregate = line.split()[1]
+            elif re.match('!eof$', line):
+                break
+        return self
+    def first_index_after(self, time, dir = None):
+        if dir is None:
+            return self.first_index_after(time, 0), self.first_index_after(time, 1)
+        else:
+            fake_pkt = Packet(time, 0, 0, 0)
+            return bisect(self.s[_direction(dir)], fake_pkt)
+    def packets(self, dir, start_time = None, last_time = None):
+        dir = _direction(dir)
+        if start_time is None:
+            i = 0
+        else:
+            i = self.first_index_after(start_time, dir)
+        print i, dir, len(self.s[dir])
+        while i < len(self.s[dir]) and (last_time is None or self.s[dir][i].time < last_time):
+            yield self.s[dir][i]
+            i += 1
+
+if __name__ == "__main__":
+    c = Connection().read(sys.stdin)
+    for p in c.packets('>', 1):
+        print p
