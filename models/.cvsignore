@@ -1,2 +1,2 @@
 Makefile autom4te*
-config.log config.status
+config.log config.status config.h
