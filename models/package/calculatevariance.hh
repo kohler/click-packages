@@ -77,6 +77,7 @@ class CalculateVariance : public Element {
     Vector<CounterEntry> _counters;
     unsigned _num_aggregates;
     unsigned _num_aggregates_bits;
+    unsigned long long int _total_pkts;
 
 };
 

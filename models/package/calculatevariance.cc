@@ -56,6 +56,7 @@ CalculateVariance::reset()
 int
 CalculateVariance::initialize(ErrorHandler *)
 {
+    _total_pkts = 0;
     reset();
     return 0;
 }
@@ -93,6 +94,8 @@ CalculateVariance::simple_action(Packet *p)
     _counters[row].pkt_sum_interval++;
     _counters[row].pkt_count++;
     _counters[row].byte_count += p->length();
+
+    _total_pkts++;
 
     return p;
 }
@@ -136,7 +139,8 @@ CalculateVariance::print_edf_function()
         click_chatter("%s: %s", _filename.cc(), strerror(errno));
 	return;
     }
-
+   
+    printf("#total number of packets %lld \n",_total_pkts);
     //to get edf i need to first sort the data
     qsort(&_counters[0],_counters.size(),sizeof(CounterEntry),&pktsorter);
 
@@ -152,7 +156,7 @@ CalculateVariance::print_edf_function()
 	if ((i==_counters.size()) || ((_counters[i].pkt_count!=prev_edf_x_size))) {
 	    fprintf(outfile,"%d\t %0.10f",prev_edf_x_size,edf_y_val);
 	    if ((i-prev_count)>10) {
-		fprintf(outfile,"\n");
+		fprintf(outfile,"(%d)\n",i-prev_count);
 	    }else{
 		for (int j=prev_count;j<i;j++) {
 		    fprintf(outfile,"\t%d",_counters[j].aggregate_no);
