@@ -987,7 +987,8 @@ class PlotCanvas_ScreenDrawable:
         if len(l) > 1 and l[0][0] < 0:
             x1, y1 = l[0]; x2, y2 = l[1]
             l[0] = (0, y1 + (-x1 / (x2 - x1)) * (y2 - y1))
-        self.drawable.draw_lines(gc, l)
+        if len(l) > 1:
+            self.drawable.draw_lines(gc, l)
 
     def fill_rectangle(self, gc, x1, y1, w, h):
         self.drawable.draw_rectangle(gc, gtk.TRUE, x1, y1, w, h)
