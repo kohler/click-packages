@@ -2078,7 +2078,7 @@ labeloffset := 5;
 picture clipper;
 
 def Sdata = withcolor (1, 0, 0) withpen pencircle scaled 0.5 enddef;
-def Sdataundelivered = withcolor (0.8, 0.8, 0.8) withpen pencircle scaled 0.5 dashed evenly enddef;
+def Sdataundelivered = withcolor .2white withpen pencircle scaled 1.5 enddef;
 def Sack = withcolor (0.42, 0.56, 0.14) withpen pencircle scaled 0.5 enddef;
 def Sdataack = withcolor (0, 0, 1) withpen pencircle scaled 0.5 enddef;
 
