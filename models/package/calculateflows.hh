@@ -79,10 +79,18 @@ Boolean. If true, then output the latencies between data packets and their
 acknowledgements to the TRACEINFO file. This information will be written
 inside an "C<&lt;acklatency&gt;>" XML element as a series of non-XML lines.
 Each line has the format "I<timestamp> I<seq> I<latency>", where I<timestamp>
-is the data packet's timestamp, I<seq> is its last sequence number, and
+is the data packet's timestamp, I<seq> is its end sequence number, and
 I<latency> is the delay between the packet's arrival and its ack's arrival at
 the trace point. These lines will generally be sorted in increasing order of
 I<timestamp>, but that is not guaranteed.
+
+=item FULLRCVWINDOW
+
+Boolean. If true, then output a list of data packet timestamps that fill the
+receiver's advertised window to the TRACEINFO file, inside a
+"C<&lt;fullrcvwindow&rt;>" XML element. Each line has the format "I<timestamp>
+I<seq>", where I<timestamp> is the packet's timestamp and I<seq> is its end
+sequence number.
 
 =back
 
@@ -131,6 +139,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
     bool write_ack_latency() const	{ return _ack_latency; }
+    bool write_full_rcv_window() const	{ return _full_rcv_window; }
 
     static double float_timeval(const struct timeval &);
     
@@ -146,6 +155,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     HandlerCall *_filepos_h;
 
     bool _ack_latency : 1;
+    bool _full_rcv_window : 1;
     bool _ip_id : 1;
     
     Pkt *_free_pkt;
@@ -175,15 +185,17 @@ struct CalculateFlows::Pkt {
     uint16_t ip_id;		// IP ID of this packet
 
     enum Flags {
-	F_NEW = 1,		// packet contains some new data
-	F_REXMIT = 2,		// packet contains some retransmitted data
-	F_FULL_REXMIT = 4,	// retransmitted data corresponds exactly
+	F_NEW = 0x1,		// packet contains some new data
+	F_REXMIT = 0x2,		// packet contains some retransmitted data
+	F_FULL_REXMIT = 0x4,	// retransmitted data corresponds exactly
 				// to an earlier packet
-	F_DUPLICATE = 8,	// packet is a network duplicate
-	F_REORDER = 16,		// packet is reordered
-	F_IN_REORDER = 32,	// packet is part of a reordered block
-	F_KEEPALIVE = 64,	// packet is a keepalive
-	F_ACK_REORDER = 128	// packet's ackno is reordered
+	F_DUPLICATE = 0x8,	// packet is a network duplicate
+	F_REORDER = 0x10,	// packet is reordered
+	F_IN_REORDER = 0x20,	// packet is part of a reordered block
+	F_KEEPALIVE = 0x40,	// packet is a keepalive
+	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
+
+	F_FILLS_RCV_WINDOW = 0x100, // packet filled receive window
     };
     int flags;			// packet flags
 
@@ -217,6 +229,7 @@ struct CalculateFlows::StreamInfo {
     bool have_syn : 1;		// have we seen a SYN?
     bool have_fin : 1;		// have we seen a FIN?
     bool have_ack_latency : 1;	// have we seen an ACK match?
+    bool filled_rcv_window : 1;	// have we ever filled the receive window?
     
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
@@ -242,6 +255,9 @@ struct CalculateFlows::StreamInfo {
 
     struct timeval min_ack_latency; // minimum time between packet and ACK
 
+    tcp_seq_t end_rcv_window;	// end of receive window
+    int rcv_window_scale;	// window scaling option
+
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
     Pkt *pkt_data_tail;		// last packet record with data
@@ -255,13 +271,14 @@ struct CalculateFlows::StreamInfo {
 
     void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
-    void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
+    void update_counters(const Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &, Pkt *search_hint = 0) const;
 
     void output_loss(ConnInfo *, CalculateFlows *);
-    void write_xml(ConnInfo *, FILE *, bool ack_latency) const;
+    void write_xml(ConnInfo *, FILE *, bool ack_latency, bool full_rcv_window) const;
     void write_ack_latency_xml(ConnInfo *, FILE *) const;
+    void write_full_rcv_window_xml(FILE *) const;
     
 };
 

@@ -23,11 +23,12 @@ operator*(double frac, const struct timeval &tv)
 
 CalculateFlows::StreamInfo::StreamInfo()
     : have_init_seq(false), have_syn(false), have_fin(false),
-      have_ack_latency(false),
+      have_ack_latency(false), filled_rcv_window(false),
       init_seq(0), max_seq(0), max_ack(0), max_live_seq(0), max_loss_seq(0),
       total_packets(0), total_seq(0),
       loss_events(0), possible_loss_events(0), false_loss_events(0),
       event_id(0),
+      end_rcv_window(0), rcv_window_scale(0),
       pkt_head(0), pkt_tail(0), pkt_data_tail(0),
       loss_trail(0)
 {
@@ -160,21 +161,45 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 }
 
 void
-CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, const ConnInfo *conn)
+CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, int transport_length, const ConnInfo *conn)
 {
     // update counters
     total_packets++;
     total_seq += np->end_seq - np->seq;
     
-    // mark SYN and FIN packets
+    // SYN processing
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != np->seq)
 	    click_chatter("%u: different SYN seqnos!", conn->aggregate()); // XXX report error
 	else {
 	    syn_seq = np->seq;
 	    have_syn = true;
+
+	    // look for window scaling option
+	    if (tcph->th_off > 5) {
+		const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
+		int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
+		for (int oi = 20; oi < hlen; ) {
+		    if (oa[oi] == TCPOPT_NOP) {
+			oi++;
+			continue;
+		    } else if (oa[oi] == TCPOPT_EOL)
+			break;
+
+		    int xlen = oa[oi+1];
+		    if (xlen < 2 || oi + xlen > hlen) // bad option
+			break;
+
+		    if (oa[oi] == TCPOPT_WSCALE && xlen == TCPOLEN_WSCALE)
+			rcv_window_scale = (oa[oi+2] <= 14 ? oa[oi+2] : 14);
+
+		    oi += xlen;
+		}
+	    }
 	}
     }
+
+    // FIN processing
     if (tcph->th_flags & TH_FIN) {
 	if (have_fin && fin_seq != np->end_seq - 1)
 	    click_chatter("%u: different FIN seqnos!", conn->aggregate()); // XXX report error
@@ -188,7 +213,10 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     if (SEQ_GT(np->end_seq, max_seq))
 	max_seq = np->end_seq;
     if (SEQ_GT(np->end_seq, max_live_seq))
-	max_live_seq = np->end_seq;    
+	max_live_seq = np->end_seq;
+
+    // update end_rcv_window
+    end_rcv_window = np->ack + (ntohs(tcph->th_win) << rcv_window_scale);
 }
 
 CalculateFlows::Pkt *
@@ -403,16 +431,31 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 }
 
 void
-CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, bool ack_latency) const
+CalculateFlows::StreamInfo::write_full_rcv_window_xml(FILE *f) const
+{
+    if (filled_rcv_window) {
+	fprintf(f, "    <fullrcvwindow>\n");
+	for (Pkt *k = pkt_head; k; k = k->next)
+	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
+		fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	fprintf(f, "    </fullrcvwindow>\n");
+    }
+}
+
+void
+CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, bool ack_latency, bool full_rcv_window) const
 {
     fprintf(f, "  <stream dir='%d' beginseq='%u' seqlen='%u' nloss='%u' nploss='%u' nfloss='%u'",
 	    direction, init_seq, total_seq, loss_events, possible_loss_events, false_loss_events);
-    if (loss_trail || (ack_latency && have_ack_latency)) {
+    if (loss_trail || (ack_latency && have_ack_latency)
+	|| (full_rcv_window && filled_rcv_window)) {
 	fprintf(f, ">\n");
 	if (loss_trail)
 	    loss_trail->write_xml(f);
 	if (ack_latency)
 	    write_ack_latency_xml(conn, f);
+	if (full_rcv_window)
+	    write_full_rcv_window_xml(f);
 	fprintf(f, "  </stream>\n");
     } else
 	fprintf(f, " />\n");
@@ -437,8 +480,8 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    fprintf(f, " filepos='%s'", String(_filepos).cc());
 	fprintf(f, ">\n");
 	
-	_stream[0].write_xml(this, f, cf->write_ack_latency());
-	_stream[1].write_xml(this, f, cf->write_ack_latency());
+	_stream[0].write_xml(this, f, cf->write_ack_latency(), cf->write_full_rcv_window());
+	_stream[1].write_xml(this, f, cf->write_ack_latency(), cf->write_full_rcv_window());
 	
 	fprintf(f, "</flow>\n");
     }
@@ -536,6 +579,12 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	    }
 	}
     }
+
+    // did packet fill receive window?
+    if (k->end_seq == ack_stream.end_rcv_window) {
+	k->flags |= Pkt::F_FILLS_RCV_WINDOW;
+	_stream[direction].filled_rcv_window = true;
+    }
 }
 
 void
@@ -548,7 +597,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
 	_stream[direction].categorize(k, this, parent);
-	_stream[direction].update_counters(k, p->tcp_header(), this);
+	_stream[direction].update_counters(k, p->tcp_header(), p->transport_length(), this);
 
 	// update counters, maximum sequence numbers, and so forth
 	post_update_state(p, k, parent);
@@ -583,7 +632,7 @@ int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool acklatency = false, ip_id = true;
+    bool acklatency = false, ip_id = true, full_rcv_window = false;
     if (cp_va_parse(conf, this, errh,
 		    cpOptional,
 		    cpFilename, "output connection info file", &_traceinfo_filename,
@@ -594,6 +643,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element for loss annotations", &tipsd_element,
 		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element for loss annotations", &tipfd_element,
 		    "ACKLATENCY", cpBool, "output ack latency XML?", &acklatency,
+		    "FULLRCVWINDOW", cpBool, "output receive window fillers?", &full_rcv_window,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
 		    0) < 0)
         return -1;
@@ -611,6 +661,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 
     _ip_id = ip_id;
     _ack_latency = acklatency;
+    _full_rcv_window = full_rcv_window;
     return 0;
 }
 
