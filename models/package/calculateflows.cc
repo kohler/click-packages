@@ -54,12 +54,12 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     }
 
     // exit if this is a pure ack
-    if (np->seq == np->last_seq)
+    if (np->seq == np->end_seq)
 	// NB pure acks will not include IP ID check for network duplicates
 	return;
     
     // exit if there is any new data
-    if (SEQ_GT(np->last_seq, max_seq)) {
+    if (SEQ_GT(np->end_seq, max_seq)) {
 	np->flags |= Pkt::F_NEW;
 	if (SEQ_LT(np->seq, max_seq))
 	    np->flags |= Pkt::F_REXMIT;
@@ -73,13 +73,13 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     for (x = np->prev; x; x = x->prev) {
 	
 	if ((x->flags & Pkt::F_NEW)
-	    && SEQ_LEQ(x->last_seq, np->seq)) {
+	    && SEQ_LEQ(x->end_seq, np->seq)) {
 	    // packet has new data older than our oldest data;
 	    // therefore, nothing relevant can precede it.
 	    // either we have a retransmission or a reordering.
 	    break;
 
-	} else if (np->seq == np->last_seq) {
+	} else if (np->seq == np->end_seq) {
 	    // ignore pure acks
 	
 	} else if (np->seq == x->seq) {
@@ -88,18 +88,18 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    
 	    if (np->ip_id
 		&& np->ip_id == x->ip_id
-		&& np->last_seq == x->last_seq) {
+		&& np->end_seq == x->end_seq) {
 		// network duplicate
 		np->flags |= Pkt::F_DUPLICATE;
 		return;
-	    } else if (np->last_seq == max_seq
-		       && np->seq + 1 == np->last_seq) {
+	    } else if (np->end_seq == max_seq
+		       && np->seq + 1 == np->end_seq) {
 		// keepalive XXX
 		np->flags |= Pkt::F_KEEPALIVE;
 		return;
 	    }
 
-	    if (np->last_seq == x->last_seq) {
+	    if (np->end_seq == x->end_seq) {
 		// it has the same data as we do; call off the search
 		np->flags |= Pkt::F_FULL_REXMIT;
 		rexmit = x;
@@ -108,8 +108,8 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    if (!rexmit)
 		rexmit = x;
 	    
-	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->last_seq))
-		   || (SEQ_LT(x->seq, np->last_seq) && SEQ_LEQ(np->last_seq, x->last_seq))) {
+	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->end_seq))
+		   || (SEQ_LT(x->seq, np->end_seq) && SEQ_LEQ(np->end_seq, x->end_seq))) {
 	    // partial retransmission. There might be a more relevant
 	    // preceding retransmission, so keep searching for one.
 	    np->flags |= Pkt::F_REXMIT;
@@ -144,17 +144,17 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 	output_loss(conn, parent);
     if (SEQ_GT(max_ack, endk->seq))
 	loss.type = FALSE_LOSS;
-    else if (SEQ_GEQ(endk->last_seq, max_live_seq))
+    else if (SEQ_GEQ(endk->end_seq, max_live_seq))
 	loss.type = POSSIBLE_LOSS;
     else
 	loss.type = LOSS;
     loss.time = startk->timestamp;
     loss.seq = startk->seq;
     loss.end_time = endk->timestamp;
-    loss.last_seq = max_live_seq;
+    loss.top_seq = max_live_seq;
 
     // We just completed a loss event, so reset max_live_seq and max_loss_seq.
-    max_live_seq = endk->last_seq;
+    max_live_seq = endk->end_seq;
     if (SEQ_GT(max_seq, max_loss_seq))
 	max_loss_seq = max_seq;
 }
@@ -164,7 +164,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 {
     // update counters
     total_packets++;
-    total_seq += np->last_seq - np->seq;
+    total_seq += np->end_seq - np->seq;
     
     // mark SYN and FIN packets
     if (tcph->th_flags & TH_SYN) {
@@ -176,26 +176,26 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
 	}
     }
     if (tcph->th_flags & TH_FIN) {
-	if (have_fin && fin_seq != np->last_seq - 1)
+	if (have_fin && fin_seq != np->end_seq - 1)
 	    click_chatter("%u: different FIN seqnos!", conn->aggregate()); // XXX report error
 	else {
-	    fin_seq = np->last_seq - 1;
+	    fin_seq = np->end_seq - 1;
 	    have_fin = true;
 	}
     }
 
     // update max_seq and max_live_seq
-    if (SEQ_GT(np->last_seq, max_seq))
-	max_seq = np->last_seq;
-    if (SEQ_GT(np->last_seq, max_live_seq))
-	max_live_seq = np->last_seq;    
+    if (SEQ_GT(np->end_seq, max_seq))
+	max_seq = np->end_seq;
+    if (SEQ_GT(np->end_seq, max_live_seq))
+	max_live_seq = np->end_seq;    
 }
 
 CalculateFlows::Pkt *
 CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &timestamp, Pkt *search_hint) const
 {
     // region of interest is:
-    // bounded on the left by a packet whose last_seq < ack, and which is
+    // bounded on the left by a packet whose end_seq < ack, and which is
     // neither a reordering nor a retransmission
     // bounded on the right by a packet whose seq >= ack, and which is not
     // part of a reordered block
@@ -209,26 +209,26 @@ CalculateFlows::StreamInfo::find_acked_pkt(tcp_seq_t ack, const struct timeval &
     Pkt *possible = 0;
     int possible_goodness = -1;
     for (Pkt *k = (search_hint ? search_hint->prev : pkt_data_tail);
-	 k && (SEQ_GEQ(k->last_seq, ack)
+	 k && (SEQ_GEQ(k->end_seq, ack)
 	       || (k->flags & (Pkt::F_REORDER | Pkt::F_REXMIT)));
 	 k = k->prev) {
 
-	// a packet with last_seq == ack is definitely the right answer
+	// a packet with end_seq == ack is definitely the right answer
 	// if it is the first transmission of the relevant data
 	// and there was no later retransmission
 	if (possible_goodness <= 0
-	    && k->last_seq == ack
+	    && k->end_seq == ack
 	    && (k->flags & Pkt::F_NEW))
 	    return k;
 
 	// skip it if couldn't be an ack
-	if (SEQ_LT(k->last_seq, ack) || SEQ_GEQ(k->seq, ack))
+	if (SEQ_LT(k->end_seq, ack) || SEQ_GEQ(k->seq, ack))
 	    continue;
 
-	// measure goodness == (ack latency fits) + (last_seq == ack)
+	// measure goodness == (ack latency fits) + (end_seq == ack)
 	int goodness =
 	    (!have_ack_latency || timestamp - k->timestamp >= min_ack_latency)
-	    + (k->last_seq == ack);
+	    + (k->end_seq == ack);
 	// store the best guess so far
 	if (goodness > possible_goodness)
 	    possible = k, possible_goodness = goodness;
@@ -260,7 +260,7 @@ CalculateFlows::LossInfo::unparse(StringAccum &sa, const StreamInfo *cstr, const
     if (!absolute_time && !absolute_seq)
 	// common case
 	sa << time << ' ' << seq << ' '
-	   << end_time << ' ' << last_seq;
+	   << end_time << ' ' << top_seq;
     else {
 	if (absolute_time)
 	    sa << (time + conn->init_time()) << ' ';
@@ -275,9 +275,9 @@ CalculateFlows::LossInfo::unparse(StringAccum &sa, const StreamInfo *cstr, const
 	else
 	    sa << end_time << ' ';
 	if (absolute_seq)
-	    sa << (last_seq + cstr->init_seq);
+	    sa << (top_seq + cstr->init_seq);
 	else
-	    sa << last_seq;
+	    sa << top_seq;
     }
 
     return true;
@@ -364,7 +364,7 @@ CalculateFlows::LossInfo::unparse_xml(StringAccum &sa) const
 
     // add times and sequence numbers; all are relative in XML
     sa << "time='" << time << "' seq='" << seq << "' endtime='"
-       << end_time << "' lastseq='" << last_seq << "' />\n";
+       << end_time << "' lastseq='" << top_seq << "' />\n";
 }
 
 void
@@ -394,7 +394,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 	    last_ack = ack->ack;
 	    if (Pkt *k = find_acked_pkt(ack->ack, ack->timestamp, hint)) {
 		struct timeval latency = ack->timestamp - k->timestamp;
-		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->last_seq, latency.tv_sec, latency.tv_usec);
+		fprintf(f, "%ld.%06ld %u %ld.%06ld\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq, latency.tv_sec, latency.tv_usec);
 		hint = k;
 	    }
 	}
@@ -474,7 +474,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 
 	// set fields appropriately
 	np->seq = ntohl(tcph->th_seq) - stream.init_seq;
-	np->last_seq = np->seq + calculate_seqlen(iph, tcph);
+	np->end_seq = np->seq + calculate_seqlen(iph, tcph);
 	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
 	np->ip_id = (parent->_ip_id ? iph->ip_id : 0);
 	np->timestamp = p->timestamp_anno() - _init_time;
@@ -488,7 +488,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	    stream.pkt_tail = stream.pkt_tail->next = np;
 	else
 	    stream.pkt_head = stream.pkt_tail = np;
-	if (np->seq != np->last_seq)
+	if (np->seq != np->end_seq)
 	    stream.pkt_data_tail = np;
 
 	return np;

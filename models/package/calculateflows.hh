@@ -169,7 +169,7 @@ struct CalculateFlows::Pkt {
     Pkt *prev;
 
     tcp_seq_t seq;		// sequence number of this packet
-    tcp_seq_t last_seq;		// last sequence number of this packet
+    tcp_seq_t end_seq;		// end sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
     uint16_t ip_id;		// IP ID of this packet
@@ -193,7 +193,7 @@ struct CalculateFlows::Pkt {
 struct CalculateFlows::LossInfo {
     LossType type;
     tcp_seq_t seq;
-    tcp_seq_t last_seq;
+    tcp_seq_t top_seq;
     struct timeval time;
     struct timeval end_time;
 
