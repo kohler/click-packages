@@ -266,7 +266,9 @@ struct CalculateFlows::StreamInfo {
     unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
     bool have_syn : 1;		// have we seen a SYN?
+    bool different_syn : 1;	// did we see a different SYN?
     bool have_fin : 1;		// have we seen a FIN?
+    bool different_fin : 1;	// did we see a different FIN?
     bool have_ack_latency : 1;	// have we seen an ACK match?
     bool filled_rcv_window : 1;	// have we ever filled the receive window?
     bool sent_window_probe : 1;	// have we ever sent a window probe?
@@ -312,7 +314,7 @@ struct CalculateFlows::StreamInfo {
 
     void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
-    void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
+    void update_counters(const Pkt *np, const click_tcp *);
     void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
     
     Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;

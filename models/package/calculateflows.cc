@@ -14,7 +14,8 @@
 CLICK_DECLS
 
 CalculateFlows::StreamInfo::StreamInfo()
-    : have_init_seq(false), have_syn(false), have_fin(false),
+    : have_init_seq(false), have_syn(false), different_syn(false),
+      have_fin(false), different_fin(false),
       have_ack_latency(false), filled_rcv_window(false),
       sent_window_probe(false), sent_sackok(false),
       init_seq(0), max_seq(0), max_ack(0),
@@ -169,7 +170,7 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 }
 
 void
-CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, const ConnInfo *conn)
+CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph)
 {
     // update counters
     total_packets++;
@@ -178,7 +179,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     // SYN processing
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != np->seq)
-	    click_chatter("%u: different SYN seqnos!", conn->aggregate()); // XXX report error
+	    different_syn = true;
 	else {
 	    syn_seq = np->seq;
 	    have_syn = true;
@@ -188,7 +189,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     // FIN processing
     if (tcph->th_flags & TH_FIN) {
 	if (have_fin && fin_seq != np->end_seq - 1)
-	    click_chatter("%u: different FIN seqnos!", conn->aggregate()); // XXX report error
+	    different_fin = true;
 	else {
 	    fin_seq = np->end_seq - 1;
 	    have_fin = true;
@@ -466,6 +467,8 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time /*, struct timeval &running_min_ack_latency, const Pkt *&ackwindow_begin, const Pkt *&ackwindow_end */) const
 {
+    click_chatter("mark_delivered at %{timeval}: %u", &ackk->timestamp, ackk->ack);
+    
     // update current RTT
     struct timeval cur_min_ack_latency = min_ack_latency;
     //update_cur_min_ack_latency(cur_min_ack_latency, running_min_ack_latency, ackk, ackwindow_begin, ackwindow_end);
@@ -882,6 +885,10 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	fprintf(f, " minacklatency='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
     if (sent_sackok)
 	fprintf(f, " sentsackok='yes'");
+    if (different_syn)
+	fprintf(f, " differentsyn='yes'");
+    if (different_fin)
+	fprintf(f, " differentfin='yes'");
 
     int nreordered = 0, nundelivered = 0;
     for (Pkt *k = pkt_head; k; k = k->next)
@@ -1070,7 +1077,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
 	_stream[direction].categorize(k, this, parent);
-	_stream[direction].update_counters(k, p->tcp_header(), this);
+	_stream[direction].update_counters(k, p->tcp_header());
 	_stream[direction].options(k, p->tcp_header(), p->transport_length(), this);
 
 	// update counters, maximum sequence numbers, and so forth
