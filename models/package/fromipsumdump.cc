@@ -193,7 +193,7 @@ FromIPSummaryDump::initialize(ErrorHandler *errh)
 	uninitialize();
 	return -1;
     } else if (line.substring(0, 14) != "!IPSummaryDump") {
-	errh->warning("%s: missing banner line; is this an IP summary dump?");
+	errh->warning("%s: missing banner line; is this an IP summary dump?", _filename.cc());
 	_pos = 0;
     }
     
