@@ -45,7 +45,8 @@ _screen_style = {
     "H": LineDescriptor(1, 0.9, 0, linewidth=2),
     "H.cause": LineDescriptor(1, 200/255., 200/255.),
     "H.effect": LineDescriptor(200/255., 1, 200/255.),
-    "H.dup": LineDescriptor(1, 1, 0.6)
+    "H.dup": LineDescriptor(0.9, 0.9, 0.9),
+    "H.link": LineDescriptor(1, 1, 0.6)
     }
 
 _postscript_style = {
@@ -2382,6 +2383,11 @@ class PlotCanvas:
         p, dir = self.lit_main[0]
         t0, t1 = self.get_plotted_time_range()
         if dir == self.dir:
+            for l in self.conn.links(dir, t0, t1):
+                if l.t0 == p.time:
+                    pp = self.conn.find_packet(l.t1, 1 - dir)
+                    if pp is not None:
+                        self._add_lit("H.link", (pp, 1 - dir))
             for pp in self.conn.packets(dir, t0, t1):
                 if pp.seq <= p.seq and pp.last_seq >= p.last_seq and pp is not p:
                     self._add_lit("H.dup", (pp, dir))
@@ -2393,6 +2399,11 @@ class PlotCanvas:
                     if pp.ack == p.last_seq:
                         self._add_lit("H.effect", (pp, 1 - dir))
         else:
+            for l in self.conn.links(self.dir, t0, t1):
+                if l.t1 == p.time:
+                    pp = self.conn.find_packet(l.t0, self.dir)
+                    if pp is not None:
+                        self._add_lit("H.link", (pp, self.dir))
             for pp in self.conn.packets(self.dir, t0, t1):
                 if pp.time <= p.time:
                     if pp.last_seq == p.ack:
@@ -2670,10 +2681,10 @@ class PlotCanvas:
                 bounds = union_rectangle(bounds, expand_rectangle(b, 2))
 
         # highlight packets
-        for name in ("H.cause", "H.dup", "H.effect"):
+        for name in ("H.cause", "H.dup", "H.effect", "H.link"):
             for pd in self.lit.get(name, []):
                 bounds = union_rectangle(bounds, self._highlight_packet_bg(pd, name))
-        for name in ("H.cause", "H.dup", "H.effect"):
+        for name in ("H.cause", "H.dup", "H.effect", "H.link"):
             for pd in self.lit.get(name, []):
                 self._highlight_packet_fg(pd, name)
 
