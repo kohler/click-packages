@@ -231,3 +231,6 @@ distclean: clean
 
 .PHONY: all always clean distclean elemlist \
 	install install-obj install-man uninstall uninstall-obj uninstall-man
+
+avh: avh.uo
+	c++ -o avh avh.uo `click-compile --libs`
