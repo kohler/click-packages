@@ -536,9 +536,10 @@ class Connection(object):
             return ConnectionReader(conn=self).read_process(self.filename, filepos=self.filepos, endtime=self.endtime)
 
     def load(self):
-        f = self.load_process()
-        while f is not None:
-            f = f()
+        #f = self.load_process()
+        #while f is not None:
+        #    f = f()
+        pass
     
     def unload(self):
         if self.dynload:
@@ -1114,6 +1115,8 @@ class FlowSet:
         self.conns = []
         self.flows = []
         self.sorted = FlowSet.SORT_NONE
+        self.min_aggregate = 999999999
+        self.max_aggregate = 0
 
     def read_process(self, filename, f):
         self.filename = filename
@@ -1213,9 +1216,7 @@ class FlowSet:
             if "duration" in attrs and "begin" in attrs:
                 endtime = float(attrs["begin"]) + float(attrs["duration"])
             self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=True)
-            self.conns.append(self.reading_connection)
-            self.flows.append(FlowRef(self.reading_connection, 0))
-            self.flows.append(FlowRef(self.reading_connection, 1))
+            self.append(self.reading_connection)
         elif name == 'flow' and self.reading_connection is not None:
             try:
                 d, l, pl, fl = int(attrs["dir"]), long(attrs["nloss"]), long(attrs["nploss"]), long(attrs["nfloss"])
@@ -1259,6 +1260,8 @@ class FlowSet:
         self.conns.append(conn)
         self.flows.append(FlowRef(conn, 0))
         self.flows.append(FlowRef(conn, 1))
+        self.min_aggregate = min(self.min_aggregate, conn.aggregate)
+        self.max_aggregate = max(self.max_aggregate, conn.aggregate)
 
     def index(self, flowref):
         if self.sorted == FlowSet.SORT_LOSS:
@@ -1266,6 +1269,12 @@ class FlowSet:
             return bisect_with_cmp(self.flows, lambda f: f.loss_count() - l or a - f.aggregate() or flowref.dir - f.dir) - 1
         else:
             return self.flows.index(flowref)
+
+    def find_aggregate(self, aggregate):
+        for c in self.conns:
+            if c.aggregate == aggregate:
+                return FlowRef(c, 0)
+        raise RuntimeError("Not found " + str(aggregate))
 
 
 _by_loss_groups = [ (50, "50 or more losses"),
@@ -2766,6 +2775,50 @@ class PrintOptionsDialog:
 
 
 ####################
+# finding a specific flow
+#
+
+class FindFlowDialog:
+
+    def __init__(self, parentw, parent):
+        self.parent = parent
+        
+        self.dialog = dialog = gtk.Dialog(title='TCPscape Select Flow', parent=parentw, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+        self.dialog.set_border_width(10)
+        dialog.vbox.set_spacing(10)
+
+        # Printer frame
+        hbox = gtk.HBox()
+        l = gtk.Label("Flow:")
+        l.set_alignment(1, 0.5)
+        hbox.pack_start(l)
+
+        flowset = parent.get_flowset()
+        self.adjustment = gtk.Adjustment(value=parent.get_aggregate(), lower=flowset.min_aggregate, upper=flowset.max_aggregate, step_incr=1, page_incr=10)
+        self.w_aggregate = gtk.SpinButton(self.adjustment, 0.5)
+        hbox.pack_start(self.w_aggregate)
+
+        dialog.vbox.pack_start(hbox)
+        hbox.show_all()
+
+        # action area
+        ok = gtk.Button(stock=gtk.STOCK_OK)
+        ok.connect("clicked", self.cmd_done, 1)
+        dialog.action_area.pack_start(ok)
+        cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
+        cancel.connect("clicked", self.cmd_done, 0)
+        dialog.action_area.pack_start(cancel)
+        
+        dialog.show_all()
+        
+    def cmd_done(self, widget, data):
+        if data:                        # OK
+            self.parent.set_flow(fref=self.parent.get_flowset().find_aggregate(self.w_aggregate.get_value_as_int()))
+        self.dialog.destroy()
+
+
+
+####################
 # status bar watcher
 #
 
@@ -2878,6 +2931,7 @@ class PlotFlowWindow:
             ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, "<StockItem>", gtk.STOCK_GO_FORWARD ),
             ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, "<StockItem>", gtk.STOCK_GO_BACK ),
             ( "/View/_Swap Direction", None, self.cmd_swap_dir, 0, None ),
+            ( "/View/Select _Flow", "<control>F", self.cmd_find_flow, 0, None ),
             ( "/View/sep2",	None, None, 0, "<Separator>" ),
             ( "/View/Hide Receive Window", None, self.cmd_toggle_receive_window, 0, None )
    	    ))
@@ -2994,6 +3048,9 @@ class PlotFlowWindow:
     def cmd_print_to(self, widget, event):
         PrintOptionsDialog(self.window, self)
         
+    def cmd_find_flow(self, widget, event):
+        FindFlowDialog(self.window, self)
+
     def cmd_zoom_in(self, widget, event, data=None):
         self.canvas.zoom(factor=0.75)
 
@@ -3054,6 +3111,12 @@ class PlotFlowWindow:
         else:
             self.activating = (id, fref, keeptime, None)
             self._flow_loaded()
+
+    def get_aggregate(self):
+        return self.flowref.aggregate()
+
+    def get_flowset(self):
+        return self.flowset
 
     def _flow_loaded(self):
         id, fref, keeptime = self.activating[:3]
