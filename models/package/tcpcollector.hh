@@ -98,6 +98,12 @@ file, in "C<E<lt>windowprobe<gt>>" XML elements nested inside each
 where I<timestamp> is the packet's timestamp and I<endseq> is its end sequence
 number.  Default is false.
 
+=item INTERARRIVAL
+
+Boolean.  If true, then write packet interarrival times to the TRACEINFO file,
+in "C<E<lt>interarrivalE<gt>>" XML elements nested inside each
+"C<E<lt>streamE<gt>>".  Each line is an interarrival time.  Default is false.
+
 =back
 
 =e
@@ -281,6 +287,7 @@ struct TCPCollector::StreamInfo {
     static void packet_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
     static void fullrcvwindow_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
     static void windowprobe_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
+    static void interarrival_xmltag(FILE *, const StreamInfo &, const ConnInfo &, const String &, void *);
 #endif
 
 };

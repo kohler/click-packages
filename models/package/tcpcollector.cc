@@ -441,7 +441,7 @@ TCPCollector::ConnInfo::write_xml(FILE *f, const TCPCollector *owner) const
 {
     timeval duration = this->duration();
     
-    fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+    fprintf(f, "\n<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
 	    _aggregate,
 	    _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 	    _flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
@@ -528,6 +528,19 @@ TCPCollector::StreamInfo::windowprobe_xmltag(FILE *f, const StreamInfo &stream, 
     }
 }
 
+void
+TCPCollector::StreamInfo::interarrival_xmltag(FILE *f, const StreamInfo &stream, const ConnInfo &, const String &tagname, void *)
+{
+    if (stream.pkt_head) {
+	fprintf(f, "    <%s>\n", tagname.c_str());
+	for (Pkt *k = stream.pkt_head->next; k; k = k->next) {
+	    timeval diff = k->timestamp - k->prev->timestamp;
+	    fprintf(f, "%ld.%06ld\n", diff.tv_sec, diff.tv_usec);
+	}
+	fprintf(f, "    </%s>\n", tagname.c_str());
+    }
+}
+
 #endif
 
 
@@ -566,7 +579,7 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
     Element *af_element = 0;
     bool ip_id = true;
 #if TCPCOLLECTOR_XML
-    bool full_rcv_window = false, window_probe = false, packets = false;
+    bool full_rcv_window = false, window_probe = false, packets = false, interarrival = false;
 #endif
     if (cp_va_parse(conf, this, errh,
 #if TCPCOLLECTOR_XML
@@ -581,6 +594,7 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
 		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
 		    "WINDOWPROBE", cpBool, "output window probes XML?", &window_probe,
+		    "INTERARRIVAL", cpBool, "output interarrival XML?", &interarrival,
 		    "PACKET", cpBool, "output packet XML?", &packets,
 #endif
 		    0) < 0)
@@ -601,6 +615,8 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 	add_stream_xmltag("fullrcvwindow", StreamInfo::fullrcvwindow_xmltag, 0);
     if (window_probe)
 	add_stream_xmltag("windowprobe", StreamInfo::windowprobe_xmltag, 0);
+    if (interarrival)
+	add_stream_xmltag("interarrival", StreamInfo::interarrival_xmltag, 0);
 #endif
 
     return 0;
@@ -644,7 +660,7 @@ TCPCollector::cleanup(CleanupStage)
     
 #if TCPCOLLECTOR_XML
     if (_traceinfo_file) {
-	fprintf(_traceinfo_file, "</trace>\n");
+	fprintf(_traceinfo_file, "\n</trace>\n");
 	fclose(_traceinfo_file);
     }
 #endif
