@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 from __future__ import generators
-from bisect import bisect
 import sys, re, types, string, struct, gzip
+sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
+from bisect import bisect
 from math import *
-import gtk, pango, xml.parsers.expat
+import gtk, gobject, pango, xml.parsers.expat
 
 fill_colors = {
     "data": "red", "ack": "green", "dataack": "blue",
@@ -109,7 +110,10 @@ class Connection:
         self.s = ([], [])
         self.loss = ([], [])
         self.available = False
-        self.flow_id = (src, sport, dst, dport)
+        if src is not None:
+            self.flowid = (src, int(sport), dst, int(dport))
+        else:
+            self.flowid = None
         self.aggregate = aggregate
         self.loss_count = [0, 0]
         if type(f) == types.FileType:
@@ -159,7 +163,8 @@ class Connection:
             type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
             self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
         elif re.match('!flowid', line):
-            self.flow_id = tuple(line.split()[1:5])
+            fid = line.split()[1:5]
+            self.flowid = (fid[0], int(fid[1]), fid[2], int(fid[3]))
         elif re.match('!aggregate', line):
             self.aggregate = int(line.split()[1])
         elif re.match('!data ', line):
@@ -310,12 +315,18 @@ class Connection:
         return min(r0[0], r1[0]), max(r0[1], r1[1])
     
     def get_description(self):
-        if not self.available:
+        if self.flowid is None:
             self.load()
         s = ""
         if self.aggregate >= 0:
             s += "#" + `self.aggregate` + ": "
-        return s + self.flow_id[0] + ":" + self.flow_id[1] + " > " + self.flow_id[2] + ":" + self.flow_id[3]
+        return s + self.flowid[0] + ":" + str(self.flowid[1]) + " > " + self.flowid[2] + ":" + str(self.flowid[3])
+    
+    def get_flowid_text(self, dir=0):
+        if self.flowid is None:
+            self.load()
+        dirstr = "><"[direction(dir)]
+        return self.flowid[0] + ":" + str(self.flowid[1]) + " " + dirstr + " " + self.flowid[2] + ":" + str(self.flowid[3])
     
     def load(self):
         if type(self.filename) != types.StringType:
@@ -339,7 +350,7 @@ class Connection:
 class FlowRef:
 
     def __init__(self, conn, dir):
-        self.conn, self.dir = conn, dir
+        self.conn, self.dir, self.plotboxes = conn, dir, []
 
     def loss_count(self):
         return self.conn.loss_count[self.dir]
@@ -347,11 +358,40 @@ class FlowRef:
     def aggregate(self):
         return self.conn.aggregate
 
+    def get_flowid_text(self):
+        return self.conn.get_flowid_text(self.dir)
+
+    def get_description(self):
+        s = self.conn.get_description()
+        if self.dir:
+            s = re.sub(" > ", " < ", s)
+        return s
+    
+    def opposite(self):
+        return FlowRef(self.conn, 1 - self.dir)
+    
     def unload(self):
         self.conn.unload()
 
+    def add_plotbox(self, plotbox):
+        self.plotboxes.append(plotbox)
+
+    def del_plotbox(self, plotbox):
+        self.plotboxes.remove(plotbox)
+
+    def shown(self):
+        return len(self.plotboxes) > 0
+
+    def __cmp__(self, other):
+        if self.conn is other.conn:
+            return self.dir - other.dir
+        elif self.conn < other.conn:
+            return -1
+        else:
+            return 1
+
     def __str__(self):
-        fid = self.conn.flow_id
+        fid = self.conn.flowid
         return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
 
 
@@ -360,6 +400,7 @@ class FlowSet:
     def __init__(self, f=None):
         self.conns = []
         self.flows = []
+        self.sum_loss_count = [0, 0, 0]
         if type(f) == types.StringType:
             slash = f.rfind('/')
             if slash >= 0: dir = f[:slash+1]
@@ -438,8 +479,14 @@ class FlowSet:
             self.flows.append(FlowRef(self.reading_connection, 0))
             self.flows.append(FlowRef(self.reading_connection, 1))
         elif name == 'flow' and self.reading_connection is not None:
-            d, l, pl, fl = int(attrs["dir"]), int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
-            self.reading_connection.loss_count[d] += l + pl + fl
+            try:
+                d, l, pl, fl = int(attrs["dir"]), int(attrs["loss"]), int(attrs["ploss"]), int(attrs["floss"])
+                self.reading_connection.loss_count[d] += l + pl + fl
+                self.sum_loss_count[0] += l
+                self.sum_loss_count[1] += pl
+                self.sum_loss_count[2] += fl
+            except KeyError:
+                pass
 
     def _end_element(self, name):
         if name == 'connections':
@@ -450,8 +497,11 @@ class FlowSet:
     def sort_by_loss_count(self):
         self.flows.sort(lambda a, b: b.loss_count().__cmp__(a.loss_count()) or a.aggregate().__cmp__(b.aggregate()))
 
-    def __getitem__(self, key):
-        return self.flows[key]
+    def __getitem__(self, k):
+        if type(k) == types.SliceType:
+            return self.flows[k.start:k.stop]
+        else:
+            return self.flows[k]
 
     def __len__(self):
         return len(self.flows)
@@ -460,6 +510,157 @@ class FlowSet:
         self.conns.append(conn)
         self.flows.append(FlowRef(conn, 0))
         self.flows.append(FlowRef(conn, 1))
+
+
+_by_loss_groups = [ (50, "50 or more losses"),
+                    (30, "30-49 losses"),
+                    (20, "20-29 losses"),
+                    (10, "10-19 losses"),
+                    (5, "5-9 losses"),
+                    (4, "4 losses"),
+                    (3, "3 losses"),
+                    (2, "2 losses"),
+                    (1, "1 loss"),
+                    (0, "no losses") ]
+
+class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
+    '''This class represents the model of a tree.  The iterators used
+    to represent positions are converted to python objects when passed
+    to the on_* methods.  This means you can use any python object to
+    represent a node in the tree.  The None object represents a NULL
+    iterator.'''
+
+    def __init__(self, flowset):
+	'''constructor for the model.  Make sure you call
+	PyTreeModel.__init__'''
+        self.flowset = flowset
+        self.analyze_flowset()
+	gtk.GenericTreeModel.__init__(self)
+
+    def analyze_flowset(self):
+        self.cg = []
+        self.gn = []
+        if self.flowset is not None and len(self.flowset) > 0:
+            self.flowset.sort_by_loss_count()
+            i = 0; first = 0; lc = self.flowset[i].loss_count()
+            blg = 0; min_losses = _by_loss_groups[blg][0]
+            while i < len(self.flowset):
+                f = self.flowset[i]
+                if f.loss_count() < min_losses:
+                    if first < i:
+                        self.gn.append(_by_loss_groups[blg][1])
+                        self.cg.append(self.flowset[first:i])
+                        first = i
+                    blg += 1; min_losses = _by_loss_groups[blg][0]
+                else:
+                    i += 1
+            if first < i:
+                self.gn.append(_by_loss_groups[blg][1])
+                self.cg.append(self.flowset[first:i])
+
+    # the implementations for TreeModel methods are prefixed with on_
+    def on_get_flags(self):
+	'''returns the GtkTreeModelFlags for this particular type of model'''
+	return 0
+    def on_get_n_columns(self):
+	'''returns the number of columns in the model'''
+	return 3
+    def on_get_column_type(self, index):
+	'''returns the type of a column in the model'''
+	return gobject.TYPE_STRING
+    
+    def on_get_path(self, node):
+	'''returns the tree path (a tuple of indices at the various
+	levels) for a particular node.'''
+        return node
+    def on_get_iter(self, path):
+        '''returns the node corresponding to the given path.  In our
+        case, the node is the path'''
+        return path
+
+    def path2flowref(self, n):
+        assert len(n) == 2
+        return self.cg[n[0]][n[1]]
+    def flowref2path(self, fref):
+        lc = fref.loss_count()
+        i = 0
+        while i < len(self.cg) and lc < self.cg[i][-1].loss_count():
+            i += 1
+        if i >= len(self.cg):
+            return None
+        for j in range(0, len(self.cg[i])):
+            if self.cg[i][j] == fref:
+                return (i, j)
+        return None
+    
+    def on_get_value(self, n, column):
+	'''returns the value stored in a particular column for the node'''
+        if len(n) == 1:
+            if column == 1:
+                return self.gn[n[0]]
+            else:
+                return ''
+        elif column == 0:
+            if self.path2flowref(n).shown():
+                return 'X'
+            else:
+                return ''
+        elif column == 1:
+            l = self.path2flowref(n).loss_count()
+            if l == 1:
+                return '1 loss'
+            else:
+                return `l` + ' losses'
+        elif column == 2:
+            return '#' + `self.path2flowref(n).aggregate()`
+        else:
+            return self.path2flowref(n).get_flowid_text()
+            
+    def on_iter_next(self, n):
+	'''returns the next node at this level of the tree'''
+        if len(n) == 1 and n[0] < len(self.cg) - 1:
+            return n[0]+1,
+        elif len(n) == 2 and n[1] < len(self.cg[n[0]]) - 1:
+            return n[0], n[1]+1
+        else:
+            return None
+    def on_iter_children(self, n):
+	'''returns the first child of this node'''
+        if n is None:
+            if len(self.cg) > 0:
+                return 0,
+        elif len(n) == 1:
+            return n + (0,)
+        return None
+    def on_iter_has_child(self, n):
+	'''returns true if this node has children'''
+        if n is None:
+            return len(self.cg) > 0
+        else:
+            return len(n) == 1
+    def on_iter_n_children(self, n):
+	'''returns the number of children of this node'''
+        if n is None:
+            return len(self.cg)
+        elif len(n) == 1:
+            return len(self.cg[n[0]])
+        else:
+            return 0
+    def on_iter_nth_child(self, n, i):
+	'''returns the nth child of this node'''
+        if n is None:
+            return i,
+        elif len(n) == 1 and i < len(self.cg[n[0]]):
+            return n + (i,)
+        else:
+            return None
+    def on_iter_parent(self, n):
+	'''returns the parent of this node'''
+	if len(n) == 0:
+	    return None
+	else:
+	    return n[:-1]
+
 
 
 def fix_range(a, b, min_step_frac):
@@ -575,8 +776,8 @@ class PlotCanvas:
         self.canvas.connect("button_press_event", self.cmd_press)
         self.canvas.connect("motion_notify_event", self.cmd_motion)
         self.canvas.connect("button_release_event", self.cmd_release)
-        self.canvas.connect("key_press_event", self.cmd_check_state)
-        self.canvas.connect("key_release_event", self.cmd_check_state)
+        self.canvas.connect("key_press_event", self.cmd_check_state_focus)
+        self.canvas.connect("key_release_event", self.cmd_check_state_focus)
         self.canvas.connect("enter_notify_event", self.cmd_check_state)
         self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.BUTTON1_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
@@ -594,10 +795,10 @@ class PlotCanvas:
         self.mod_state = 0
 
     # getting properties
-    def get_connection(self):
-        return self.conn
     def get_direction(self):
         return self.dir
+    def get_flowref(self):
+        return FlowRef(self.conn, self.dir)
     def get_time_range(self):
         if self.plotted:
             return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
@@ -605,9 +806,6 @@ class PlotCanvas:
             return self.begin, self.end
 
     # setting properties
-    def set_connection(self, conn, dir, begin=None, end=None):
-        self.conn, self.dir = conn, direction(dir)
-        self.set_time_range(begin, end)
     def set_flowref(self, fref, begin=None, end=None):
         self.conn, self.dir = fref.conn, fref.dir
         self.set_time_range(begin, end)
@@ -619,6 +817,9 @@ class PlotCanvas:
         if end is None: end = self.conn.get_time_range()[1]
         self.begin, self.end = begin, end
         if self.plotted: self.plot()
+
+    def grab_focus(self):
+        self.canvas.grab_focus()
 
     def cmd_configure(self, widget, event):
         x, y, self.wwidth, self.wheight = widget.get_allocation()
@@ -658,6 +859,7 @@ class PlotCanvas:
             pass
         self.stuck = True
         self.press_state = event.state
+        self.grab_focus()
         return 1
     def cmd_motion(self, widget, event):
         try:
@@ -716,6 +918,10 @@ class PlotCanvas:
             self.mod_state = state
     def cmd_check_state(self, widget, event):
         self._state2cursor(widget.window.get_pointer()[2])
+        return 1
+    def cmd_check_state_focus(self, widget, event):
+        self._state2cursor(widget.window.get_pointer()[2])
+        self.grab_focus()
         return 1
 
     # drawing helpers
@@ -858,18 +1064,16 @@ class PlotBox:
         
         self.canvas = PlotCanvas(self.frame)
     def cmd_dirbutton(self, *args):
-        self.set_connection(self.canvas.get_connection(), 1 - self.canvas.get_direction())
-    def set_connection(self, conn, dir=0):
-        self.canvas.set_connection(conn, dir)
-        desc = conn.get_description()
+        self.set_flowref(self.canvas.get_flowref().opposite())
+    def set_flowref(self, fref):
+        self.canvas.set_flowref(fref)
+        desc = fref.conn.get_description()
         mid = desc.find(' > ')
         s = desc[:mid + 1]
         s = re.sub("(^\\#[0-9]+)", "  <b>\\1</b>", s)
         self.l0.set_markup(s)
         self.l1.set_label(desc[mid + 2:])
-        self.dirbutton.set_label("><"[self.canvas.get_direction()])
-    def set_flowref(self, fref):
-        self.set_connection(fref.conn, fref.dir)
+        self.dirbutton.set_label("><"[fref.dir])
     def set_time_range(self, begin, end):
         self.canvas.set_time_range(begin, end)
     def zoom_in(self):
@@ -877,6 +1081,44 @@ class PlotBox:
         self.canvas.set_time_range(0.667*t0 + 0.333*t1, 0.333*t0 + 0.667*t1)
     def pack(self, *args, **keys):
         self.frame.pack(*args, **keys)
+
+
+class FlowTree:
+    def __init__(self, parent, fset, plotbox=None):
+        scrolled_window = gtk.ScrolledWindow()
+        scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        parent.add(scrolled_window)
+
+        self.model = FlowSetTreeModelByLosses(fset)
+        self.treeview = gtk.TreeView(self.model)
+        self.treeview.set_headers_visible(gtk.FALSE)
+        cell1 = gtk.CellRendererText()
+        # the text in the column comes from column 0
+        column = gtk.TreeViewColumn("tuples", cell1, text=0)
+        self.treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=1)
+        self.treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=2)
+        self.treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=3)
+        self.treeview.append_column(column)
+        self.treeview.show()
+
+        scrolled_window.add(self.treeview)
+        scrolled_window.show()
+
+        self.plotbox = plotbox
+        if self.plotbox is not None:
+            self.treeview.connect("row_activated", self.cmd_row_activated)
+
+    def select_flowref(self, fref):
+        #self.model.flowref_changed(fref) 
+        pass
+
+    def cmd_row_activated(self, widget, path, column):
+        fref = self.model.path2flowref(path)
+        self.plotbox.set_flowref(fref)
+        self.select_flowref(fref)
 
 
 class PlotFlowWindow:
@@ -895,12 +1137,15 @@ class PlotFlowWindow:
         self._init_menus(win, vbox)
         self.plotbox = PlotBox(vbox)
 
+        self.flowtree = FlowTree(vbox, fset, self.plotbox)
+
         if len(fset):
             self.plotbox.set_flowref(fset[0])
+            self.flowtree.select_flowref(fset[0])
 
         win.show()
 
-        self.plotbox.canvas.canvas.grab_focus()
+        self.plotbox.canvas.grab_focus()
 
     def _init_menus(self, win, vbox):
         accel_group = gtk.AccelGroup()
@@ -943,6 +1188,7 @@ class PlotFlowWindow:
         if of.conn is not nf.conn:
             of.unload()
         self.plotbox.set_flowref(nf)
+        self.flowtree.select_flowref(nf)
         self.flowid = new_flowid
         self._activate_flow_items()
     
@@ -967,6 +1213,7 @@ if __name__ == "__main__":
         else:
             all_connections.append(Connection(sys.stdin))
         all_connections.sort_by_loss_count()
+        print all_connections.sum_loss_count
         window = PlotFlowWindow(all_connections)
         gtk.main()
     except KeyboardInterrupt:
