@@ -6,6 +6,7 @@ sys.path[0:0] = ['/usr/lib/python2.2/site-packages/gtk-2.0']
 from bisect import bisect
 from math import *
 import gtk, gobject, pango, xml.parsers.expat
+KEY_ESCAPE = 0xFF1B
 
 class LineDescriptor:
     def __init__(self, r, g, b, **args):
@@ -588,6 +589,14 @@ class FlowRef(object):
     
     def unload(self):
         self.conn.unload()
+
+    def data_packets(self, begin=None, end=None, fuzz=0):
+        for p in self.conn.packets(self.dir, begin=begin, end=end, fuzz=fuzz):
+            yield p
+
+    def ack_packets(self, begin=None, end=None, fuzz=0):
+        for p in self.conn.packets(1 - self.dir, begin=begin, end=end, fuzz=fuzz):
+            yield p
 
     def __cmp__(self, other):
         if self.conn is other.conn:
@@ -1906,7 +1915,7 @@ class PlotCanvas:
         self.canvas.connect("motion_notify_event", self.cmd_motion)
         self.canvas.connect("button_release_event", self.cmd_release)
         self.canvas.connect("key_press_event", self.cmd_check_state_focus)
-        self.canvas.connect("key_release_event", self.cmd_check_state_focus)
+        self.canvas.connect("key_release_event", self.cmd_key_release)
         self.canvas.connect("enter_notify_event", self.cmd_check_state)
         self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
@@ -1926,6 +1935,7 @@ class PlotCanvas:
         self.end = 1000000000.0
         self.beginseq = None
         self.endseq = None
+        self.zoom_stack = []
         self.show_window = True
         self.backing_store = None
         self.backing_store_updated = False
@@ -1972,6 +1982,7 @@ class PlotCanvas:
         self.highlight = [None]
         self.highlight_bounds = None
         self.beginseq = self.endseq = None
+        self.zoom_stack = []
         if keeptime:
             self.plot()
         else:
@@ -2009,6 +2020,7 @@ class PlotCanvas:
             self.set_time_range(adj.value)
     
     def zoom(self, when=None, factor=1):
+        self.zoom_stack.append((self.begin, self.end, self.beginseq, self.endseq))
         if when is None:
             when = (self.begin + self.end) / 2
         new_dt = (self.end - self.begin) * factor
@@ -2164,10 +2176,14 @@ class PlotCanvas:
                     crap, t0, s0, t1, s1 = old_highlight
                     dt, ds = abs(t0 - t1), abs(s0 - s1)
                     t0, s0 = min(t0, t1), min(s0, s1)
+                    self.zoom_stack.append((self.begin, self.end, self.beginseq, self.endseq))
                     self.beginseq = s0
                     self.endseq = s0 + ds
                     self.set_time_range(t0, interval=dt)
-
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and len(self.zoom_stack):
+                    t0, t1, self.beginseq, self.endseq = self.zoom_stack.pop()
+                    self.set_time_range(t0, t1 - t0)
+                    
                 self.highlight_changed()
         except ValueError:
             pass
@@ -2179,7 +2195,9 @@ class PlotCanvas:
         if t == PlotCanvas.TOOL_HAND or t == PlotCanvas.TOOL_IDENTIFY:
             if state & (gtk.gdk.BUTTON1_MASK | gtk.gdk.BUTTON3_MASK):
                 state = self.press_state
-            if state & gtk.gdk.BUTTON3_MASK:
+            if state is None:
+                pass
+            elif state & gtk.gdk.BUTTON3_MASK:
                 t = PlotCanvas.TOOL_ZOOM_DRAG
             elif state & gtk.gdk.MOD1_MASK:
                 t = PlotCanvas.TOOL_ZOOM_OUT
@@ -2197,6 +2215,13 @@ class PlotCanvas:
         self._check_tool(widget.window.get_pointer()[2])
         self.grab_focus()
         return 1
+    def cmd_key_release(self, widget, event):
+        if event.keyval == KEY_ESCAPE:
+            self.highlight = ['lit_packet']
+            self.sublight_matchers()
+            self.press = self.press_state = None
+            self.highlight_changed()
+        return self.cmd_check_state_focus(widget, event)
 
     # IDENTIFY tool
     def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM, dir=None):
@@ -3077,6 +3102,26 @@ class PlotFlowWindow:
             desc2 = "%+d in %.6fs" % (ds, dt)
             
             self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b> (" + desc2 + ")</span>")
+
+        elif h[0] == "box":
+            t0, s0, t1, s1 = h[1:5]
+            t0, t1 = min(t0, t1), max(t0, t1)
+            s0, s1 = min(s0, s1), max(s0, s1)
+            np = na = 0
+            p0 = 8000000000.; p1 = 0
+
+            for p in self.flowref.data_packets(begin=t0, end=t1):
+                if p.seq >= s0 and p.last_seq <= s1:
+                    np += 1
+                    p0, p1 = min(p0, p.seq), max(p1, p.last_seq)
+            for p in self.flowref.ack_packets(begin=t0, end=t1):
+                if p.ack >= s0 and p.ack <= s1:
+                    na += 1
+
+            progress = ""
+            if p0 <= p1: progress = " (+%d)" % (p1 - p0)
+            self.statusbar.set_markup("<span foreground='#000099'>%.06fs to %.06fs: <b>%d data, %d ack</b>%s</span>" % (t0, t1, np, na, progress))
+            
         else:
             self.statusbar_description()
 
