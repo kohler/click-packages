@@ -498,6 +498,7 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
     // go over previous packets, marking them as delivered
     if (!k_time || k_time != k_cumack) {
 	Pkt *k_time_hint = k_time;
+#define ACK_JUMP_SECTION 1
 #if ACK_JUMP_SECTION
 	bool ack_jump_section = (ackk->prev && ackk->prev->ack != ackk->ack);
 	uint32_t ack_jump_end_seq = ackk->ack;
