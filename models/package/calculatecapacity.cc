@@ -69,7 +69,7 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     fprintf(f, "  <stream dir='%d' beginseq='%u'\n",
 	    direction, init_seq);
     for(unsigned int i=0; i < pkt_cnt; i++){
-	fprintf(f, "%d %ld.%06ld %d\n", intervals[i].size+40,
+	fprintf(f, "%d %ld.%06ld %d\n", intervals[i].size,
 		intervals[i].interval.tv_sec,
 		intervals[i].interval.tv_usec,
 		intervals[i].newack);
@@ -86,9 +86,9 @@ static int compare(const void *a, const void *b){
     bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
     
     iratea = (ac->interval.tv_sec + ac->interval.tv_usec/1.0e6)
-	/ ((ac->size+40)*8.0);
+	/ ((ac->size)*8.0);
     irateb = (bc->interval.tv_sec + bc->interval.tv_usec/1.0e6)
-	/ ((bc->size+40)*8.0);
+	/ ((bc->size)*8.0);
     
 //     if(ac->interval < bc->interval) return -1;
 //     if(ac->interval == bc->interval) return 0;
@@ -107,7 +107,7 @@ CalculateCapacity::StreamInfo::fill_intervals()
     intervals = new IntervalStream[sizeof(struct IntervalStream) * pkt_cnt];
     
     for(cp = pkt_head, i=0; cp != NULL && i < pkt_cnt; i++, cp=cp->next){
-	intervals[i].size = cp->last_seq - cp->seq;
+	intervals[i].size = cp->last_seq - cp->seq + cp->hsize;
 	if(intervals[i].size > 1500){
 	    printf("huh?\n%d\n%d\n%d\n",
 		   intervals[i].size,
@@ -212,6 +212,8 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
 	np->ack = ntohl(tcph->th_ack) - ack_stream.init_seq;
 	np->timestamp = p->timestamp_anno() - _init_time;
 	np->flags = tcph->th_flags;
+	np->hsize = 4*(tcph->th_off + iph->ip_hl);
+
 
 	// hook up to packet list
 	np->next = 0;

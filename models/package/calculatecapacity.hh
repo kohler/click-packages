@@ -134,6 +134,7 @@ struct CalculateCapacity::Pkt {
     tcp_seq_t last_seq;		// last sequence number of this packet
     tcp_seq_t ack;		// ack sequence number of this packet
     struct timeval timestamp;	// timestamp of this packet
+    uint32_t hsize;             // ip+tcp header size
 
     int flags;			// packet flags
 };
