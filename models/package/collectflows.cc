@@ -1,7 +1,5 @@
 // -*- c-basic-offset: 4 -*-
-#include <config.h>
 #include <click/config.h>
-
 #include "collectflows.hh"
 #include <click/error.hh>
 #include <click/hashmap.hh>

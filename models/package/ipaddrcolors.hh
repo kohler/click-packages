@@ -3,7 +3,7 @@
 #define CLICK_IPADDRCOLORS_HH
 #include <click/string.hh>
 #include <click/vector.hh>
-#include <stdio.h>
+#include <cstdio>
 class ErrorHandler;
 
 class IPAddrColors { public:

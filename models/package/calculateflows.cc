@@ -1,5 +1,4 @@
 // -*- mode: c++; c-basic-offset: 4 -*-
-#include <config.h>
 #include <click/config.h>
 #include "calculateflows.hh"
 #include <click/error.hh>

@@ -5,7 +5,7 @@
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include <packet_anno.hh>
-#include <time.h>
+#include <ctime>
 
 /* this will generate the master-xxx file, together with some general trace info. 
    this is an attempt to clear up the messy calculatevariance.cc file */

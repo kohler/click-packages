@@ -1,6 +1,4 @@
-#include <config.h>
 #include <click/config.h>
-
 #include "aggregateipaddr.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>

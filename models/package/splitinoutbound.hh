@@ -2,7 +2,7 @@
 #define SPLITINOUTBOUND_HH
 #include <click/element.hh>
 #include <click/bighashmap.hh>
-#include <stdio.h>
+#include <cstdio.h>
 
 /* split a trace stream into two directions (normally, inbound and outbound traffic)
  * SplitInOutBound("filename")
