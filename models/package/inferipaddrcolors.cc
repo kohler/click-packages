@@ -46,7 +46,7 @@ InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    cpKeywords,
 		    "ACTIVE", cpBool, "active on startup?", &active,
 		    "SEED", cpFilename, "seed color file", &seed_filename,
-		    0) < 0)
+		    cpEnd) < 0)
 	return -1;
     
     _active = active;

@@ -346,7 +346,7 @@ MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "TCPCOLLECTOR", cpElement, "TCPCollector", &e,
 		    "RAW_TIMESTAMP", cpBool, "use raw timestamps?", &raw_timestamp,
 		    "MIN_SCALE", cpDouble, "minimum scale", &MIN_SCALE,
-		    0) < 0)
+		    cpEnd) < 0)
 	return -1;
     if (e) {
 	TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");

@@ -83,7 +83,7 @@ CollectTCPFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		    cpFilename, "dump filename", &_filename,
 		    cpKeywords,
 		    "SESSION_PACKETS", cpBool, "generate session packets?", &_gen_packets,
-		    0) < 0)
+		    cpEnd) < 0)
 	return -1;
     if (_gen_packets && noutputs() == 1)
 	errh->warning("`SESSION_PACKETS', but element has only 1 output");

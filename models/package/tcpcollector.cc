@@ -628,7 +628,7 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "INTERARRIVAL", cpBool, "output interarrival XML?", &interarrival,
 		    "PACKET", cpBool, "output packet XML?", &packets,
 #endif
-		    0) < 0)
+		    cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;

@@ -1082,7 +1082,7 @@ TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "REORDERED", cpBool, "output reordered packets XML?", &reordered,
 		    "PACKET", cpBool, "output packet XML?", &packets,
 		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
-		    0) < 0)
+		    cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;
@@ -1213,7 +1213,7 @@ TCPMystery::write_handler(const String &s, Element *e, void *thunk, ErrorHandler
 	  if (cp_va_space_parse(s, cf, errh,
 				cpWord, "data type", &what,
 				cpUnsigned, "aggregate number", &aggregate,
-				cpFilename, "save file", &filename, 0) < 0)
+				cpFilename, "save file", &filename, cpEnd) < 0)
 	      return -1;
 	  if (what == "undelivered_packetno")
 	      return cf->save(SAVE_UNDELIVERED_PACKETNO, aggregate, 0, filename, errh);

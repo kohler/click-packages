@@ -57,7 +57,7 @@ SplitFirst::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   current_no_of_packets = 0;
   if (cp_va_parse(conf, this, errh, 
-	          cpUnsigned, "number of first N packets to split", &threshold, 0) < 0) 
+	          cpUnsigned, "number of first N packets to split", &threshold, cpEnd) < 0) 
     return -1;
   return 0;
 }

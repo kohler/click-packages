@@ -623,7 +623,7 @@ CalculateCapacity::configure(Vector<String> &conf, ErrorHandler *errh)
 		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
 		    "SOURCE", cpElement, "packet source element", &_packet_source,
                     "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
-		    0) < 0)
+		    cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;

@@ -57,7 +57,7 @@ GetSSRC::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   return cp_va_parse(conf, this, errh,
 		     cpUnsigned, "byte offset of SSRC", &_offset,
-		     0);
+		     cpEnd);
 }
 
 void

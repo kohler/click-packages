@@ -47,7 +47,7 @@ IPAddrColorPaint::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    cpFilename, "colors filename", &_filename,
 		    cpKeywords,
 		    "CAREFUL", cpBool, "be careful?", &_careful,
-		    0) < 0)
+		    cpEnd) < 0)
 	return -1;
     return 0;
 }

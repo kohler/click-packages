@@ -72,8 +72,8 @@ CheckAverageLength::configure(Vector<String> &conf, ErrorHandler *errh)
 {
    media();
    return cp_va_parse(conf, this, errh,
-		     cpUnsigned, "min AverageLength", &min,
-		     0);
+		      cpUnsigned, "min AverageLength", &min,
+		      cpEnd);
 }
 
 

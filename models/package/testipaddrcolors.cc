@@ -44,7 +44,7 @@ TestIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    cpFilename, "colors filename", &_filename,
 		    cpKeywords,
 		    "VERBOSE", cpBool, "be verbose?", &verbose,
-		    0) < 0)
+		    cpEnd) < 0)
 	return -1;
     _verbose = verbose;
     return 0;

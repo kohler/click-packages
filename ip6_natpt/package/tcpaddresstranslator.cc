@@ -146,7 +146,8 @@ ErrorHandler *errh)
        "REAP_TCP_DONE", cpSeconds, "reap interval for completed TCP connections", &_tcp_done_gc_interval,
        "TCP_TIMEOUT", cpSeconds, "TCP timeout interval", &_tcp_timeout_jiffies,
        "TCP_DONE_TIMEOUT", cpSeconds, "completed TCP timeout interval", &_tcp_done_timeout_jiffies,
-       "DST_ANNO", cpBool, "set destination IP addr annotation?", &_dst_anno,0) < 0)
+       "DST_ANNO", cpBool, "set destination IP addr annotation?", &_dst_anno,
+       cpEnd) < 0)
     return -1;
   */
   set_ninputs(2);
