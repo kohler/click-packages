@@ -2,7 +2,20 @@
 
 from __future__ import generators
 from bisect import bisect
-import sys, re
+import sys, re, types
+from Tkinter import *
+from math import *
+
+cross_bitmap_text = """
+#define cross_width 5
+#define cross_height 5
+#define cross_x_hot 2
+#define cross_y_hot 2
+static unsigned char cross_bits[] = {
+   0x04, 0x04, 0x1f, 0x04, 0x04 };
+"""
+
+loss_fill_colors = { "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond" }
 
 class Packet:
     def __init__(self, time, seq, seqlen, ack):
@@ -15,70 +28,314 @@ class Packet:
     def has_data(self):
         return self.seq != self.last_seq
     def __cmp__(self, other):
-        print "cmp", self.time, "<=>", other.time
         return self.time.__cmp__(other.time)
     def __str__(self):
-        result = "[" + str(self.time) + " "
+        result = "[" + `self.time` + " "
         if self.pure_ack():
-            result += "A" + str(self.ack)
+            result += "A" + `self.ack`
         else:
-            result += str(self.seq) + ":" + str(self.last_seq)
+            result += `self.seq` + ":" + `self.last_seq`
         return result + "]"
 
 class LossEvent:
-    def __init__(self, type, time, seq, end_time, end_seq):
-        self.type, self.time, self.seq, self.end_time, self.end_seq = \
-                   type, float(time), int(seq), float(end_time), int(end_seq)
+    def __init__(self, type, begin, seq, end, end_seq):
+        self.type, self.begin, self.seq, self.end, self.end_seq = \
+                   type, float(begin), int(seq), float(end), int(end_seq)
+    def time_overlaps(self, begin, end):
+        return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
+    def fillcolor(self):
+        return loss_fill_colors[self.type]
 
-def _direction(dir):
+
+def direction(dir):
     if dir == '>':
         return 0
     elif dir == '<':
         return 1
-    elif dir == 0 or dir == 1:
-        return dir
+    elif dir is True:
+        return 0
+    elif dir is False:
+        return 1
+    elif int(dir) == 0 or int(dir) == 1:
+        return int(dir)
     else:
-        raise RuntimeError, "bad direction"
+        raise RuntimeError, "bad direction " + `dir`
+
 
 class Connection:
-    def __init__(self):
+    def __init__(self, f=None):
         self.s = ([], [])
         self.loss = ([], [])
         self.flow_id = []
         self.aggregate = -1
+        self.available = False
+        if type(f) == types.FileType:
+            self.read(f)
+        else:
+            self.filename = f
     def read(self, f):
         for line in f:
-            if not re.match('[\!\#]', line):
+            if not re.match('[\\!\\#]', line):
                 time, dir, flags, seq, seqlen, ack = line.split()
-                self.s[_direction(dir)].append(Packet(time, seq, seqlen, ack))
+                self.s[direction(dir)].append(Packet(time, seq, seqlen, ack))
             elif re.match('\\#[pf]?loss', line):
                 type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
-                self.loss[_direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+                self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
             elif re.match('!flowid', line):
                 self.flow_id = line.split()[1:]
             elif re.match('!aggregate', line):
                 self.aggregate = line.split()[1]
             elif re.match('!eof$', line):
                 break
+        self.available = True
         return self
-    def first_index_after(self, time, dir = None):
+    def first_index_after(self, time, dir=None):
+        if not self.available:
+            self.load()
         if dir is None:
             return self.first_index_after(time, 0), self.first_index_after(time, 1)
         else:
             fake_pkt = Packet(time, 0, 0, 0)
-            return bisect(self.s[_direction(dir)], fake_pkt)
-    def packets(self, dir, start_time = None, last_time = None):
-        dir = _direction(dir)
-        if start_time is None:
+            return bisect(self.s[direction(dir)], fake_pkt)
+    def packets(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        if begin is None:
             i = 0
         else:
-            i = self.first_index_after(start_time, dir)
-        print i, dir, len(self.s[dir])
-        while i < len(self.s[dir]) and (last_time is None or self.s[dir][i].time < last_time):
+            i = self.first_index_after(begin, dir)
+        while i < len(self.s[dir]) and (end is None or self.s[dir][i].time < end):
             yield self.s[dir][i]
             i += 1
+    def losses(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        for l in self.loss[dir]:
+            if l.time_overlaps(begin, end):
+                yield l
+    def time_range(self, dir=None):
+        if not self.available:
+            self.load()
+        if dir is None:
+            return min(self.s[0][0].time, self.s[1][0].time), max(self.s[0][-1].time, self.s[1][-1].time)
+        else:
+            dir = direction(dir)
+            return self.s[dir][0].time, self.s[dir][-1].time
+    def _time_index(self, dir, time, after):
+        if time is not None:
+            return self.first_index_after(time, dir)
+        elif after:
+            return len(self.s[dir])
+        else:
+            return 0
+    def _seq_range(self, dir, begin, end):
+        s0, s1 = 1e10, None
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True) - 1):
+            s0 = min(s0, self.s[dir][i].seq)
+            s1 = max(s1, self.s[dir][i].last_seq)
+        return s0, s1
+    def _ack_range(self, dir, begin, end):
+        s0, s1 = 1e10, None
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True) - 1):
+            s0 = min(s0, self.s[dir][i].ack)
+            s1 = max(s1, self.s[dir][i].ack)
+        return s0, s1
+    def seq_range(self, dir=None, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        r0, r1 = self._seq_range(dir, begin, end), self._ack_range(1 - dir, begin, end)
+        return min(r0[0], r1[0]), max(r0[1], r1[1])
+    def load(self):
+        if type(self.filename) != types.StringType:
+            raise RuntimeError, "cannot load this Connection"
+        elif not self.available:
+            self.read(self.filename)
+    def unload(self):
+        if type(self.filename) == types.StringType:
+            self.__init__(self.filename)
+
+
+def fix_range(a, b, min_step_frac):
+    d = b - a
+    step = 10 ** floor(log10(d))
+
+    # make step bigger if required
+    while step < d and step / d < min_step_frac:
+        if 2*step / d >= min_step_frac:
+            step *= 2
+        elif 2.5*step / d >= min_step_frac:
+            step *= 2.5
+        elif 5*step / d >= min_step_frac:
+            step *= 5
+        else:
+            step *= 10
+    if step >= d:
+        step = d
+
+    # bound a and b to multiples of step, if appropriate
+    a_try = floor(a / step) * step
+    if a - a_try < 0.1*d:
+        a = a_try
+    b_try = ceil(b / step) * step
+    if b_try - b < 0.1*d:
+        b = b_try
+
+    # return a dictionary
+    return { "low": a, "high": b, "step": step }
+
+
+class PlotCanvas:
+    def __init__(self, master, width=600, height=500):
+        self.canvas = Canvas(master, width = width, height = height, bg = "white")
+        self.left_margin = 40
+        self.right_margin = 20
+        self.top_margin = 10
+        self.bottom_margin = 20
+        self.plot_width = width - self.left_margin - self.right_margin
+        self.plot_height = height - self.top_margin - self.bottom_margin
+        self.wwidth = width
+        self.wheight = height
+        self.canvas.bind("<Configure>", self.cmd_configure)
+    def set_conn(self, conn, dir, begin=None, end=None, duration=None):
+        if begin is not None and duration is not None and end is None:
+            end = begin + duration
+        self.conn, self.dir, self.begin, self.end = conn, direction(dir), begin, end
+    def cmd_configure(self, event):
+        self.wwidth = event.width
+        self.plot_width = event.width - self.left_margin - self.right_margin
+        self.wheight = event.height
+        self.plot_height = event.height - self.top_margin - self.bottom_margin
+        self.plot()
+    def plot(self):
+        global cross_bitmap
+        self.canvas.delete("all")
+        if self.conn is not None:
+            
+            # analyze time and sequence ranges
+            t0, t1 = self.begin, self.end
+            if t0 is None:
+                t0 = self.conn.time_range(self.dir)[0]
+            if t1 is None:
+                t1 = self.conn.time_range(self.dir)[1]
+            s0, s1 = self.conn.seq_range(self.dir, t0, t1)
+
+            # fix ranges
+            ranges = fix_range(t0, t1, 30.0 / self.plot_width)
+            t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
+            ranges = fix_range(s0, s1, 30.0 / self.plot_height)
+            s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
+
+            # get transformation
+            tscale = self.plot_width / float(t1 - t0)
+            sscale = self.plot_height / float(s0 - s1)
+            toff = self.left_margin - (t0 * tscale)
+            soff = self.top_margin - (s1 * sscale)
+
+            # losses
+            for l in self.conn.losses(self.dir, t0, t1):
+                x0 = max(t0, l.begin) * tscale + toff
+                x1 = min(t1, l.end) * tscale + toff
+                y0 = max(s0, l.seq) * sscale + soff
+                y1 = min(s1, l.end_seq) * sscale + soff
+                self.canvas.create_rectangle(x0, y1, x1, y0, outline='yellow', fill=l.fillcolor())
+            
+            # border box
+            self.canvas.create_rectangle(self.left_margin, self.top_margin, self.wwidth - self.right_margin, self.wheight - self.bottom_margin, outline='grey')
+
+            # time axis major tics
+            y1 = self.top_margin
+            y2 = self.wheight - self.bottom_margin
+            if tstep * tscale >= 50:
+                mtstep = tstep / 10
+            else:
+                mtstep = tstep / 4
+            for t in range(t0, t1 + tstep/2, tstep):
+                x = t * tscale + toff
+                self.canvas.create_line(x, y1, x, y1 + 6, fill='grey')
+                self.canvas.create_line(x, y2, x, y2 - 5, fill='grey')
+                self.canvas.create_text(x, y2 + 2, text=`t`, anchor='n', fill='grey')
+                for tt in range(t + mtstep, min(t + tstep, t1), mtstep):
+                    x = tt * tscale + toff
+                    self.canvas.create_line(x, y1, x, y1 + 3, fill='grey')
+                    self.canvas.create_line(x, y2, x, y2 - 2, fill='grey')
+            
+            # sequence axis major tics
+            x1 = self.left_margin
+            x2 = self.wwidth - self.right_margin
+            if sstep * sscale <= -50:
+                msstep = sstep / 10
+            else:
+                msstep = sstep / 4
+            for s in range(s0, s1 + sstep/2, sstep):
+                y = s * sscale + soff
+                self.canvas.create_line(x1, y, x1 + 6, y, fill='grey')
+                self.canvas.create_line(x2, y, x2 - 5, y, fill='grey')
+                self.canvas.create_text(x1 - 4, y, text=`s`, anchor='e', fill='grey')
+                for ss in range(s + msstep, min(s + sstep, s1), msstep):
+                    y = ss * sscale + soff
+                    self.canvas.create_line(x1, y, x1 + 3, y, fill='grey')
+                    self.canvas.create_line(x2, y, x2 - 2, y, fill='grey')
+            
+            # data packets
+            for p in self.conn.packets(self.dir, t0, t1):
+                x, y, yy = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
+                self.canvas.create_line(x - 2, y, x + 3, y, fill='red')
+                self.canvas.create_line(x - 2, yy, x + 3, yy, fill='red')
+                self.canvas.create_line(x, y, x, yy, fill='red')
+            
+            # ack packets
+            for p in self.conn.packets(1 - self.dir, t0, t1):
+                x, y = int(p.time * tscale + toff), int(p.ack * sscale + soff)
+                if p.pure_ack(): color = "green"
+                else: color = "blue"
+                self.canvas.create_line(x - 2, y - 1, x + 3, y + 4, fill=color)
+                self.canvas.create_line(x + 3, y - 2, x - 2, y + 3, fill=color)
+
+
+class PlotFlowWindow:
+    def __init__(self, master):
+        self.master = master
+        
+        self.master.title("PlotFlow")
+
+        # menu bar
+        menubar = Menu(self.master)
+        self.master.config(menu=menubar)
+
+        filemenu = Menu(menubar)
+        menubar.add_cascade(label="File", menu=filemenu)
+        filemenu.add_command(label="Quit", command=self.exit_command, accelerator="Ctrl+Q", underline=0)
+
+        # main canvas
+        self.canvas = PlotCanvas(self.master)
+
+        # surrounding widgets
+        bframe = Frame(self.master)
+        self.linfovar = StringVar()
+        linfo = Label(bframe, textvariable=self.linfovar)
+        linfo.grid(column=0, row=0, sticky=W)
+        
+        # event bindings
+        self.canvas.canvas.bind("<Button-1>", self.exit_command)
+        self.master.protocol("WM_DELETE_WINDOW", self.exit_command)
+
+        # layout
+        bframe.pack(side=TOP)
+        self.canvas.canvas.pack(expand=1, side=BOTTOM, fill=BOTH)
+
+        c = Connection(sys.stdin)
+        self.canvas.set_conn(c, '>')
+        self.canvas.plot()
+
+    def exit_command(self, event=None):
+        self.master.destroy()
+
 
 if __name__ == "__main__":
-    c = Connection().read(sys.stdin)
-    for p in c.packets('>', 1):
-        print p
+    root = Tk()
+    cross_bitmap = BitmapImage(data=cross_bitmap_text, maskdata=cross_bitmap_text, foreground="red")
+    window = PlotFlowWindow(root)
+    root.mainloop()
