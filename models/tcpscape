@@ -2,13 +2,13 @@
 
 from __future__ import generators
 from bisect import bisect
-import sys, re, types, string
+import sys, re, types, string, struct
 from math import *
 import gtk, pango
 
 fill_colors = {
     "data": "red", "ack": "green", "dataack": "blue",
-    "loss": "cornsilk1", "ploss": "mint cream", "floss": "blanched almond",
+    "loss": "gold", "ploss": "mint cream", "floss": "grey80",
     "border": "dark grey", "lossborder": "yellow"
 }
 gc_dashes = {
@@ -59,6 +59,10 @@ class LossEvent:
         return fill_colors[self.type]
 
 
+class ConnectionFormatError(Exception):
+    def __init__(self):
+        pass
+
 def direction(dir):
     if dir == '>':
         return 0
@@ -71,10 +75,17 @@ def direction(dir):
     elif int(dir) == 0 or int(dir) == 1:
         return int(dir)
     else:
-        raise RuntimeError, "bad direction " + `dir`
+        raise ConnectionFormatError, "bad direction " + `dir`
 
+
+def unparse_tcp_flags(flags):
+    return ("", "F", "S", "FS", "R", "FR", "SR", "FSR",
+            "P", "FP", "SP", "FSP", "RP", "FRP", "SRP", "FSRP")[flags & 15] \
+        + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
+           "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
 
 class Connection:
+    
     def __init__(self, f=None):
         self.s = ([], [])
         self.loss = ([], [])
@@ -85,26 +96,108 @@ class Connection:
             self.read(f)
         else:
             self.filename = f
+
+    class Fileboy:
+        def __init__(self, f):
+            self.f = f
+            self.str = ""
+            self.pos = 0
+        def __iter__(self):
+            return self
+        def next(self):
+            try:
+                eol = self.str.find("\n", self.pos)
+                while eol < 0:
+                    if self.pos > 0:
+                        self.str = self.str[self.pos:]
+                        self.pos = 0
+                    p = len(self.str)
+                    self.str += self.f.read(32768)
+                    eol = self.str.find("\n", p)
+                p = self.pos
+                self.pos = eol + 1
+                return self.str[p:eol + 1]
+            except EOFError:
+                raise StopIteration
+        def read(self):
+            return self.str[self.pos:] + self.f.read()
+    
+    def _check_data(self):
+        if self.read_state == "a":      # ASCII
+            x = '!data timestamp direction tcp_flags tcp_seq payload_len tcp_ack'
+        elif self.read_state == "b":    # binary
+            x = '!data timestamp tcp_seq payload_len tcp_ack tcp_flags direction'
+        else:
+            return
+        if not re.match(x, self.read_data):
+            raise ConnectionFormatError, "bad !data"
+    
+    def _read_nonpacket(self, line):
+        if re.match('\\#[pf]?loss', line):
+            type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
+            self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+        elif re.match('!flowid', line):
+            self.flow_id = line.split()[1:]
+        elif re.match('!aggregate', line):
+            self.aggregate = int(line.split()[1])
+        elif re.match('!data ', line):
+            self.read_data = line
+            self._check_data()
+        elif re.match('!eof$', line):
+            return 1
+        return 0
+
+    def _read_binary(self, f):
+        self.read_state = "b"
+        self._check_data()
+
+        last_ack = [-1, -1]; dup_acks = [0, 0]
+        data = f.read()
+        while len(data) > 4:
+            l, = struct.unpack("!l", data[:4])
+            i = l & 0x7FFFFFFF
+            line, data = data[4:i], data[i:]
+            if len(line) < i - 4:
+                raise ConnectionFormatError, "corrupted file"
+            elif l & 0x80000000:
+                if self._read_nonpacket(line):
+                    break
+            elif i >= 26:
+                ts_sec, ts_usec, seq, payloadlen, ack, flags, dir = \
+                   struct.unpack("!lllllBB", line[:26])
+                time = ts_sec + ts_usec / 1000000.
+                if flags == 16: flags = "A"
+                else: flags = unparse_tcp_flags(flags)
+                if ack == last_ack[dir]: dup_acks[dir] += 1
+                else: dup_acks[dir] = 0; last_ack[dir] = ack
+                self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
+
     def read(self, f):
         last_ack = [-1, -1]; dup_acks = [0, 0]
+        read_state = 0; self.read_state = ""
+        f = Connection.Fileboy(f)
         for line in f:
             if not re.match('[\\!\\#]', line):
+                if read_state == 0:
+                    read_state = 1; self.read_state = "a"
+                    self._check_data()
                 time, dir, flags, seq, payloadlen, ack = line.split()
                 dir, ack = direction(dir), int(ack)
                 if ack == last_ack[dir]: dup_acks[dir] += 1
                 else: dup_acks[dir] = 0; last_ack[dir] = ack
                 self.s[dir].append(Packet(time, flags, seq, payloadlen, ack, dup_acks[dir]))
-            elif re.match('\\#[pf]?loss', line):
-                type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
-                self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
-            elif re.match('!flowid', line):
-                self.flow_id = line.split()[1:]
-            elif re.match('!aggregate', line):
-                self.aggregate = int(line.split()[1])
-            elif re.match('!eof$', line):
+            elif re.match('!binary', line):
+                self.read_state = "b"
                 break
+            elif self._read_nonpacket(line):
+                break
+        if self.read_state == "b":
+            self._read_binary(f)
         self.available = True
+        del self.read_state
+        del self.read_data
         return self
+    
     def first_index_after(self, time, dir=None):
         if not self.available:
             self.load()
@@ -113,6 +206,7 @@ class Connection:
         else:
             fake_pkt = Packet(time, "A", 0, 0, 0)
             return bisect(self.s[direction(dir)], fake_pkt)
+    
     def packets(self, dir, begin=None, end=None):
         if not self.available:
             self.load()
@@ -124,6 +218,7 @@ class Connection:
         while i < len(self.s[dir]) and (end is None or self.s[dir][i].time <= end):
             yield self.s[dir][i]
             i += 1
+    
     def rev_packets(self, dir, begin=None, end=None):
         if not self.available:
             self.load()
@@ -135,6 +230,7 @@ class Connection:
         while i >= 0 and (begin is None or self.s[dir][i].time >= begin):
             yield self.s[dir][i]
             i -= 1
+    
     def losses(self, dir, begin=None, end=None):
         if not self.available:
             self.load()
@@ -142,6 +238,7 @@ class Connection:
         for l in self.loss[dir]:
             if l.time_overlaps(begin, end):
                 yield l
+    
     def time_range(self, dir=None):
         if not self.available:
             self.load()
@@ -150,6 +247,7 @@ class Connection:
         else:
             dir = direction(dir)
             return self.s[dir][0].time, self.s[dir][-1].time
+    
     def _time_index(self, dir, time, after):
         if time is not None:
             return self.first_index_after(time, dir)
@@ -157,6 +255,7 @@ class Connection:
             return len(self.s[dir])
         else:
             return 0
+    
     def _seq_range(self, dir, begin, end):
         s0, s1 = 1e10, None
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
@@ -166,18 +265,21 @@ class Connection:
             s0 = min(s0, l.seq - 10)
             s1 = max(s1, l.end_seq + 10)
         return max(s0, 0), s1
+    
     def _ack_range(self, dir, begin, end):
         s0, s1 = 1e10, None
         for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
             s0 = min(s0, self.s[dir][i].ack - 10)
             s1 = max(s1, self.s[dir][i].ack + 10)
         return max(s0, 0), s1
+    
     def seq_range(self, dir=None, begin=None, end=None):
         if not self.available:
             self.load()
         dir = direction(dir)
         r0, r1 = self._seq_range(dir, begin, end), self._ack_range(1 - dir, begin, end)
         return min(r0[0], r1[0]), max(r0[1], r1[1])
+    
     def get_description(self):
         if not self.available:
             self.load()
@@ -185,11 +287,13 @@ class Connection:
         if self.aggregate >= 0:
             s += "#" + `self.aggregate` + ": "
         return s + self.flow_id[0] + ":" + self.flow_id[1] + " > " + self.flow_id[2] + ":" + self.flow_id[3]
+    
     def load(self):
         if type(self.filename) != types.StringType:
             raise RuntimeError, "cannot load this Connection"
         elif not self.available:
             self.read(self.filename)
+    
     def unload(self):
         if type(self.filename) == types.StringType:
             self.__init__(self.filename)
@@ -539,7 +643,7 @@ class PlotCanvas:
             for p in self.conn.rev_packets(1 - self.dir, t0, t1):
                 x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
                 if p.dup_acks > 0 and (p.ack != last_dupack or x < last_dupack_x):
-                    small_playout.set_text(str(p.dup_acks), -1)
+                    small_playout.set_text(str(p.dup_acks + 1), -1)
                     ir, lr = small_playout.get_extents()
                     if p.ack != last_dupack or x + lr[2]/2048.0 < last_dupack_x:
                         drawable.draw_layout(gc, x - lr[2]/2048.0, y + 2, small_playout)
@@ -632,8 +736,6 @@ class PlotFlowWindow:
             ( "/_View",		None,		None, 0, "<Branch>" ),
             ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
             ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
-   	    ( "/_Help",         None,         None, 0, "<Branch>" ),
-   	    ( "/_Help/About",   None,         None, 0, None ),
    	    ))
         menubar = self.item_factory.get_widget("<main>")
         vbox.add(menubar)
