@@ -150,11 +150,14 @@ FromIPSummaryDump::read_line(String &result, ErrorHandler *errh)
 int
 FromIPSummaryDump::initialize(ErrorHandler *errh)
 {
+    _pipe = 0;
     if (_filename == "-") {
 	_fd = STDIN_FILENO;
 	_filename = "<stdin>";
     } else
 	_fd = open(_filename.cc(), O_RDONLY);
+
+  retry_file:
     if (_fd < 0)
 	return errh->error("%s: %s", _filename.cc(), strerror(errno));
 
@@ -167,6 +170,22 @@ FromIPSummaryDump::initialize(ErrorHandler *errh)
     } else if (result == 0) {
 	uninitialize();
 	return errh->error("%s: empty file", _filename.cc());
+    }
+
+    // check for a gziped or bzip2d dump
+    if (_fd == STDIN_FILENO || _pipe)
+	/* cannot handle gzip or bzip2 */;
+    else if (_len >= 3
+	     && ((_buffer[0] == '\037' && _buffer[1] == '\213')
+		 || (_buffer[0] == 'B' && _buffer[1] == 'Z' && _buffer[2] == 'h'))) {
+	close(_fd);
+	_fd = -1;
+	String command = (_buffer[0] == '\037' ? "zcat " : "bzcat ") + _filename;
+	_pipe = popen(command.cc(), "r");
+	if (!_pipe)
+	    return errh->error("%s while executing `%s'", strerror(errno), command.cc());
+	_fd = fileno(_pipe);
+	goto retry_file;
     }
 
     String line;
@@ -187,9 +206,12 @@ FromIPSummaryDump::initialize(ErrorHandler *errh)
 void
 FromIPSummaryDump::uninitialize()
 {
-    if (_fd >= 0 && _fd != STDIN_FILENO)
+    if (_pipe)
+	pclose(_pipe);
+    else if (_fd >= 0 && _fd != STDIN_FILENO)
 	close(_fd);
     _fd = -1;
+    _pipe = 0;
     _buffer = String();
     _task.unschedule();
 }

@@ -6,7 +6,7 @@
 /*
 =c
 
-FromIPSummaryDump(FILENAME [, I<KEYWORDS>])
+FromIPSummaryDump(FILE [, I<KEYWORDS>])
 
 =s sources
 
@@ -17,6 +17,9 @@ reads packets from an IP summary dump file
 Reads IP packet descriptors from a file produced by or ToIPSummaryDump, then
 creates packets containing info from the descriptors and pushes them out the
 output. Optionally stops the driver when there are no more packets.
+
+FILE may be compressed with gzip(1) or bzip2(1); FromIPSummaryDump will run
+zcat(1) or bzcat(1) to uncompress it.
 
 Keyword arguments are:
 
@@ -115,9 +118,10 @@ class FromIPSummaryDump : public Element { public:
     bool _active;
 
     Task _task;
-  
+
     struct timeval _time_offset;
     String _filename;
+    FILE *_pipe;
 
     int error_helper(ErrorHandler *, const char *);
     int read_buffer(ErrorHandler *);
