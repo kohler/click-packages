@@ -7,7 +7,6 @@
 #include "tcpcollector.hh"
 #include "elements/analysis/aggregatenotifier.hh"
 CLICK_DECLS
-class ToIPSummaryDump;
 
 /*
 =c
@@ -69,6 +68,11 @@ E<lparen>"C<source='var'>").  For example:
 Boolean.  If true, then write information about individual semi-RTTs to the
 trace info file in "C<E<lt>ackcausationE<gt>>" tags.  Default is false.
 
+=item UNDELIVERED
+
+Boolean.  If true, then write information about any undelivered data packets
+to the trace info file in "C<E<lt>undelivered<gt>>" tags.  Default is false.
+
 =back
 
 =e
@@ -117,21 +121,21 @@ class TCPMystery : public Element, public TCPCollector::AttachmentManager { publ
     int _myconn_offset;
     int _mypkt_offset;
 
-    void clear(Stream*);
-    void finish(Conn*);
+    void clear_mypkts(Stream*, Conn*);
     void find_true_caused_acks(Stream*, Conn*);
     void calculate_semirtt(Stream*, Conn*);
+    void find_delivered(Stream*, Conn*);
     
     static void mystery_rtt_xmltag(FILE* f, TCPCollector::Conn* conn, const String& tagname, void* thunk);
     static void mystery_semirtt_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
     static void mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
+    static void mystery_undelivered_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
 
     void find_min_ack_latency(Stream*, Conn*);
     void find_loss_events(Stream*, Conn*);
     
     static void mystery_loss_xmltag(FILE *f, TCPCollector::Stream &stream, TCPCollector::Conn &conn, const String &tagname, void *thunk);
     static void mystery_reordered_xmltag(FILE *f, TCPCollector::Stream &stream, TCPCollector::Conn &conn, const String &tagname, void *thunk);
-    static void mystery_undelivered_xmltag(FILE *f, TCPCollector::Stream &stream, TCPCollector::Conn &conn, const String &tagname, void *thunk);
     
 };
 
@@ -174,6 +178,11 @@ struct TCPMystery::MyLossBlock {
 };
 
 struct TCPMystery::MyStream {
+    enum {
+	F_CLEARPKTS = 1, F_TRUEACKCAUSATION = 2, F_SEMIRTT = 4,
+	F_DELIVERED = 8
+    };
+    int flags;
     double semirtt_min;
     double semirtt_syn;
     double semirtt_max;
@@ -186,7 +195,6 @@ struct TCPMystery::MyConn {
     MyStream* mystream(int i)	{ assert(i==0||i==1); return &_stream[i]; }
     const MyStream* mystream(int i) const { assert(i==0||i==1); return &_stream[i]; }
   private:
-    bool _finished : 1;		// have we finished the flow?
     MyStream _stream[2];
     friend class TCPMystery;
 };
@@ -300,21 +308,18 @@ class TCPMystery::MyConn {  public:
     MyConn();
     void kill(TCPMystery *);
 
-    struct timeval rtt() const;
     MyStream &stream(int i)	{ assert(i==0||i==1); return _stream[i]; }
     const MyStream &stream(int i) const { assert(i==0||i==1); return _stream[i]; }
 
-    void handle_packet(const Packet *, TCPMystery *);
-    
-    MPkt *create_pkt(const Packet *, TCPMystery *);
-    void calculate_loss_events(MPkt *, unsigned dir, TCPMystery *);
-    void post_update_state(const Packet *, MPkt *, TCPMystery *);
-
-    void finish(TCPMystery *);
+    void finish_ackcausation(TCPMystery *);
+    void finish_rtt(TCPMystery *);
+    void finish_undelivered(TCPMystery *);
     
   private:
 
-    bool _finished : 1;		// have we finished the flow?
+    bool _cleared : 1;
+    bool _have_ackcausation : 1;
+    bool _have_undelivered : 1;
     MyStream _stream[2];
     
 };

@@ -34,13 +34,14 @@ int
 TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *e;
-    bool ackcausation = false, semirtt = false, rtt = true;
+    bool ackcausation = false, semirtt = false, rtt = true, undelivered = false;
     if (cp_va_parse(conf, this, errh,
 		    cpElement, "TCPCollector", &e,
 		    cpKeywords,
 		    "ACKCAUSATION", cpBool, "output ack causation XML?", &ackcausation,
 		    "SEMIRTT", cpBool, "output semi-RTT XML?", &semirtt,
 		    "RTT", cpBool, "output RTT XML?", &rtt,
+		    "UNDELIVERED", cpBool, "output undelivered packets XML?", &undelivered,
 		    cpEnd) < 0)
 	return -1;
     TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");
@@ -52,6 +53,8 @@ TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 	tcpc->add_stream_xmltag("semirtt", mystery_semirtt_xmltag, this);
     if (ackcausation)
 	tcpc->add_stream_xmltag("ackcausation", mystery_ackcausation_xmltag, this);
+    if (undelivered)
+	tcpc->add_stream_xmltag("undelivered", mystery_undelivered_xmltag, this);
     _myconn_offset = tcpc->add_conn_attachment(this, sizeof(MyConn));
     _mypkt_offset = tcpc->add_pkt_attachment(sizeof(MyPkt));
     return 0;
@@ -64,33 +67,22 @@ void
 TCPMystery::new_conn_hook(Conn* c, unsigned)
 {
     MyConn* mc = myconn(c);
-    mc->_finished = false;
+    mc->mystream(0)->flags = mc->mystream(1)->flags = 0;
 }
 
 void
-TCPMystery::clear(Stream* s)
+TCPMystery::clear_mypkts(Stream* s, Conn* c)
 {
+    if (mystream(s, c)->flags & MyStream::F_CLEARPKTS)
+	return;
+    mystream(s, c)->flags |= MyStream::F_CLEARPKTS;
+
     for (Pkt* k = s->pkt_head; k; k = k->next) {
 	MyPkt* mk = mypkt(k);
 	mk->flags = 0;
 	mk->event_id = 0;
 	mk->rexmit = 0;
 	mk->caused_ack = 0;
-    }
-}
-
-void
-TCPMystery::finish(Conn* c)
-{
-    MyConn* mc = myconn(c);
-    if (!mc->_finished) {
-	clear(c->stream(0));
-	clear(c->stream(1));
-	find_true_caused_acks(c->stream(0), c);
-	find_true_caused_acks(c->stream(1), c);
-	calculate_semirtt(c->stream(0), c);
-	calculate_semirtt(c->stream(1), c);
-	mc->_finished = true;
     }
 }
 
@@ -102,6 +94,11 @@ TCPMystery::finish(Conn* c)
 void
 TCPMystery::find_true_caused_acks(Stream* datas, Conn* c)
 {
+    if (mystream(datas, c)->flags & MyStream::F_TRUEACKCAUSATION)
+	return;
+    mystream(datas, c)->flags |= MyStream::F_TRUEACKCAUSATION;
+    clear_mypkts(datas, c);
+    
     Stream* acks = c->ack_stream(datas);
     Pkt* ackk = acks->pkt_head;
 
@@ -137,6 +134,10 @@ void
 TCPMystery::calculate_semirtt(Stream* s, Conn* c)
 {
     MyStream* ms = mystream(s, c);
+    if (ms->flags & MyStream::F_SEMIRTT)
+	return;
+    ms->flags |= MyStream::F_SEMIRTT;
+    find_true_caused_acks(s, c);
     
     ms->semirtt_syn = 0;
     ms->semirtt_min = DBL_MAX;
@@ -163,12 +164,55 @@ TCPMystery::calculate_semirtt(Stream* s, Conn* c)
 	ms->semirtt_min = 0;
 }
 
+void
+TCPMystery::find_delivered(Stream* datas, Conn* c)
+{
+    if (mystream(datas, c)->flags & MyStream::F_DELIVERED)
+	return;
+    mystream(datas, c)->flags |= MyStream::F_DELIVERED;
+    find_true_caused_acks(datas, c);
+    
+    Stream* acks = c->ack_stream(datas);
+
+    Pkt* k_time = datas->pkt_head;
+    if (!k_time)		// no data packets
+	return;
+
+    tcp_seq_t last_ack = 0;
+    for (Pkt* ackk = acks->pkt_head; ackk; ackk = ackk->next) {
+	// skip duplicate acks on the first pass
+	if (ackk->ack == last_ack && !ackk->sack)
+	    continue;
+	
+	// The region of interest is bounded on the right by k_time, the first
+	// packet received at or after ackk
+	while (k_time->next && k_time->next->timestamp <= ackk->timestamp)
+	    k_time = k_time->next;
+
+	TCPScoreboard sb;
+	ackk->add_ack(sb);
+
+	TCPScoreboard acked;
+	for (Pkt* k = k_time; k; k = k->prev)
+	    if (k->seq == k->end_seq)
+		/* nada */;
+	    else if ((k->flags & Pkt::F_NEW) && SEQ_LEQ(k->end_seq, last_ack))
+		break;
+	    else if (k->seq_contained(sb) && !k->seq_contained(acked)) {
+		mypkt(k)->flags |= MyPkt::F_DELIVERED;
+		k->add_seq(acked);
+	    }
+
+	last_ack = ackk->ack;
+    }
+}
+
 
 void
 TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCollector::Conn* c, const String& tagname, void* thunk)
 {
     TCPMystery* my = static_cast<TCPMystery*>(thunk);
-    my->finish(c);
+    my->find_true_caused_acks(s, c);
 
     fprintf(f, "    <%s", tagname.c_str());
     //if (have_ack_latency)
@@ -190,7 +234,7 @@ void
 TCPMystery::mystery_semirtt_xmltag(FILE* f, TCPCollector::Stream* s, TCPCollector::Conn* c, const String& tagname, void* thunk)
 {
     TCPMystery* my = static_cast<TCPMystery*>(thunk);
-    my->finish(c);
+    my->calculate_semirtt(s, c);
 
     MyStream* ms = my->mystream(s, c);
     if (ms->nsemirtt) {
@@ -208,7 +252,8 @@ void
 TCPMystery::mystery_rtt_xmltag(FILE* f, TCPCollector::Conn* c, const String& tagname, void* thunk)
 {
     TCPMystery* my = static_cast<TCPMystery*>(thunk);
-    my->finish(c);
+    my->calculate_semirtt(c->stream(0), c);
+    my->calculate_semirtt(c->stream(1), c);
 
     MyStream* ms0 = my->mystream(c->stream(0), c);
     MyStream* ms1 = my->mystream(c->stream(1), c);
@@ -219,6 +264,30 @@ TCPMystery::mystery_rtt_xmltag(FILE* f, TCPCollector::Conn* c, const String& tag
 	fprintf(f, "  <%s source='avg' value='%g' />\n", tagname.c_str(), ms0->semirtt_sum/ms0->nsemirtt + ms1->semirtt_sum/ms1->nsemirtt);
 	fprintf(f, "  <%s source='max' value='%g' />\n", tagname.c_str(), ms0->semirtt_max + ms1->semirtt_max);
     }
+}
+
+void
+TCPMystery::mystery_undelivered_xmltag(FILE* f, TCPCollector::Stream* s, TCPCollector::Conn* c, const String& tagname, void* thunk)
+{
+    TCPMystery* my = static_cast<TCPMystery*>(thunk);
+    my->find_delivered(s, c);
+
+    fprintf(f, "    <%s", tagname.c_str());
+    
+    bool any = false;
+    for (Pkt* k = s->pkt_head; k; k = k->next)
+	if (k->seq != k->end_seq && !(my->mypkt(k)->flags & MyPkt::F_DELIVERED)) {
+	    if (!any) {
+		fprintf(f, ">\n");
+		any = true;
+	    }
+	    fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	}
+
+    if (any)
+	fprintf(f, "    </%s>\n", tagname.c_str());
+    else
+	fprintf(f, " />\n");
 }
 
 

@@ -418,6 +418,14 @@ class Connection(object):
         remove_duplicates(self.loss[0])
         remove_duplicates(self.loss[1])
         self.loss_count = [len(self.loss[0]), len(self.loss[1])]
+        for t in self.undelivered[0]:
+            p = self.find_packet(t, 0)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
+        for t in self.undelivered[1]:
+            p = self.find_packet(t, 1)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
         if adjust:
             t0 = s0 = s1 = 99999999999
             if len(self.s[0]):
@@ -434,14 +442,6 @@ class Connection(object):
                 p.adjust(t0, s0, s1)
             for p in self.s[1]:
                 p.adjust(t0, s1, s0)
-        for t in self.undelivered[0]:
-            p = self.find_packet(t, 0)
-            if p is not None:
-                p.flags |= TH_UNDELIVERED
-        for t in self.undelivered[1]:
-            p = self.find_packet(t, 1)
-            if p is not None:
-                p.flags |= TH_UNDELIVERED
     
     def first_index_after(self, time, dir=None):
         if not self.available:
@@ -1204,6 +1204,7 @@ class FlowSet:
         self.reading_state = FlowSet.READ_NONE
         self.reading_connection = self.reading_direction = None
         self.reading_lastline = None
+	self.reading_hadpackets = False
 
         return self._read_process
 
@@ -1287,6 +1288,7 @@ class FlowSet:
                 endtime = float(attrs["begin"]) + float(attrs["duration"])
             self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=(self.reading_tracefile is not None))
             self.append(self.reading_connection)
+	    self.reading_hadpackets = False
         elif name == 'stream' and self.reading_connection is not None:
             try:
                 d, l, pl, fl = int(attrs["dir"]), long(attrs.get("nloss", 0)), long(attrs.get("nploss", 0)), long(attrs.get("nfloss", 0))
@@ -1306,14 +1308,16 @@ class FlowSet:
             self.reading_state = FlowSet.READ_UNDELIVERED
         elif name == 'packet' and self.reading_direction is not None:
             self.reading_state = FlowSet.READ_PACKET
-            self.reading_connection.available = True
+	    self.reading_hadpackets = True
 
     def _end_element(self, name):
         if name == 'trace':
             self.reading_state = FlowSet.READ_NONE
-        elif name == 'connection':
-            self.reading_connection = None
         elif name == 'flow':
+	    if self.reading_hadpackets:
+		self.reading_connection.read_complete(False)
+            self.reading_connection = None
+        elif name == 'stream':
             self.reading_direction = None
         elif (name == 'ackcausality' or name == 'ackcausation') and self.reading_state == FlowSet.READ_ACKCAUSALITY:
             self.reading_state = FlowSet.READ_TRACE
