@@ -512,88 +512,80 @@ void
 CalculateFlows::
 print_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
 {
-	
-	loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
-	if (type == 0){	
-		fprintf(loss->outfile[paint],"%ld.%06ld PACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-	}
-	else {
-		fprintf(loss->outfile[paint],"%ld.%06ld ACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-	}
-	//fflush(loss->outfile[paint]);
-	if (fclose(loss->outfile[paint])){ 
-   		click_chatter("error closing file!");
-	}
-	
+    loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
+    if (type == 0) {
+	fprintf(loss->outfile[paint],"%ld.%06ld PACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+    } else {
+	fprintf(loss->outfile[paint],"%ld.%06ld ACK %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+    }
+    //fflush(loss->outfile[paint]);
+    if (fclose(loss->outfile[paint])){ 
+	click_chatter("error closing file!");
+    }
 }
 
 void
 CalculateFlows::
 print_send_event(unsigned paint, timeval tstamp, unsigned startseq, unsigned endseq)
 {
-	loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
-	fprintf(loss->outfile[paint],"%ld.%06ld SEND %u %u\n",tstamp.tv_sec,tstamp.tv_usec,startseq,endseq); 
-//	fflush(loss->outfile[paint]);
-	if (fclose(loss->outfile[paint])){ 
-   		click_chatter("error closing file!");
-	}
-
+    loss->outfile[paint] = fopen(loss->outfilename[paint].cc(), "a");
+    fprintf(loss->outfile[paint],"%ld.%06ld SEND %u %u\n",tstamp.tv_sec,tstamp.tv_usec,startseq,endseq); 
+    //	fflush(loss->outfile[paint]);
+    if (fclose(loss->outfile[paint])){ 
+	click_chatter("error closing file!");
+    }
 }
 
 void
 CalculateFlows::
 gplotp_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
 {
-	if (type == 0){	
-		loss->outfileg[paint] = fopen(loss->outfilenameg[paint].cc(), "a");
-		fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-		if (fclose(loss->outfileg[paint])){ 
-   			click_chatter("error closing file!");
-		}
+    if (type == 0){	
+	loss->outfileg[paint] = fopen(loss->outfilenameg[paint].cc(), "a");
+	fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+	if (fclose(loss->outfileg[paint])){ 
+	    click_chatter("error closing file!");
 	}
-	else{
-		loss->outfileg[paint+8] = fopen(loss->outfilenameg[paint+8].cc(), "a");
-		fprintf(loss->outfileg[paint+8],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
-		if (fclose(loss->outfileg[paint+8])){ 
-   			click_chatter("error closing file!");
-		}
+    } else {
+	loss->outfileg[paint+8] = fopen(loss->outfilenameg[paint+8].cc(), "a");
+	fprintf(loss->outfileg[paint+8],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+	if (fclose(loss->outfileg[paint+8])){ 
+	    click_chatter("error closing file!");
 	}
+    }
 }
 
 void
 CalculateFlows::
 gplotp_send_event(unsigned paint, timeval tstamp, unsigned endseq)
 {
-	loss->outfileg[paint+2] = fopen(loss->outfilenameg[paint+2].cc(), "a");
-	fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
-	//fflush(loss->outfileg[paint+2]);
-	if (fclose(loss->outfileg[paint+2])){ 
-   		click_chatter("error closing file!");
-	}
-
+    loss->outfileg[paint+2] = fopen(loss->outfilenameg[paint+2].cc(), "a");
+    fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
+    //fflush(loss->outfileg[paint+2]);
+    if (fclose(loss->outfileg[paint+2])){ 
+	click_chatter("error closing file!");
+    }
 }
 
 void 
 CalculateFlows::
 aggregate_notify(uint32_t aggregate_ID,
                  AggregateEvent event /* can be NEW_AGG or DELETE_AGG */,
-                 const Packet * /* null for DELETE_AGG */){
+                 const Packet * /* null for DELETE_AGG */)
+{
 //	printf("ok1 ---->%d %d\n", aggregate_ID, event);
-	if (event == NEW_AGG){	
-		LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 1, 1) ;
-		loss_map.insert(aggregate_ID, tmploss);
-	}
-	
-	else if (event == DELETE_AGG){
-		LossInfo *tmploss = loss_map.find(aggregate_ID);	
-		loss_map.remove(aggregate_ID);
-		delete tmploss;
-	}
-}	
+    if (event == NEW_AGG){	
+	LossInfo *tmploss = new LossInfo(outfilename,aggregate_ID, 1, 1) ;
+	loss_map.insert(aggregate_ID, tmploss);
+    } else if (event == DELETE_AGG){
+	LossInfo *tmploss = loss_map.find(aggregate_ID);	
+	loss_map.remove(aggregate_ID);
+	delete tmploss;
+    }
+}
 
 
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(CalculateFlows)
-
 
 #include <click/bighashmap.cc>

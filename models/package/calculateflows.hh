@@ -340,47 +340,13 @@ class CalculateFlows::LossInfo {
     }
 
 
-
-    timeval Search_seq_interval(unsigned start_seq, unsigned end_seq, unsigned paint){
-	
-	timeval tbstart = time_by_firstseq[paint].find(start_seq);
-	timeval tbend = time_by_lastseq[paint].find(end_seq);
-	MapInterval &ibtime = inter_by_time[paint];
-	
-	if (!tbend.tv_sec && !tbend.tv_usec ){ 
-	    if (!tbstart.tv_sec && !tbstart.tv_usec){ // We have a partial retransmission ...
-		for (MapInterval::Iterator iter = ibtime.first(); iter; iter++){
-		    TimeInterval *tinter = const_cast<TimeInterval *>(&iter.value());
-		    if (tinter->start_byte < start_seq && tinter->end_byte > start_seq){
-			return tinter->time;
-		    }  
-		    //printf("[%ld.%06ld : %u - %u ]\n",tinter->time.tv_sec, tinter->time.tv_usec, tinter->start_byte, tinter->end_byte);
-		}
-		// nothing matches (that cannot be possible unless there is reordering)
-		outoforder_pckt = 1; //set the outoforder indicator
-		printf("Cannot find packet in history of flow %u:%u!:[%u:%u], Possible reordering?\n",
-		       agganno,
-		       paint, 
-		       start_seq,
-		       end_seq);
-		timeval tv = timeval();
-		return tv;
-	    } else {
-		//printf("Found in Start Byte Hash\n");
-		return tbstart;
-					}
-	    
-	} else {
-	    //printf("Found in End Byte Hash\n");
-	    return tbend;
-	}
-	
-    }
     
-    double timesub (timeval end_time , timeval start_time){
+    struct timeval Search_seq_interval(tcp_seq_t start_seq, tcp_seq_t end_seq, unsigned paint);
+    
+    static double timesub (timeval end_time , timeval start_time){
 	return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
     }
-    double timeadd (timeval end_time , timeval start_time){
+    static double timeadd (timeval end_time , timeval start_time){
 	return ((end_time.tv_sec+start_time.tv_sec) + 0.000001 *(end_time.tv_usec+start_time.tv_usec));
     }
     
