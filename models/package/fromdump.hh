@@ -26,6 +26,14 @@ Keyword arguments are:
 
 Boolean. Same as the TIMING argument.
 
+=item SAMPLE
+
+Unsigned real number between 0 and 1. FromDump will output each packet with
+probability SAMPLE. Default is 1. FromDump uses fixed-point arithmetic, so the
+actual sampling probability may differ substantially from the requested
+sampling probability. Use the C<sampling_prob> handler to find out the actual
+probability.
+
 =item STOP
 
 Boolean. If true, then FromDump will ask the router to stop when it is done
@@ -47,6 +55,10 @@ Only available in user-level processes.
 By default, `tcpdump -w FILENAME' dumps only the first 68 bytes of
 each packet. You probably want to run `tcpdump -w FILENAME -s 2000' or some
 such.
+
+=h sampling_prob read-only
+
+Returns the sampling probability (see the SAMPLE keyword argument).
 
 =a
 
@@ -86,6 +98,7 @@ class FromDump_Fast : public Element { public:
 #ifdef ALLOW_MMAP
     bool _mmap : 1;
 #endif
+    unsigned _sampling_prob;
     int _minor_version;
     int _linktype;
 
@@ -107,7 +120,9 @@ class FromDump_Fast : public Element { public:
     int read_buffer(ErrorHandler *);
     int read_into(void *, uint32_t, ErrorHandler *);
     Packet *read_packet(ErrorHandler *);
-  
+
+    static String read_handler(Element *, void *);
+    
 };
 
 #endif

@@ -62,6 +62,7 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 #else
     bool mmap = true;
 #endif
+    _sampling_prob = (1 << 28);
     
     if (cp_va_parse(conf, this, errh,
 		    cpFilename, "dump file name", &_filename,
@@ -71,8 +72,14 @@ FromDump_Fast::configure(const Vector<String> &conf, ErrorHandler *errh)
 		    "TIMING", cpBool, "use original packet timing?", &timing,
 		    "STOP", cpBool, "stop driver when done?", &stop,
 		    "MMAP", cpBool, "access file with mmap()?", &mmap,
+		    "SAMPLE", cpUnsignedReal2, "sampling probability", 28, &_sampling_prob,
 		    0) < 0)
 	return -1;
+    if (_sampling_prob > (1 << 28)) {
+	errh->warning("SAMPLE probability reduced to 1");
+	_sampling_prob = (1 << 28);
+    } else if (_sampling_prob == 0)
+	errh->warning("SAMPLE probability is 0; emitting no packets");
     
     _timing = timing;
     _stop = stop;
@@ -307,7 +314,9 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
 {
     fake_pcap_pkthdr swapped_ph;
     const fake_pcap_pkthdr *ph;
+    int len, caplen;
 
+  retry:
     // we may need to read bits of the file
     if (_len - _pos >= sizeof(*ph)) {
 	ph = reinterpret_cast<const fake_pcap_pkthdr *>(_buffer + _pos);
@@ -324,7 +333,6 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
     }
 
     // may need to swap 'caplen' and 'len' fields at or before version 2.3
-    int len, caplen;
     if (_minor_version > 3 || (_minor_version == 3 && ph->caplen <= ph->len)) {
 	len = ph->len;
 	caplen = ph->caplen;
@@ -339,6 +347,12 @@ FromDump_Fast::read_packet(ErrorHandler *errh)
 	return 0;
     }
 
+    // checking sampling probability
+    if (_sampling_prob < (1 << 28) && (uint32_t)(random() & 0xFFFFFFF) >= _sampling_prob) {
+	_pos += caplen;
+	goto retry;
+    }
+    
     // create packet
     Packet *p;
     if (_pos + caplen <= _len) {
@@ -398,10 +412,24 @@ FromDump_Fast::run_scheduled()
 	router()->please_stop_driver();
 }
 
+String
+FromDump_Fast::read_handler(Element *e, void *thunk)
+{
+    FromDump_Fast *fdf = (FromDump_Fast *)e;
+    switch ((int)thunk) {
+      case 0:
+	return cp_unparse_real2(fdf->_sampling_prob, 28) + "\n";
+      default:
+	return "<error>\n";
+    }
+}
+
 void
 FromDump_Fast::add_handlers()
 {
-    add_task_handlers(&_task);
+    add_read_handler("sampling_prob", read_handler, (void *)0);
+    if (output_is_push(0))
+	add_task_handlers(&_task);
 }
 
 ELEMENT_REQUIRES(userlevel)
