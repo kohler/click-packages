@@ -2018,7 +2018,7 @@ class PlotCanvas:
     DRAG_MAGNETISM = 12
     
     # initialization
-    def __init__(self, master, width=600, height=500):
+    def __init__(self, master, width=900, height=600):
         self.canvas = gtk.DrawingArea()
         self.canvas.set_size_request(width, height)
         self.canvas.set_double_buffered(False) # we do our own
