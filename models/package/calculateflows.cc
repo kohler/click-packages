@@ -39,7 +39,7 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 					
 					,0) < 0)
         return -1;
-		loss = new LossInfo(outfilename);
+		loss = new LossInfo(outfilename , 1);
 	return 0;
 
 }
@@ -103,7 +103,10 @@ CalculateFlows::simple_action(Packet *p)
 	   	   loss->calculate_loss_events2(seq,seqlen,ts,paint); //calculate loss if any
 		   loss->calculate_loss(seq, seqlen, paint); //calculate loss if any
    	       print_send_event(paint, ts, seq, (seq+seqlen));
-  		   m_tbfirst.insert(seq, ts);
+		   if (loss->gnuplot)
+		   	gplotp_send_event(paint, ts, (seq+seqlen));
+  		   
+		   m_tbfirst.insert(seq, ts);
 		   m_tblast.insert((seq+seqlen), ts);
 		   TimeInterval ti;
 		   ti.start_byte = seq;
@@ -116,6 +119,8 @@ CalculateFlows::simple_action(Packet *p)
 			loss->set_last_ack(ack,cpaint);
 			m_acks.insert(ack, m_acks.find(ack)+1 );
 			print_ack_event(cpaint, type, ts, ack);	
+			if (loss->gnuplot)
+		     gplotp_ack_event(cpaint, ts, ack);	
 			//printf("[%u, %u]",ack,m_acks[ack]);
 	   }
 	   
@@ -165,7 +170,8 @@ CalculateFlows::simple_action(Packet *p)
 }
 
 void
-CalculateFlows::print_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
+CalculateFlows::
+print_ack_event(unsigned paint, int type, timeval tstamp, unsigned ackseq)
 {
 	
 	if (type == 0){	
@@ -183,6 +189,23 @@ print_send_event(unsigned paint, timeval tstamp, unsigned startseq, unsigned end
 {
 
 		fprintf(loss->outfile[paint],"%ld.%06ld SEND %u %u\n",tstamp.tv_sec,tstamp.tv_usec,startseq,endseq); 
+
+}
+
+void
+CalculateFlows::
+gplotp_ack_event(unsigned paint, timeval tstamp, unsigned ackseq)
+{
+	fprintf(loss->outfileg[paint],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,ackseq); 
+	
+}
+
+void
+CalculateFlows::
+gplotp_send_event(unsigned paint, timeval tstamp, unsigned endseq)
+{
+
+		fprintf(loss->outfileg[paint+2],"%ld.%06ld %u\n",tstamp.tv_sec,tstamp.tv_usec,endseq); 
 
 }
 

@@ -74,6 +74,9 @@ class CalculateFlows : public Element { public:
     int initialize(ErrorHandler *);
 	void print_ack_event(unsigned, int,  timeval, unsigned);
 	void print_send_event(unsigned, timeval, unsigned , unsigned);
+	void gplotp_ack_event(unsigned, timeval, unsigned);
+	void gplotp_send_event(unsigned, timeval, unsigned);
+	
 	Packet *simple_action(Packet *);
 	struct TimeInterval {
 		timeval	time;
@@ -93,7 +96,7 @@ class CalculateFlows : public Element { public:
 	private:	
 		unsigned  _last_seq[2];
 		unsigned  _upper_wind_seq[2];
-		unsigned  _lower_wind_seq[2];
+		unsigned  _max_wind_seq[2];
 		unsigned  _last_ack[2];
 		unsigned  _max_seq[2];
 		unsigned  _total_bytes[2];
@@ -101,9 +104,12 @@ class CalculateFlows : public Element { public:
 		unsigned  _packets_lost[2];
 		unsigned  _packets[2];
 		unsigned  _loss_events[2];
+		unsigned  _p_loss_events[2];
 		   
 	public:	
 		FILE *outfile[2];
+		FILE *outfileg[8];
+		int  gnuplot;
 		MapT time_by_firstseq[2];
 		MapT time_by_lastseq[2];
 		MapInterval inter_by_time[2];
@@ -115,11 +121,12 @@ class CalculateFlows : public Element { public:
 		short int prev_doubling[2];
 		
 		void init() { 
+			gnuplot = 0;
 			prev_diff[0] = 0;
 			doubling[0] = -1;
 			prev_doubling[0] = 0;
 			_upper_wind_seq[0] = 0;
-			_lower_wind_seq[0] = 0;
+			_max_wind_seq[0] = 0;
 			_last_seq[0] = 0;
 			_last_ack[0] = 0;
 			_max_seq[0] = 0;
@@ -128,13 +135,14 @@ class CalculateFlows : public Element { public:
 			_packets_lost[0] = 0;
 			_packets[0] = 0;
 			_loss_events[0] = 0;
+			_p_loss_events[0] = 0;
 			
 			
 			prev_diff[1]=0;
 			doubling[1] = -1;
 			prev_doubling[1] = 0;
 			_upper_wind_seq[1] = 0;
-			_lower_wind_seq[1] = 0;
+			_max_wind_seq[1] = 0;
 			_last_seq[1] = 0;
 			_last_ack[1] = 0;
 			_max_seq[1] = 0;
@@ -142,28 +150,80 @@ class CalculateFlows : public Element { public:
 			_bytes_lost[1] = 0;
 			_packets_lost[1] = 0;
 			_packets[1] = 0;
-			_loss_events[1] = 0;
+			_p_loss_events[1] = 0;
 		};
 			
-		LossInfo(String *outfilename) { 
+		LossInfo(String *outfilename, int gnuplotprm) { 
 			init();
+			gnuplot = gnuplotprm;
+			String outfilenametmp;
 			for (int i = 0 ; i < 2 ; i++){
-				//printf("%s",outfilename[i].cc());
+				//outfilename[i].append("test",4);
+				//printf("%s\n",outfilename[i].cc());
 				outfile[i] = fopen(outfilename[i].cc(), "w");
 	    		if (!outfile[i]){
     	    		click_chatter("%s: %s", outfilename[i].cc(), strerror(errno));
 	        		return;
 				}
 			}
+			if (gnuplot){  // check if gnuplot output is requested.
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outfilename[i];
+					outfilenametmp.append("_acks.gp",8);
+					outfileg[i] = fopen(outfilenametmp.cc(), "w");
+	    			if (!outfileg[i]){
+    	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+	        			return;
+					}
+				}
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outfilename[i];
+					outfilenametmp.append("_xmts.gp",8);
+					outfileg[i+2] = fopen(outfilenametmp.cc(), "w");
+	    			if (!outfileg[i]){
+    	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+	        			return;
+					}
+				}
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outfilename[i];
+					outfilenametmp.append("_levt.gp",8);
+					outfileg[i+4] = fopen(outfilenametmp.cc(), "w");
+	    			if (!outfileg[i]){
+    	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+	        			return;
+					}
+				}
+				for (int i = 0 ; i < 2 ; i++){
+					outfilenametmp = outfilename[i];
+					outfilenametmp.append("_plevt.gp",9);
+					outfileg[i+6] = fopen(outfilenametmp.cc(), "w");
+	    			if (!outfileg[i]){
+    	    			click_chatter("%s: %s", outfilenametmp.cc(), strerror(errno));
+	        			return;
+					}
+				}
+				
+			}
+			
     	};
 		
 		~LossInfo(){
 			print_stats();
 			for (int i = 0 ; i < 2 ; i++){
+				fflush(outfile[i]);
 				if (fclose(outfile[i])){ 
     		    	click_chatter("error closing file!");
 				}
-			}			
+			}
+			if (gnuplot){  // check if gnuplot output is requested.
+				for (int i = 0 ; i < 8 ; i++){
+					fflush(outfileg[i]);
+					if (fclose(outfileg[i])){ 
+    		    		click_chatter("error closing file!");
+					}
+				}			
+			}
 		}
 		 
 		void print_stats(){
@@ -173,6 +233,7 @@ class CalculateFlows : public Element { public:
 			printf("Total Packets = [%u]  ",packets(0));
 			printf("Total Packets Lost = [%u]\n",packets_lost(0));
 			printf("Total Loss Events = [%u]\n",loss_events(0));
+			printf("Total Possible Loss Events = [%u]\n",ploss_events(0));
 	 	 	
 			printf("Flow from B->A \n");
 			printf("Total Bytes = [%u]     ", total_bytes(1));
@@ -180,6 +241,7 @@ class CalculateFlows : public Element { public:
 			printf("Total Packets = [%u]  ",packets(1));
 			printf("Total Packets Lost = [%u]\n",packets_lost(1));
 			printf("Total Loss Events = [%u]\n",loss_events(1));
+			printf("Total Possible Loss Events = [%u]\n",ploss_events(1));
 		}
 
 
@@ -220,7 +282,10 @@ class CalculateFlows : public Element { public:
 		double timesub (timeval end_time , timeval start_time){
 			return ((end_time.tv_sec-start_time.tv_sec) + 0.000001 *(end_time.tv_usec-start_time.tv_usec));
 		}
-				
+		double timeadd (timeval end_time , timeval start_time){
+			return ((end_time.tv_sec+start_time.tv_sec) + 0.000001 *(end_time.tv_usec+start_time.tv_usec));
+		}
+						
 		void calculate_loss_events(unsigned seq, unsigned seqlen, timeval time, unsigned paint){
 			double curr_diff;
 	   	    short int num_of_acks = acks[paint].find(seq);
@@ -287,11 +352,30 @@ class CalculateFlows : public Element { public:
 			double curr_diff;
 	   	    short int num_of_acks = acks[paint].find(seq);
 			short int  num_of_rexmt = rexmt[paint].find(seq);
+			short int possible_loss_event=0; //0 for loss event 1 for possible loss event
+						
 			//printf("seq:%u ,rexmt: %d\n",seq , num_of_rexmt);
 			if ( seq < _max_seq[paint] 
-				&& (seq > _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we may have a new event.
+				&& (seq >= _upper_wind_seq[paint] || ( num_of_rexmt > 0 ))){ // then we have a new event.
 					//printf("last_seq[%d]=%u \n",paint,seq );
+					rexmt[paint].clear(); // clear previous retransmissions (fresh start for this window)
 					timeval time_last_sent  = Search_seq_interval(seq ,seq+seqlen, paint);	
+					
+					if (_max_wind_seq[paint] > (seq+seqlen)){
+						fprintf(outfileg[paint+4],"%f %.1f %f %.1f\n",
+								timeadd(time,time_last_sent)/2.,
+								(_max_wind_seq[paint]+seq+seqlen)/2.,
+								timesub(time,time_last_sent)/2.,
+								(_max_wind_seq[paint]-seq-seqlen)/2.); 
+					}
+					else{
+						possible_loss_event = 1; // possible loss event
+						fprintf(outfileg[paint+6],"%f %.1f %f %.1f\n",
+								timeadd(time,time_last_sent)/2.,
+								(double)(seq+seqlen+seqlen/4.),
+								timesub(time,time_last_sent)/2.,
+								seqlen/4.); 
+					}	
 					
 					if (prev_diff[paint] == 0){ //first time
 				        prev_diff[paint] = timesub(time, time_last_sent);
@@ -318,33 +402,54 @@ class CalculateFlows : public Element { public:
 					}					
 					
 					if (num_of_acks > 3){ //triple dup.
-						printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
-							time.tv_sec, 
-							time.tv_usec, 
-							seq,
-							num_of_acks);
-							_loss_events[paint]++;
-							acks[paint].insert(seq, -10000);
+						if (!possible_loss_event){
+							printf("We have a loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+								time.tv_sec, 
+								time.tv_usec, 
+								seq,
+								num_of_acks);
+								_loss_events[paint]++;
+						}
+						else {
+							printf("We have a POSSIBLE loss Event/CWNDCUT [Triple Dup] at time: [%ld.%06ld] seq:[%u], num_of_acks:%u \n",
+								time.tv_sec, 
+								time.tv_usec, 
+								seq,
+								num_of_acks);
+								_p_loss_events[paint]++;
+						}
+					//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",
+					//			time.tv_sec,time.tv_usec,_max_seq[paint]); 
+						acks[paint].insert(seq, -10000);
 					}
 					else{ 					
 						acks[paint].insert(seq, -10000);
 						doubling[paint] = doubling[paint] < 1 ? 1 : doubling[paint] ;
-						printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
-							(log(doubling[paint])/log(2)), 
-							time.tv_sec, 
-							time.tv_usec, 
-							seq,
-							num_of_acks); 
-						    _loss_events[paint]++;
-						prev_diff[paint] = curr_diff;
+						if (!possible_loss_event){
+							printf ("We have a loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
+								(log(doubling[paint])/log(2)), 
+								time.tv_sec, 
+								time.tv_usec, 
+								seq,
+								num_of_acks); 
+							    _loss_events[paint]++;
+						}
+						else{
+							printf ("We have a POSSIBLE loss Event/CWNDCUT [Timeout] of %1.0f, at time:[%ld.%06ld] seq:[%u],num_of_acks : %hd\n",
+								(log(doubling[paint])/log(2)), 
+								time.tv_sec, 
+								time.tv_usec, 
+								seq,
+								num_of_acks); 
+							    _p_loss_events[paint]++;
+						}
+					//	fprintf(outfileg[paint+4],"%ld.%06ld %u\n",time.tv_sec,time.tv_usec,seq); 	
+					//	prev_diff[paint] = curr_diff;
 					}
+					_max_wind_seq[paint] = seq; //reset the maximum sequence transmitted in this window
 					if (_max_seq[paint] > _upper_wind_seq[paint]){
 						//printf("%u:%u",_last_wind_mseq[paint],_max_seq[paint]);
 						_upper_wind_seq[paint] = _max_seq[paint]; // the window for this event loss
-					}
-					if (seq > _lower_wind_seq[paint]){
-						//printf("%u:%u",_last_wind_mseq[paint],_max_seq[paint]);
-						_lower_wind_seq[paint] = seq; // the window for this event loss
 					}
 			}
 					
@@ -371,10 +476,15 @@ class CalculateFlows : public Element { public:
 				if (_max_seq[paint] < _last_seq[paint]){
 					_max_seq[paint] = _last_seq[paint];
 				}
+				if (_max_wind_seq[paint] < _last_seq[paint]){
+					_max_wind_seq[paint] = _last_seq[paint];
+				}
 				
 			}	
 			
-		};
+		}; 
+		
+		
 		void set_rel_seq(unsigned seq, unsigned paint){
 		
 			rel_seq[paint] = seq;
@@ -409,12 +519,6 @@ class CalculateFlows : public Element { public:
 		void inc_packets(unsigned paint){
 	
 			_packets[paint]++;
-	
-		};
-
-		void set_lower_wind_seq(unsigned packets, unsigned paint){
-	
-			_lower_wind_seq[paint] = packets;
 	
 		};
 
@@ -477,6 +581,15 @@ class CalculateFlows : public Element { public:
 			return _loss_events[paint];
 		};		
 		
+		unsigned ploss_events(unsigned paint){
+			if (paint > 2 ){
+				printf("Error overflow Paint\n");		
+				return 0;
+			}		  
+	
+			return _p_loss_events[paint];
+		};		
+
 		unsigned packets_lost(unsigned paint){
 			if (paint > 2 ){
 				printf("Error overflow Paint\n");		
@@ -485,15 +598,7 @@ class CalculateFlows : public Element { public:
 	
 			return _packets_lost[paint];
 		};
-		unsigned lower_wind_seq(unsigned paint){
-			if (paint > 2 ){
-				printf("Error overflow Paint\n");		
-				return 0;
-			}		  
-	
-			return _lower_wind_seq[paint];
-		};				
-
+		
 		
 	};
 
