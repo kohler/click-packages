@@ -122,8 +122,9 @@ def fix_range(a, b, min_step_frac):
     # return a dictionary
     return { "low": a, "high": b, "step": step }
 
-def uncompressed_file(filename):
-    f = file(filename, "rb")
+def uncompressed_file(f):
+    if type(f) is types.StringType:
+        f = file(f, "rb")
     twochars = f.read(2)
     f.seek(0)
     if twochars == "\037\235" or twochars == "\037\213":
@@ -221,6 +222,40 @@ def remove_duplicates(l):
             l[i - delta] = l[i]
         i += 1
     del l[len(l) - delta:]
+
+_nidle = 0; _idle_dict = { }
+
+def idle_add(f, *args):
+    global _nidle
+    what = gtk.idle_add(idle_run, _nidle)
+    _idle_dict[_nidle] = (f, args, what)
+    _nidle += 1
+    return _nidle - 1
+
+def idle_run(num):
+    f, args, what = _idle_dict[num]
+    f2 = f(*args)
+    if f2 is None:
+        gtk.idle_remove(what)
+        del _idle_dict[num]
+        return False
+    else:
+        _idle_dict[num] = f2, args, what
+        return True
+
+def idle_complete(num):
+    if num is not None:
+        f, args, what = _idle_dict[num]
+        gtk.idle_remove(what)
+        while f is not None:
+            f = f(*args)
+        del _idle_dict[num]
+
+def idle_remove(num):
+    if num is not None:
+        f, args, what = _idle_dict[num]
+        gtk.idle_remove(what)
+        del _idle_dict[num]
 
 
 ####################
@@ -474,13 +509,18 @@ class Connection(object):
             pass
         self.s[dir].append(p)
         
-    def load(self):
+    def load_process(self):
         if self.available:
-            return
+            return None
         elif not self.dynload:
             raise RuntimeError, "cannot load this Connection " + self.filename
         else:
-            ConnectionReader(conn=self).read(self.filename, filepos=self.filepos, endtime=self.endtime)
+            return ConnectionReader(conn=self).read_process(self.filename, filepos=self.filepos, endtime=self.endtime)
+
+    def load(self):
+        f = self.load_process()
+        while f is not None:
+            f = f()
     
     def unload(self):
         if self.dynload:
@@ -525,6 +565,9 @@ class FlowRef(object):
     
     def opposite(self):
         return FlowRef(self.conn, 1 - self.dir)
+
+    def available(self):
+        return self.conn.available
     
     def unload(self):
         self.conn.unload()
@@ -554,7 +597,7 @@ class SafeFile:
         self.pos = 0
     def __iter__(self):
         return self
-    def next(self):
+    def readline(self):
         while True:
             eol = self.str.find("\n", self.pos)
             if eol >= 0:
@@ -566,10 +609,16 @@ class SafeFile:
             p = len(self.str)
             self.str += self.f.read(32768)
             if len(self.str) == 0:
-                raise StopIteration
+                return ""
             elif len(self.str) == p:
                 self.pos = p
                 return self.str
+    def next(self):
+        r = self.readline()
+        if r == "":
+            raise StopIteration
+        else:
+            return r
     def read(self):
         p, self.pos = self.pos, len(self.str)
         return self.str[p:] + self.f.read()
@@ -588,13 +637,16 @@ class TCPPacket(object):
         self.payload_len = struct.unpack('!H', s[2:4])[0] - iphl - tcp_off
         
 
-class TCPDumpFile:
+class TCPDumpFile(object):
 
     MAGIC = 0xA1B2C3D4L
     MODIFIED_MAGIC = 0xA1B2CD34L
     VMAJOR = 2
     DLT_EN10MB = 1
     DLT_RAW = 12
+
+    __slots__ = ['f', 's', 'pos', 'endian', 'vminor', 'snaplen', 'header',
+                 'header_size', 'ip_filter', 'dltfilter']
 
     class Error(Exception):
         def __init__(self, s=""):
@@ -656,37 +708,40 @@ class TCPDumpFile:
         else:
             return None
 
-    def packets(self):
-        header_size, header, snaplen, vminor = self.header_size, self.header, self.snaplen, self.vminor
-        pos, s = self.pos, self.s
+    def next_packet(self):
         try:
-            while 1:
-                if pos + header_size > len(s):
+            while True:
+                s, pos = self.s, self.pos
+                if pos + self.header_size > len(s):
                     s = s[pos:] + self.f.read(32768)
                     pos = 0
-                tsec, tusec, caplen, plen = struct.unpack(header, s[pos:pos+16])
-                if vminor < 3 or (vminor == 3 and caplen > len):
+                tsec, tusec, caplen, plen = struct.unpack(self.header, s[pos:pos+16])
+                if self.vminor > 3:
+                    pass
+                elif self.vminor < 3 or caplen > plen:
                     caplen, plen = plen, caplen
                 if caplen > 65535:
-                    return
+                    return None             # error
                 
                 skiplen = 0
                 if caplen > plen:
                     skiplen = caplen - plen
                 
-                pos += header_size
+                pos += self.header_size
                 if pos + caplen > len(s):
                     s, pos = s[pos:], 0
                     while caplen > len(s):
                         oldlen = len(s)
                         s += self.f.read(32768)
-                        if len(s) == oldlen: return
+                        if len(s) == oldlen:
+                            return None     # error
                 p = self.dltfilter(tsec, tusec, s[pos:pos + caplen - skiplen])
-                if p is not None:
-                    yield p
                 pos += caplen
+                if p is not None:
+                    self.s, self.pos = s, pos
+                    return p
         except struct.error:
-            return
+            return None
 
 
 class ConnectionReader:
@@ -845,107 +900,141 @@ except KeyError:\n\
         elif re.match('!data ', line):
             self.read_data = line
             self._check_data()
+        elif re.match('!binary', line):
+            self.read_state = 'b'
+            self._check_data()
+            self.read_func = self._read_ipsumdump_binary_chunk
+            self.file_data = self.f.read()
+            return 1
         elif re.match('!eof$', line):
+            self.read_func = self._complete_ipsumdump
             return 1
         elif line[:2] == "\037\235" or line[:2] == "\037\213": # compressed data
             raise ConnectionFileCompressedError
         return 0
 
-    def _read_binary(self, f):
-        self.read_state = "b"
-        self._check_data()
+    # IPSummaryDump files
+    def read_ipsumdump_process(self, filename, f, filepos=None, endtime=None):
+        self.filename = filename
+        self.cmap = { }
 
-        data = f.read()
-        pos, leng = 0, len(data)
-        while pos + 4 < leng:
+        # read the file header
+        self.read_state = ""; self.read_data = ""; self.read_func = None
+        self.f = f = SafeFile(f)
+        for line in f:
+            if line and line[0] >= '0':
+                self.read_state = "a"
+                self._check_data()
+                self.read_func = self._read_ipsumdump_ascii_chunk
+                exec self._parse_code
+                break
+            elif self._read_nonpacket(line):
+                break
+        return self.read_func
+
+    def _read_ipsumdump_binary_chunk(self):
+        data = self.file_data
+        pos, leng, count = 0, len(data), 1000
+        while pos + 4 < leng and count > 0:
             l, = struct.unpack("!l", data[pos:pos+4])
             i = l & 0x7FFFFFFF
             if pos + i > leng:
                 raise ConnectionFormatError, "corrupted file"
             elif l & 0x80000000:
                 if self._read_nonpacket(data[pos+4:pos+i]):
-                    break
+                    return self.read_func
             elif i >= self._parse_code_min_binary_len:
                 exec self._parse_code
-            pos += i
+            pos += i; count -= 1
+        self.file_data = data[pos:]
+        return pos + 4 < leng and self.read_func or self._complete_ipsumdump
 
-    def read_ipsumdump(self, filename, f, filepos=None, endtime=None):
-        self.filename = filename
-        self.cmap = { }
-
-        # actually read file
-        read_state = 0; self.read_state = ""; self.read_data = ""
-        f = SafeFile(f)
+    def _read_ipsumdump_ascii_chunk(self):
+        f = self.f
         for line in f:
             if line and line[0] >= '0':
-                if read_state == 0:
-                    read_state = 1; self.read_state = "a"
-                    self._check_data()
                 exec self._parse_code
-            elif re.match('!binary', line):
-                self.read_state = "b"
-                break
             elif self._read_nonpacket(line):
-                break
-        if self.read_state == "b":
-            self._read_binary(f)
+                return self.read_func
+        return self._complete_ipsumdump
 
+    def _complete_ipsumdump(self):
         # complete connections
         self.conn.read_complete(False)
         for c in self.cmap.values():
             c.read_complete(True)
         if not self.fake_flowset and self.fake_conn and not self.conn.empty():
             self.flowset.append(self.conn)
-        
-        return self
+        return None
 
-    def read_tcpdump(self, filename, f, filepos=None, endtime=None):
+    # tcpdump files
+    def read_tcpdump_process(self, filename, f, filepos=None, endtime=None):
         self.filename = filename
-        agg = 1
+        self.read_aggregate = 1
 
         # prepare flowmap
-        flowmap = { }
+        self.read_flowmap = { }
         if not self.fake_conn:
             flowid = (parse_ip(self.conn.src()), self.conn.sport(), parse_ip(self.conn.dst()), self.conn.dport())
-            flowmap[flowid] = (self.conn, 0)
-            flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (self.conn, 1)
+            self.read_flowmap[flowid] = (self.conn, 0)
+            self.read_flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (self.conn, 1)
         
         # actually read file
-        tcpdump = TCPDumpFile(f)
+        self.f = TCPDumpFile(f)
         if filepos is not None:
-            tcpdump.seek(filepos)
+            self.f.seek(filepos)
         if endtime is None:
             endtime = 8000000000.
-        
-        for p in tcpdump.packets():
-            if p.time > endtime: break
+        self.endtime = endtime
+
+        return self._read_tcpdump
+
+    def _read_tcpdump(self):
+        f, endtime, flowmap = self.f, self.endtime, self.read_flowmap
+        i = 0
+        while i < 1000:
+            i += 1
+            p = self.f.next_packet()
+            if p is None or p.time > endtime:
+                return self._complete_tcpdump
             flowid = (p.src, p.sport, p.dst, p.dport)
             try:
                 c, dir = flowmap[flowid]
             except KeyError:
-                c = Connection(filename=filename, dynload=False, aggregate=agg, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
+                c = Connection(filename=self.filename, dynload=False, aggregate=self.read_aggregate, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
                 self.flowset.append(c)
                 dir = 0
                 flowmap[flowid] = (c, 0)
                 flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (c, 1)
             c.append(dir, Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, p.win))
+        return self._read_tcpdump
 
-        for c, d in flowmap.values():
+    def _complete_tcpdump(self):
+        for c, d in self.read_flowmap.values():
             if d == 0:
                 c.has_window = True
                 c.read_complete(True)
+        return None
 
-        return self
-
-    def read(self, filename, f=None, filepos=None, endtime=None):
+    # general reading
+    def read_process(self, filename, f=None, filepos=None, endtime=None):
         if f is None:
             f = uncompressed_file(filename)
+        else:
+            f = uncompressed_file(f)
         c = f.read(1)
         f.seek(0)
-        if c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
-            self.read_ipsumdump(filename, f, filepos, endtime)
+        if c == '<':
+            return self.flowset.read_process(filename, f)
+        elif c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
+            return self.read_ipsumdump_process(filename, f, filepos, endtime)
         else:
-            self.read_tcpdump(filename, f, filepos, endtime)
+            return self.read_tcpdump_process(filename, f, filepos, endtime)
+
+    def read(self, filename, f=None, filepos=None, endtime=None):
+        func = self.read_process(filename, f, filepos, endtime)
+        while func is not None:
+            func = func()
 
 
 ####################
@@ -962,22 +1051,32 @@ class FlowSet:
         self.flows = []
         self.sorted = FlowSet.SORT_NONE
 
-    def read(self, filename, f=None, dir=''):
-        if dir == '':
-            slash = filename.rfind('/')
-            if slash >= 0: dir = filename[:slash+1]
-        self.reading_directory = dir
-
-        if f is None:
-            f = uncompressed_file(filename)
+    def read_process(self, filename, f):
+        self.filename = filename
+        self.f = f
         
-        p = xml.parsers.expat.ParserCreate()
-        p.returns_unicode = 0
-        p.StartElementHandler = self._start_element
-        p.EndElementHandler = self._end_element
+        slash = filename.rfind('/')
+        if slash >= 0:
+            self.reading_directory = filename[:slash+1]
+        else:
+            self.reading_directory = ""
+
+        self.parser = xml.parsers.expat.ParserCreate()
+        self.parser.returns_unicode = 0
+        self.parser.StartElementHandler = self._start_element
+        self.parser.EndElementHandler = self._end_element
         self.reading_state = 0
         self.reading_connection = self.reading_direction = None
-        p.ParseFile(f)
+
+        return self._read_process
+
+    def _read_process(self):
+        s = self.f.read(16000)
+        self.parser.Parse(s, len(s) == 0)
+        if len(s) == 0:
+            return None
+        else:
+            return self._read_process
 
     def _handle_number(self, x, format, precision):
         if precision >= 0 and precision <= 3:
@@ -1741,11 +1840,14 @@ class PlotCanvas:
         master.pack_start(self.canvas, expand=1, fill=1, padding=4)
         self.canvas.show()
 
+        self.conn = None
+        
         self.left_margin = 4
         self.right_margin = 4
         self.top_margin = 0
         self.bottom_margin = 0
         self.plotted = False
+        self.configured = False
         self.press = None
         self.press_state = 0
         self.tool = PlotCanvas.TOOL_IDENTIFY
@@ -1797,7 +1899,7 @@ class PlotCanvas:
             self.view_all()
     def set_show_window(self, show_window):
         self.show_window = show_window
-        if self.plotted: self.plot()
+        if self.configured: self.plot()
     def view_all(self):
         self.set_time_range(None, interval=1000000000.0)
     def set_time_range(self, begin, interval=None, incr=False):
@@ -1813,7 +1915,7 @@ class PlotCanvas:
         if incr and self.begin == old_begin and self.end == old_end: return
 
         self.highlight = [None]
-        if self.plotted: self.plot()
+        if self.configured: self.plot()
 
         # now, emit changed values onto the adjustment
         begin, end = self.get_plotted_time_range()
@@ -1850,6 +1952,7 @@ class PlotCanvas:
         x, y, self.wwidth, self.wheight = widget.get_allocation()
         self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
         self.backing_store_updated = False
+        self.configured = True
 
         # set margins from layout
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
@@ -2106,7 +2209,7 @@ class PlotCanvas:
         
         drawable.prepare()
         drawable.clear()
-        
+
         if self.conn is not None:
 
             # variables
@@ -2498,6 +2601,63 @@ class PrintOptionsDialog:
         self.dialog.destroy()
 
 
+
+####################
+# status bar watcher
+#
+
+class StatusWatcher:
+
+    def __init__(self, statusline, progressbar):
+        self.statusline = statusline
+        self.progressbar = progressbar
+
+    def prepare_file(self, f, process, complete=None, text=None, markup=None):
+        self.f = f
+        self.process = process
+        self.complete = complete
+        self.text = text
+        self.markup = markup
+        try:
+            pos = self.f.tell()
+            self.f.seek(0, 2)
+            self.f_size = self.f.tell()
+            self.f.seek(pos)
+        except (IOError, AttributeError):
+            self.f_size = None
+
+    def run_file(self, f, process, **kw):
+        self.prepare_file(f, process, **kw)
+        return self.run()
+
+    def run(self):
+        if self.markup is not None:
+            self.statusline.set_markup(self.markup)
+        elif self.text is not None:
+            self.statusline.set_text(self.text)
+        if self.f_size is None:
+            self.progressbar.pulse()
+        else:
+            self.progressbar.set_fraction(0)
+        self.progressbar.show()
+        return idle_add(self.idle)
+
+    def idle(self):
+        if self.f_size is None:
+            self.progressbar.pulse()
+        else:
+            pos = self.f.tell()
+            self.progressbar.set_fraction(float(pos) / self.f_size)
+        self.process = self.process()
+        if self.process is not None:
+            return self.idle
+        if self.complete is not None:
+            self.complete()
+        self.progressbar.hide()
+        return None
+
+
+
 ####################
 # main window
 #
@@ -2520,20 +2680,22 @@ class PlotFlowWindow:
         self._init_menus(win, vbox)
         self._init_toolbar(win, vbox)
 
-        paned = gtk.VPaned()
-        vbox.add(paned)
-        paned.show()
+        #paned = gtk.VPaned()
+        #vbox.add(paned)
+        #paned.show()
         
         plotbox = self._init_plotbox()
-        flowtree = self._init_flowtree()
+        #flowtree = self._init_flowtree()
 
-        paned.add1(plotbox)
-        paned.add2(flowtree)
+        #paned.add1(plotbox)
+        #paned.add2(flowtree)
+
+        vbox.add(plotbox)
 
         if len(fset):
             self.set_flow(id=0)
-        else:
-            self._activate_flow_items(None)
+        #else:
+        #    self._activate_flow_items(None)
 
         win.show()
 
@@ -2629,16 +2791,26 @@ class PlotFlowWindow:
         frame.pack_start(scale, 0, 0)
         scale.show()
 
+        self.statusbox = gtk.HBox()
+        frame.pack_start(self.statusbox)
+        self.statusbox.show()
+        
         self.statusbar = gtk.Label("")
         self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
         self.statusbar.set_alignment(0, 0.5)
         self.statusbar.set_padding(5, 3)
-        frame.pack_start(self.statusbar, 0, 0)
+
+        self.statusbox.pack_start(self.statusbar, True, True)
         self.statusbar.show()
 
+        self.progressbar = gtk.ProgressBar()
+        self.statusbox.pack_end(self.progressbar, 0, 0)
+
+        self.activating = None
+        
         self.canvas.add_highlight_hook(self.highlight_hook)
         return frame
-        
+    
     def cmd_exit(self, *args):
         gtk.main_quit()
 
@@ -2695,21 +2867,35 @@ class PlotFlowWindow:
             return self.flowref.conn
 
     def statusbar_description(self):
-        desc = self.flowref.get_description()
-        desc = re.sub("<", "&lt;", desc)
-        desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
-        self.statusbar.set_markup(desc)
+        if self.flowref is not None:
+            desc = self.flowref.get_description()
+            desc = re.sub("<", "&lt;", desc)
+            desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
+            self.statusbar.set_markup(desc)
         
     def set_flow(self, id=None, fref=None, keeptime=False):
-        if id is None: id = self.flowset.index(fref)
-        if fref is None: fref = self.flowset[id]
+        if id is None:
+            id = self.flowset.index(fref)
+        if fref is None:
+            fref = self.flowset[id]
 
         oc = self.connection()
         if oc is not fref.conn and oc is not None:
             oc.unload()
+
+        if self.activating is not None:
+            idle_remove(self.activating[3])
         
+        if not fref.available():
+            self.activating = (id, fref, keeptime, self.watch_file_process(None, fref.conn.load_process(), complete=self._flow_loaded, text="Reading " + fref.conn.filename + "..."))
+        else:
+            self.activating = (id, fref, keeptime, None)
+            self._flow_loaded()
+
+    def _flow_loaded(self):
+        id, fref, keeptime = self.activating[:3]
+        self.activating = None
         self.canvas.set_flowref(fref, keeptime)
-        
         self.flowid = id
         self.flowref = fref
         self._activate_flow_items(fref)
@@ -2765,24 +2951,30 @@ class PlotFlowWindow:
         else:
             self.statusbar_description()
 
+    def watch_file_process(self, f, process, **kw):
+        return StatusWatcher(self.statusbar, self.progressbar).run_file(f, process, **kw)
+
+
+def initial_read_complete():
+    global all_connections, window
+    window.statusbar.set_text("Sorting flows...")
+    idle_add(initial_sort_flows)
+
+def initial_sort_flows():
+    all_connections.sort_by_loss_count()
+    window.set_flow(id=0)
 
 if __name__ == "__main__":
     all_connections = FlowSet()
     try:
-        if len(sys.argv) >= 2:
-            f = uncompressed_file(sys.argv[1])
-            c = f.read(1)
-            f.seek(0)
-            if c == '<':
-                all_connections.read(sys.argv[1], f)
-            elif c == '!' or c == '#' or (c >= '0' and c <= 'Z'):
-                ConnectionReader(flowset=all_connections).read(sys.argv[1], f)
-            else:
-                ConnectionReader(flowset=all_connections).read_tcpdump(sys.argv[1], f)
-        else:
-            ConnectionReader(flowset=all_connections).read("<stdin>", sys.stdin)
-        all_connections.sort_by_loss_count()
         window = PlotFlowWindow(all_connections)
+        if len(sys.argv) >= 2:
+            f = file(sys.argv[1])
+            p = ConnectionReader(flowset=all_connections).read_process(sys.argv[1], f)
+            window.watch_file_process(f, p, complete=initial_read_complete, text="Reading " + sys.argv[1] + "...")
+        else:
+            p = ConnectionReader(flowset=all_connections).read_process("<stdin>", sys.stdin)
+            window.watch_file_process(sys.stdin, p, complete=initial_read_complete, text="Reading <stdin>...")
         gtk.main()
     except KeyboardInterrupt:
         gtk.main_quit()
