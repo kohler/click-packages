@@ -129,7 +129,7 @@ CalculateFlows::StreamInfo::register_loss_event(Pkt *startk, Pkt *endk, ConnInfo
 }
 
 void
-CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph)
+CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph, const ConnInfo *conn)
 {
     // update counters
     total_packets++;
@@ -138,7 +138,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     // mark SYN and FIN packets
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != np->seq)
-	    click_chatter("different SYN seqnos!"); // XXX report error
+	    click_chatter("%u: different SYN seqnos!", conn->aggregate()); // XXX report error
 	else {
 	    syn_seq = np->seq;
 	    have_syn = true;
@@ -146,7 +146,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     }
     if (tcph->th_flags & TH_FIN) {
 	if (have_fin && fin_seq != np->last_seq - 1)
-	    click_chatter("different FIN seqnos!"); // XXX report error
+	    click_chatter("%u: different FIN seqnos!", conn->aggregate()); // XXX report error
 	else {
 	    fin_seq = np->last_seq - 1;
 	    have_fin = true;
@@ -467,7 +467,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
 	_stream[direction].categorize(k, this, parent);
-	_stream[direction].update_counters(k, p->tcp_header());
+	_stream[direction].update_counters(k, p->tcp_header(), this);
 
 	// update counters, maximum sequence numbers, and so forth
 	post_update_state(p, k, parent);

@@ -241,7 +241,7 @@ struct CalculateFlows::StreamInfo {
 
     void categorize(Pkt *insertion, ConnInfo *, CalculateFlows *);
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
-    void update_counters(const Pkt *np, const click_tcp *);
+    void update_counters(const Pkt *np, const click_tcp *, const ConnInfo *);
     
     Pkt *find_acked_pkt(tcp_seq_t, const struct timeval &);
 
