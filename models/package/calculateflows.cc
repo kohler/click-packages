@@ -125,9 +125,11 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     // we have identified retransmissions already.
     if (np->flags & Pkt::F_REXMIT) {
 	// ignore retransmission of something from an old loss event
-	if (rexmit->event_id == np->event_id)
+	if (rexmit->event_id == np->event_id) {
 	    // new loss event
+	    np->flags |= Pkt::F_EVENT_REXMIT;
 	    register_loss_event(rexmit, np, conn, parent);
+	}
     } else
 	// if not a retransmission, then a reordering
 	np->flags |= Pkt::F_REORDER;
@@ -379,20 +381,27 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	k = k->next;
 
     // If the ack causality is unusually long, check for a later match
-    if (k && ackk->timestamp - k->timestamp >= 5 * min_ack_latency) {
+    if (k && ackk->timestamp - k->timestamp >= 2 * min_ack_latency) {
 	Pkt *new_k_cumack = k->next;
 	tcp_seq_t new_max_ack = max_ack;
 	if (SEQ_GT(k->end_seq, new_max_ack))
 	    new_max_ack = k->end_seq;
 	Pkt *new_k = find_ack_cause2(ackk, new_k_cumack, new_max_ack);
 	// Ignore later matches that don't significantly change the delay
-	if (new_k && ackk->timestamp - new_k->timestamp <= 3 * min_ack_latency)
+	if (new_k && ackk->timestamp - new_k->timestamp <= 0.5 * (ackk->timestamp - k->timestamp) && SEQ_LEQ(new_k->end_seq, k->end_seq))
 	    k = new_k;
     }
     
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
+	// If the new match started a retransmission section, change cumack
+	if (k && (k->flags & Pkt::F_EVENT_REXMIT) && !(ackk->flags & Pkt::F_ACK_NONORDERED)) {
+	    for (Pkt *kk = k_cumack; kk != k; kk = kk->next)
+		if ((kk->flags & Pkt::F_DELIVERED) && SEQ_GT(kk->end_seq, max_ack))
+		    max_ack = kk->end_seq;
+	    k_cumack = k;
+	}
 	return k;
     } else
 	return 0;

@@ -208,16 +208,17 @@ struct CalculateFlows::Pkt {
 	F_REXMIT = 0x2,		// packet contains some retransmitted data
 	F_FULL_REXMIT = 0x4,	// retransmitted data corresponds exactly
 				// to an earlier packet
-	F_DUPLICATE = 0x8,	// packet is a network duplicate
-	F_REORDER = 0x10,	// packet is reordered
-	F_NONORDERED = 0x20,	// packet is part of a non-ordered block
+	F_EVENT_REXMIT = 0x8,	// packet closes a loss event
+	F_DUPLICATE = 0x10,	// packet is a network duplicate
+	F_REORDER = 0x20,	// packet is reordered
+	F_NONORDERED = 0x40,	// packet is part of a non-ordered block
 				// (retransmission or reordering)
-	F_KEEPALIVE = 0x40,	// packet is a keepalive
-	F_ACK_REORDER = 0x80,	// packet's ackno is reordered
-	F_ACK_NONORDERED = 0x100, // packet is part of a non-ordered ack block
+	F_KEEPALIVE = 0x80,	// packet is a keepalive
+	F_ACK_REORDER = 0x100,	// packet's ackno is reordered
+	F_ACK_NONORDERED = 0x200, // packet is part of a non-ordered ack block
 
-	F_FILLS_RCV_WINDOW = 0x200, // packet filled receive window
-	F_WINDOW_PROBE = 0x400,	// packet was a window probe
+	F_FILLS_RCV_WINDOW = 0x400, // packet filled receive window
+	F_WINDOW_PROBE = 0x800,	// packet was a window probe
 	
 	F_DELIVERED = 0x10000,	// do we think the packet was delivered?
 	F_ACK_CAUSE = 0x20000	// do we think it caused an ack?
