@@ -2,7 +2,7 @@
 
 from __future__ import generators
 from bisect import bisect
-import sys, re, types
+import sys, re, types, string
 from math import *
 import gtk, pango
 
@@ -15,6 +15,7 @@ gc_dashes = {
     "lossborder": [4, 4]
 }
 
+
 def frange(start, stop, step):
     i = 0
     while True:
@@ -25,11 +26,14 @@ def frange(start, stop, step):
         i += 1
 
 class Packet:
-    def __init__(self, time, seq, seqlen, ack):
+    def __init__(self, time, flags, seq, payloadlen, ack):
         self.time = float(time)
         self.seq = int(seq)
-        self.last_seq = self.seq + int(seqlen)
+        self.last_seq = self.seq + int(payloadlen)
         self.ack = int(ack)
+        if flags != "A" and flags != "AU":
+            if flags.find("S") or flags.find("F"):
+                self.last_seq += 1
     def pure_ack(self):
         return self.seq == self.last_seq
     def has_data(self):
@@ -37,11 +41,11 @@ class Packet:
     def __cmp__(self, other):
         return self.time.__cmp__(other.time)
     def __str__(self):
-        result = "[" + `self.time` + " "
+        result = "[" + str(self.time) + " "
         if self.pure_ack():
-            result += "A" + `self.ack`
+            result += "A" + str(self.ack)
         else:
-            result += `self.seq` + ":" + `self.last_seq`
+            result += str(self.seq) + ":" + str(self.last_seq)
         return result + "]"
 
 class LossEvent:
@@ -83,8 +87,8 @@ class Connection:
     def read(self, f):
         for line in f:
             if not re.match('[\\!\\#]', line):
-                time, dir, flags, seq, seqlen, ack = line.split()
-                self.s[direction(dir)].append(Packet(time, seq, seqlen, ack))
+                time, dir, flags, seq, payloadlen, ack = line.split()
+                self.s[direction(dir)].append(Packet(time, flags, seq, payloadlen, ack))
             elif re.match('\\#[pf]?loss', line):
                 type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
                 self.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
@@ -102,7 +106,7 @@ class Connection:
         if dir is None:
             return self.first_index_after(time, 0), self.first_index_after(time, 1)
         else:
-            fake_pkt = Packet(time, 0, 0, 0)
+            fake_pkt = Packet(time, "A", 0, 0, 0)
             return bisect(self.s[direction(dir)], fake_pkt)
     def packets(self, dir, begin=None, end=None):
         if not self.available:
@@ -143,8 +147,8 @@ class Connection:
             s0 = min(s0, self.s[dir][i].seq - 20)
             s1 = max(s1, self.s[dir][i].last_seq + 20)
         for l in self.losses(dir, begin, end):
-            s0 = min(s0, l.seq - 50)
-            s1 = max(s1, l.end_seq + 50)
+            s0 = min(s0, l.seq - 20)
+            s1 = max(s1, l.end_seq + 20)
         return max(s0, 0), s1
     def _ack_range(self, dir, begin, end):
         s0, s1 = 1e10, None
@@ -163,7 +167,7 @@ class Connection:
             self.load()
         s = ""
         if self.aggregate >= 0:
-            s += "Aggregate " + `self.aggregate` + ": "
+            s += "#" + `self.aggregate` + ": "
         return s + self.flow_id[0] + ":" + self.flow_id[1] + " > " + self.flow_id[2] + ":" + self.flow_id[3]
     def load(self):
         if type(self.filename) != types.StringType:
@@ -213,18 +217,85 @@ def fix_range(a, b, min_step_frac):
     return { "low": a, "high": b, "step": step }
 
 
+_plot_cursors = {
+    "zoomin": ("zoomin_data", "zoom_mask", 6, 6),
+    "zoomout": ("zoomout_data", "zoom_mask", 6, 6),
+    "hand": ("hand_data", "hand_mask", 9, 8),
+    "grabhand": ("grabhand_data", "grabhand_mask", 8, 7),
+    "zoomin_data": (string.join(map(chr, [
+	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x62, 0x04, 0x00,
+        0x61, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x61, 0x08, 0x00,
+        0x62, 0x04, 0x00, 0x02, 0x04, 0x00, 0x0c, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00 ]), ''), 17, 17),
+    "zoomout_data": (string.join(map(chr, [
+	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x02, 0x04, 0x00,
+        0x01, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x01, 0x08, 0x00,
+        0x02, 0x04, 0x00, 0x02, 0x04, 0x00, 0x0c, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00 ]), ''), 17, 17),
+    "zoom_mask": (string.join(map(chr, [
+        0xf0, 0x00, 0x00, 0xfc, 0x03, 0x00, 0xfe, 0x07, 0x00, 0xfe, 0x07, 0x00,
+        0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00,
+        0xfe, 0x07, 0x00, 0xfe, 0x07, 0x00, 0xfc, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00]), ''), 17, 17),
+    "hand_data": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0xb0, 0x1c, 0x00, 0xc8, 0x24, 0x00,
+        0xc8, 0xa4, 0x00, 0x90, 0x64, 0x01, 0x90, 0x24, 0x01, 0x2c, 0x20, 0x01,
+        0x32, 0x00, 0x01, 0x22, 0x80, 0x00, 0x04, 0x80, 0x00, 0x08, 0x80, 0x00,
+        0x08, 0x40, 0x00, 0x10, 0x40, 0x00, 0x20, 0x20, 0x00, 0x40, 0x20, 0x00,
+        0x40, 0x20, 0x00, 0x00, 0x00, 0x00]), ''), 18, 18),
+    "hand_mask": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0xb0, 0x1f, 0x00, 0xf8, 0x3f, 0x00,
+        0xf8, 0xbf, 0x00, 0xf0, 0xff, 0x01, 0xf0, 0xff, 0x01, 0xec, 0xff, 0x01,
+        0xfe, 0xff, 0x01, 0xfe, 0xff, 0x00, 0xfc, 0xff, 0x00, 0xf8, 0xff, 0x00,
+        0xf8, 0x7f, 0x00, 0xf0, 0x7f, 0x00, 0xe0, 0x3f, 0x00, 0xc0, 0x3f, 0x00,
+        0xc0, 0x3f, 0x00, 0x00, 0x00, 0x00]), ''), 18, 18),
+    "grabhand_data": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x0d, 0x48, 0x12,
+        0x08, 0x30, 0x0c, 0x40, 0x0a, 0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x20,
+        0x04, 0x20, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10]), ''), 16, 16),
+    "grabhand_mask": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x0d, 0xf8, 0x1f,
+        0xf8, 0x3f, 0xfc, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x3f,
+        0xfc, 0x3f, 0xf8, 0x1f, 0xf0, 0x1f, 0xf0, 0x1f]), ''), 16, 16)
+    }
+class PlotCursors:
+    def __init__(self, win):
+        self.window = win
+    def make_pixmap(self, name):
+        if name + ".pix" not in _plot_cursors:
+            l = _plot_cursors[name]
+            _plot_cursors[name + ".pix"] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
+    def __getitem__(self, name):
+        if name + ".cur" not in _plot_cursors:
+            data, mask, hotx, hoty = _plot_cursors[name]
+            self.make_pixmap(data)
+            self.make_pixmap(mask)
+            black = self.window.get_style().black
+            white = self.window.get_style().white
+            _plot_cursors[name + ".cur"] = gtk.gdk.Cursor(_plot_cursors[data + ".pix"], _plot_cursors[mask + ".pix"], black, white, hotx, hoty)
+        return _plot_cursors[name + ".cur"]
+
+
 class PlotCanvas:
+
+    # initialization
     def __init__(self, master, width=600, height=500):
         self.canvas = gtk.DrawingArea()
         self.canvas.set_size_request(width, height)
+        self.canvas.set_flags(gtk.CAN_FOCUS)
 
         self.canvas.connect("configure_event", self.cmd_configure)
         self.canvas.connect("expose_event", self.cmd_expose)
         self.canvas.connect("button_press_event", self.cmd_press)
+        self.canvas.connect("motion_notify_event", self.cmd_motion)
         self.canvas.connect("button_release_event", self.cmd_release)
-        self.canvas.connect("enter_notify_event", self.cmd_enter)
-        self.canvas.connect("leave_notify_event", self.cmd_leave)
-        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK)
+        self.canvas.connect("key_press_event", self.cmd_check_state)
+        self.canvas.connect("key_release_event", self.cmd_check_state)
+        self.canvas.connect("enter_notify_event", self.cmd_check_state)
+        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.BUTTON1_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
         
         master.pack_start(self.canvas, expand=1, fill=1)
         self.canvas.show()
@@ -236,6 +307,20 @@ class PlotCanvas:
         self.gc = {}
         self.plotted = False
         self.press_x = None
+        self.mod_state = 0
+
+    # getting properties
+    def get_connection(self):
+        return self.conn
+    def get_direction(self):
+        return self.dir
+    def get_time_range(self):
+        if self.plotted:
+            return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
+        else:
+            return self.begin, self.end
+
+    # setting properties
     def set_connection(self, conn, dir, begin=None, end=None, duration=None):
         if begin is not None and duration is not None and end is None:
             end = begin + duration
@@ -244,10 +329,10 @@ class PlotCanvas:
     def set_direction(self, dir):
         self.dir = direction(dir)
         if self.plotted: self.plot()
-    def get_connection(self):
-        return self.conn
-    def get_direction(self):
-        return self.dir
+    def set_time_range(self, begin, end):
+        self.begin, self.end = begin, end
+        if self.plotted: self.plot()
+
     def cmd_configure(self, widget, event):
         x, y, self.wwidth, self.wheight = widget.get_allocation()
 
@@ -258,51 +343,79 @@ class PlotCanvas:
             for k in gc_dashes.keys():
                 self.gc[k].line_style = gtk.gdk.LINE_ON_OFF_DASH
                 self.gc[k].set_dashes(0, gc_dashes[k])
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
         
         self.plot_width = self.wwidth - self.left_margin - self.right_margin
         self.plot_height = self.wheight - self.top_margin - self.bottom_margin
     def cmd_expose(self, widget, event):
         self.plot()
 
-    def _itransform(self, x, y):
-        if self.plotted and x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height:
+    def _itransform(self, x, y, constrain=True):
+        if self.plotted and (not constrain or (x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height)):
             return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
-        else:
-            raise ValueError
-    def _trange(self):
-        if self.plotted:
-            return (self.left_margin - self.toff) / self.tscale, (self.left_margin + self.plot_width - self.toff) / self.tscale
         else:
             raise ValueError
     def cmd_press(self, widget, event):
         try:
             if event.button == 1:
-                self.press_x, press_y = self._itransform(event.x, event.y)
+                self._itransform(event.x, event.y) # for signal
+                self.press_x = event.x
+                if not (event.state & (gtk.gdk.CONTROL_MASK | gtk.gdk.SHIFT_MASK)):
+                    self.canvas.window.set_cursor(PlotCursors(self.canvas)["grabhand"])
+        except ValueError:
+            pass
+        self.stuck = True
+        self.press_state = event.state
+        return 1
+    def cmd_motion(self, widget, event):
+        try:
+            x, y, state = widget.window.get_pointer()
+            if (state & gtk.gdk.BUTTON1_MASK):
+                if self.stuck and (abs(self.press_x - x) > 5):
+                    self.stuck = False
+                    t0, t1 = self.get_time_range()
+                    self.initial_t0 = t0
+                    self.dt = t1 - t0
+                if not self.stuck:
+                    shift_x = (x - self.press_x) / self.tscale
+                    t0 = max(self.initial_t0 - shift_x, 0)
+                    self.set_time_range(t0, t0 + self.dt)
         except ValueError:
             pass
         return 1
+    def _zoom_click(self, event, factor):
+        x, y = self._itransform(event.x, event.y)
+        t0, t1 = self.get_time_range()
+        new_dt = (t1 - t0) * factor
+        self.begin = max(x - new_dt * ((x - t0) / (t1 - t0)), 0)
+        self.end = self.begin + new_dt
+        self.plot()
     def cmd_release(self, widget, event):
         try:
             if event.button == 1 and self.press_x is not None:
-                press_x, y = self._itransform(event.x, event.y)
-                if abs(press_x - self.press_x) > 5 / self.tscale:
-                    self.begin = min(press_x, self.press_x)
-                    self.end = max(press_x, self.press_x)
-                    self.plot()
+                if self.press_state & gtk.gdk.SHIFT_MASK:
+                    self._zoom_click(event, 0.25)
+                elif self.press_state & gtk.gdk.CONTROL_MASK:
+                    self._zoom_click(event, 4)
                 else:
-                    t0, t1 = self._trange()
-                    new_dt = (t1 - t0) / 5
-                    self.begin = press_x - new_dt * ((press_x - t0) / (t1 - t0))
-                    if self.begin < 0: self.begin = 0
-                    self.end = self.begin + new_dt
-                    self.plot()
+                    self.mod_state = gtk.gdk.CONTROL_MASK # lie
         except ValueError:
             pass
+        self._state2cursor(self.canvas.window.get_pointer()[2])
         self.press_x = None
         return 1
-    def cmd_enter(self, widget, event):
-        return 1
-    def cmd_leave(self, widget, event):
+    def _state2cursor(self, state):
+        if state & gtk.gdk.BUTTON1_MASK:
+            pass
+        elif (state & gtk.gdk.SHIFT_MASK) and not (self.mod_state & gtk.gdk.SHIFT_MASK):
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)["zoomin"])
+        elif (state & gtk.gdk.CONTROL_MASK) and not (self.mod_state & gtk.gdk.CONTROL_MASK):
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)["zoomout"])
+        elif not (state & (gtk.gdk.SHIFT_MASK|gtk.gdk.CONTROL_MASK)) and (self.mod_state & (gtk.gdk.SHIFT_MASK|gtk.gdk.CONTROL_MASK)):
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)["hand"])
+        self.mod_state = state
+    def cmd_check_state(self, widget, event):
+        self._state2cursor(widget.window.get_pointer()[2])
         return 1
 
     # drawing helpers
@@ -347,9 +460,9 @@ class PlotCanvas:
             # analyze time and sequence ranges
             t0, t1 = self.begin, self.end
             if t0 is None:
-                t0 = self.conn.time_range(self.dir)[0]
+                t0 = self.conn.time_range()[0]
             if t1 is None:
-                t1 = self.conn.time_range(self.dir)[1]
+                t1 = self.conn.time_range()[1]
             s0, s1 = self.conn.seq_range(self.dir, t0, t1)
             if s0 is None or s1 is None:
                 s0 = 0; s1 = 1
@@ -387,7 +500,7 @@ class PlotCanvas:
             gc = self.gc["border"]
             drawable.draw_rectangle(gc, gtk.FALSE, self.left_margin, self.top_margin, self.plot_width, self.plot_height)
 
-            # axes major tics
+            # axes
             self._draw_axis(tscale, toff, t0, t1, tstep, self.top_margin, self.wheight - self.bottom_margin, self._draw_tic_x, self._draw_label_x, drawable, gc, playout)
             self._draw_axis(sscale, soff, s0, s1, sstep, self.left_margin, self.wwidth - self.right_margin, self._draw_tic_y, self._draw_label_y, drawable, gc, playout)
             
@@ -426,6 +539,7 @@ class PlotBox:
         self.l0 = gtk.Label("")
         self.dirbutton = gtk.Button(">")
         self.dirbutton.connect("clicked", self.cmd_dirbutton)
+        self.dirbutton.unset_flags(gtk.CAN_FOCUS)
         self.l1 = gtk.Label("foo")
         self.lframe.pack_start(self.l0, expand=0, fill=0); self.l0.show()
         self.lframe.pack_start(self.dirbutton, expand=0, fill=0); self.dirbutton.show()
@@ -441,6 +555,11 @@ class PlotBox:
         self.l0.set_label(desc[:mid + 1])
         self.l1.set_label(desc[mid + 2:])
         self.dirbutton.set_label("><"[self.canvas.get_direction()])
+    def set_time_range(self, begin, end):
+        self.canvas.set_time_range(begin, end)
+    def zoom_in(self):
+        t0, t1 = self.canvas.get_time_range()
+        self.canvas.set_time_range(0.667*t0 + 0.333*t1, 0.333*t0 + 0.667*t1)
     def pack(self, *args, **keys):
         self.frame.pack(*args, **keys)
 
@@ -448,25 +567,58 @@ class PlotBox:
 class PlotFlowWindow:
     def __init__(self):
         win = gtk.Window()
-        win.connect('destroy', self.exit_command)
+        win.connect('destroy', self.cmd_exit)
         win.set_title("PlotFlow")
 
         vbox = gtk.VBox()
         win.add(vbox)
         vbox.show()
 
-        # the plotbox
+        self._init_menus(win, vbox)
         self.plotbox = PlotBox(vbox)
 
         c = Connection(sys.stdin)
         self.plotbox.set_connection(c, '>')
 
         win.show()
-        
-    def exit_command(self, event=None):
+
+        self.plotbox.canvas.canvas.grab_focus()
+
+    def _init_menus(self, win, vbox):
+        accel_group = gtk.AccelGroup()
+        self.item_factory = gtk.ItemFactory(gtk.MenuBar, "<main>", accel_group)
+        win.add_accel_group(accel_group)
+        self.item_factory.create_items((
+            ( "/_File",         None,         None, 0, "<Branch>" ),
+   	    ( "/File/_New",     "<control>N", None, 0, None ),
+   	    ( "/File/_Open",    "<control>O", None, 0, None ),
+   	    ( "/File/_Save",    "<control>S", None, 0, None ),
+   	    ( "/File/Save _As", None,         None, 0, None ),
+   	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
+   	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, None ),
+            ( "/_View",		None,		None, 0, "<Branch>" ),
+            ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, None ),
+            ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, None ),
+   	    ( "/_Help",         None,         None, 0, "<Branch>" ),
+   	    ( "/_Help/About",   None,         None, 0, None ),
+   	    ))
+        menubar = self.item_factory.get_widget("<main>")
+        vbox.add(menubar)
+        menubar.show()
+
+    def cmd_exit(self, *args):
         gtk.main_quit()
+
+    def cmd_zoom_in(self, widget, event):
+        self.plotbox.zoom_in()
+
+    def cmd_zoom_out(self, widget, event):
+        self.plotbox.set_time_range(None, None)
 
 
 if __name__ == "__main__":
-    window = PlotFlowWindow()
-    gtk.main()
+    try:
+        window = PlotFlowWindow()
+        gtk.main()
+    except KeyboardInterrupt:
+        gtk.main_quit()
