@@ -2495,11 +2495,12 @@ class PlotCanvas:
             # links
             gc = drawable.gc('link')
             for l in self.conn.links(self.dir, t0, t1):
-                x0 = l.t0 * tscale + toff
-                x1 = l.t1 * tscale + toff
-                y0 = l.s0 * sscale + soff
-                y1 = l.s1 * sscale + soff
-                drawable.draw_line(gc, x0, y0, x1, y1)
+                if l.s0 is not None and l.s1 is not None:
+                    x0 = l.t0 * tscale + toff
+                    x1 = l.t1 * tscale + toff
+                    y0 = l.s0 * sscale + soff
+                    y1 = l.s1 * sscale + soff
+                    drawable.draw_line(gc, x0, y0, x1, y1)
             
             # border box
             border_gc = drawable.gc("border")
