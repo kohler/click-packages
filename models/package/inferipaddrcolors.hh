@@ -24,7 +24,7 @@ and blue. Then, every packet has a red source address and a blue destination
 address, or vice versa (assuming no source addresses are forged). The
 InferIPAddrColors element attempts to infer which addresses are red and which
 are blue. Output the coloring by calling the C<write_file> or
-C<write_ascii_file> handler.
+C<write_text_file> handler.
 
 Keyword arguments are:
 
@@ -41,10 +41,10 @@ Filename. Read this color file for seed colors.
 
 =back
 
-=h write_ascii_file write-only
+=h write_text_file write-only
 
 Argument is a filename, or `C<->' for standard output. Writes the current
-color assignment in ASCII to the specified file.
+color assignment in text to the specified file.
 
 =h write_file write-only
 
@@ -144,9 +144,9 @@ some residuals.
 
 =head1 FILE FORMAT
 
-The C<write_ascii_file> handler writes an ASCII file whose lines consist of an
+The C<write_text_file> handler writes a text file whose lines consist of an
 IP address, a space, and a color number. The C<write_file> handler writes a
-binary file, preceded by several lines of ASCII boilerplate. The binary data
+binary file, preceded by several lines of text boilerplate. The binary data
 starts after a C<$packed_be> or C<$packed_le> line, and consists of many
 8-byte records; the first 4 bytes are the IP address in host order, the second
 4 the color. Byte order is big-endian for C<$packed_be> and little-endian for

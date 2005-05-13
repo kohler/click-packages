@@ -204,6 +204,7 @@ void
 InferIPAddrColors::add_handlers()
 {
     add_write_handler("write_ascii_file", write_file_handler, (void *)0);
+    add_write_handler("write_text_file", write_file_handler, (void *)0);
     add_write_handler("write_file", write_file_handler, (void *)1);
     add_read_handler("active", read_handler, (void *)AC_ACTIVE);
     add_write_handler("active", write_handler, (void *)AC_ACTIVE);
