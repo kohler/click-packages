@@ -49,6 +49,11 @@ TCPCollector::new_pkt()
 		p->next = _free_pkt;
 		_free_pkt = p;
 	    }
+#if TCPCOLLECTOR_MEMSTATS
+	    _memusage += _pkt_size * 1024;
+	    if (_memusage > _max_memusage)
+		_max_memusage = _memusage;
+#endif
 	}
     if (_free_pkt) {
 	Pkt *p = _free_pkt;
@@ -420,6 +425,11 @@ TCPCollector::new_conn(Packet* p)
 	    _stream_attachments[i]->new_stream_hook(stream1, conn, _stream_attachment_offsets[i]);
 	}
 	_conn_map.insert(AGGREGATE_ANNO(p), conn);
+#if TCPCOLLECTOR_MEMSTATS
+	_memusage += _conn_size + 2 * _stream_size;
+	if (_memusage > _max_memusage)
+	    _max_memusage = _memusage;
+#endif
 	return conn;
     } else {
 	delete[] connbuf;
@@ -429,6 +439,17 @@ TCPCollector::new_conn(Packet* p)
     }
 }
 
+#if TCPCOLLECTOR_MEMSTATS
+uint32_t
+TCPCollector::Conn::sack_memusage() const
+{
+    uint32_t mu = 0;
+    for (SACKBuf *sackbuf = _sackbuf; sackbuf; sackbuf = sackbuf->next)
+	mu += sizeof(SACKBuf);
+    return mu;
+}
+#endif
+
 void
 TCPCollector::kill_conn(Conn* conn)
     /* DOES NOT delete connection from _conn_map */
@@ -436,6 +457,13 @@ TCPCollector::kill_conn(Conn* conn)
 #if TCPCOLLECTOR_XML
     if (_traceinfo_file)
 	conn->write_xml(_traceinfo_file, this);
+#endif
+#if TCPCOLLECTOR_MEMSTATS
+    // How many SACKBufs?
+    uint32_t sack_memusage = conn->sack_memusage();
+    if (_memusage + sack_memusage > _max_memusage)
+	_max_memusage = _memusage + sack_memusage;
+    _memusage -= _conn_size + 2 * _stream_size;
 #endif
     Stream* stream0 = conn->stream(0);
     Stream* stream1 = conn->stream(1);
@@ -870,7 +898,16 @@ TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const P
 /*                             */
 /*******************************/
 
-enum { H_CLEAR };
+enum { H_CLEAR, H_MAX_MEMUSAGE };
+
+#if TCPCOLLECTOR_MEMSTATS
+String
+TCPCollector::read_handler(Element *e, void *)
+{
+    TCPCollector *cf = static_cast<TCPCollector *>(e);
+    return String(cf->_max_memusage) + "\n";
+}
+#endif
 
 int
 TCPCollector::write_handler(const String &, Element *e, void *thunk, ErrorHandler *)
@@ -891,6 +928,9 @@ void
 TCPCollector::add_handlers()
 {
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
+#if TCPCOLLECTOR_MEMSTATS
+    add_read_handler("max_memusage", read_handler, (void *)H_MAX_MEMUSAGE);
+#endif
 }
 
 ELEMENT_REQUIRES(userlevel)

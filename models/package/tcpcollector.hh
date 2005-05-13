@@ -11,12 +11,13 @@ CLICK_DECLS
 class HandlerCall;
 #if CLICK_USERLEVEL
 # define TCPCOLLECTOR_XML 1
+# define TCPCOLLECTOR_MEMSTATS 1
 #endif
 
 /*
 =c
 
-TCPCollector([TRACEINFO, I<keywords> TRACEINFO, SOURCE, TRACEINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACKLATENCY])
+TCPCollector([TRACEINFO, I<keywords> TRACEINFO, SOURCE, NOTIFIER, IP_ID, PACKET, FULLRCVWINDOW, WINDOWPROBE, INTERARRIVAL])
 
 =s
 
@@ -84,7 +85,7 @@ number.  Default is false.
 =item WINDOWPROBE
 
 Boolean.  If true, then write summaries of any window probes to the TRACEINFO
-file, in "C<E<lt>windowprobe<gt>>" XML elements nested inside each
+file, in "C<E<lt>windowprobeE<gt>>" XML elements nested inside each
 "C<E<lt>streamE<gt>>".  Each line has the format "I<timestamp> I<endseq>",
 where I<timestamp> is the packet's timestamp and I<endseq> is its end sequence
 number.  Default is false.
@@ -218,6 +219,11 @@ class TCPCollector : public Element, public AggregateListener { public:
     
     int add_xmlattr(Vector<XMLHook> &, const XMLHook &);
 #endif
+
+#if TCPCOLLECTOR_MEMSTATS
+    uint32_t _memusage;
+    uint32_t _max_memusage;
+#endif
     
     int add_space(unsigned space, int &size);
 
@@ -228,6 +234,9 @@ class TCPCollector : public Element, public AggregateListener { public:
     Conn* new_conn(Packet*);
     void kill_conn(Conn*);
 
+#if TCPCOLLECTOR_MEMSTATS
+    static String read_handler(Element *, void *);
+#endif
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
     
     friend class Conn;
@@ -344,6 +353,9 @@ class TCPCollector::Conn {  public:
     
 #if TCPCOLLECTOR_XML
     void write_xml(FILE*, const TCPCollector *);
+#endif
+#if TCPCOLLECTOR_MEMSTATS
+    uint32_t sack_memusage() const;
 #endif
     
   private:
