@@ -153,7 +153,7 @@ MultiQ::adjust_max_scale(MultiQType type, const double *begin, const double *end
 
     // Ignore the leftmost mode if we're looking at acks.
     int *next_modes_start = next_modes.begin();
-    if (type == MQ_ACK)
+    if (type == MQ_ACK && next_modes_start < next_modes.end())
 	next_modes_start++;
     
     int *tallest_ptr = std::max_element(next_modes_start, next_modes.end(), ModeProbCompar(hh));
@@ -202,7 +202,7 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
 		// If we're looking at acks, then we want to ignore the
 		// leftmost mode when adjusting max_scale.
 		int max_prob_mode2 = max_prob_mode;
-		if (type == MQ_ACK && max_prob_mode == 0)
+		if (type == MQ_ACK && max_prob_mode == modes[0] && modes.size() > 1)
 		    max_prob_mode2 = *std::max_element(modes.begin() + 1, modes.end(), ModeProbCompar(h));
 		
 		max_scale = adjust_max_scale(type, begin, end, h.mode_pos(max_prob_mode2));
