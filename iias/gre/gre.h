@@ -19,10 +19,7 @@ CLICK_CXX_PROTECT
 struct click_gre {
     uint16_t flags;		/* See above */
     uint16_t protocol;		/* Ethernet protocol type */
-    uint16_t checksum;		/* present if (flags & GRE_CP) */
-    uint16_t reserved1;		/* present if (flags & GRE_CP) */
-    uint32_t key;		/* present if (flags & GRE_KP) */
-    uint32_t seq;		/* present if (flags & GRE_SP) */
+    uint32_t options[3];	/* Optional fields (up to 12 bytes in GRE version 0) */
 };
 
 CLICK_CXX_UNPROTECT

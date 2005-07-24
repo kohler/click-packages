@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: greencap.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: greencap.hh,v 1.3 2005/07/24 16:40:16 eddietwo Exp $
  */
 
 #ifndef CLICK_GREENCAP_HH
@@ -80,8 +80,8 @@ class GREEncap : public Element { public:
 
 private:
 
-  click_gre _greh;
-  int _len;
+  click_gre _greh;	// GRE header to append to each packet
+  int _len;		// length of GRE header
 #if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
   bool _aligned;
 #endif

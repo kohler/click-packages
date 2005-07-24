@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: checkgreheader.cc,v 1.3 2005/02/07 21:20:55 eddietwo Exp $
+ * $Id: checkgreheader.cc,v 1.4 2005/07/24 16:40:16 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -114,6 +114,7 @@ Packet *
 CheckGREHeader::simple_action(Packet *p)
 {
   const click_gre *greh = reinterpret_cast<const click_gre *>(p->data() + _offset);
+  const uint32_t *options = greh->options;
   uint16_t flags;
   uint32_t key, seq;
   unsigned plen = p->length() - _offset;
@@ -130,18 +131,22 @@ CheckGREHeader::simple_action(Packet *p)
     return drop(BAD_VERSION, p);
 
   if (flags & htons(GRE_CP))
-    hlen += sizeof(greh->checksum) + sizeof(greh->reserved1);
+    hlen += 4;
   if (flags & htons(GRE_KP))
-    hlen += sizeof(greh->key);
+    hlen += 4;
   if (flags & htons(GRE_SP))
-    hlen += sizeof(greh->seq);
+    hlen += 4;
 
   // too small header
   if ((int)plen < (int)hlen)
     return drop(BAD_HLEN, p);
 
-  memcpy(&key, &greh->key, sizeof(greh->key));
-  memcpy(&seq, &greh->seq, sizeof(greh->seq));
+  if (flags & htons(GRE_CP))
+    options++;
+  if (flags & htons(GRE_KP))
+    memcpy(&key, options++, sizeof(key));
+  if (flags & htons(GRE_SP))
+    memcpy(&seq, options++, sizeof(seq));
 
   if (_checksum) {
     int val = -1;
@@ -164,15 +169,15 @@ CheckGREHeader::simple_action(Packet *p)
 
   if (_key) {
     // key not present or incorrect
-    if (!(flags & htons(GRE_KP)) || _key != greh->key)
+    if (!(flags & htons(GRE_KP)) || _key != ntohl(key))
       return drop(BAD_KEY, p);
   }
 
   if (_checkseq) {
     // sequence number not present or less than or equal to previous
-    if (!(flags & htons(GRE_SP)) || (int)(seq - _seq) < 0)
+    if (!(flags & htons(GRE_SP)) || (int)(ntohl(seq) - _seq) <= 0)
       return drop(BAD_SEQ, p);
-    _seq = seq + 1;
+    _seq = ntohl(seq);
   }
 
   return(p);

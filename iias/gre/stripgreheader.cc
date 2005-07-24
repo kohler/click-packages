@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: stripgreheader.cc,v 1.2 2005/02/07 21:20:55 eddietwo Exp $
+ * $Id: stripgreheader.cc,v 1.3 2005/07/24 16:40:17 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -43,11 +43,11 @@ StripGREHeader::simple_action(Packet *p)
   memcpy(&flags, &greh->flags, sizeof(greh->flags));
 
   if (flags & htons(GRE_CP))
-    hlen += sizeof(greh->checksum) + sizeof(greh->reserved1);
+    hlen += 4;
   if (flags & htons(GRE_KP))
-    hlen += sizeof(greh->key);
+    hlen += 4;
   if (flags & htons(GRE_SP))
-    hlen += sizeof(greh->seq);
+    hlen += 4;
 
   p->pull(hlen);
   return p;

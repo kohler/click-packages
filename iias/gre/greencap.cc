@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: greencap.cc,v 1.3 2005/02/07 21:20:55 eddietwo Exp $
+ * $Id: greencap.cc,v 1.4 2005/07/24 16:40:16 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -43,6 +43,7 @@ GREEncap::configure(Vector<String> &conf, ErrorHandler *errh)
   uint16_t protocol;
   uint32_t key = 0;
   bool checksum = false, seq = false;
+  uint32_t *options = _greh.options;
 
   if (cp_va_parse(conf, this, errh,
                   cpShort, "protocol", &protocol,
@@ -59,18 +60,17 @@ GREEncap::configure(Vector<String> &conf, ErrorHandler *errh)
   _greh.protocol = htons(protocol);
   if (checksum) {
     _greh.flags |= htons(GRE_CP);
-    _len += sizeof(_greh.checksum) + sizeof(_greh.reserved1);
+    options++;
   }
   if (key) {
     _greh.flags |= htons(GRE_KP);
-    _greh.key = htonl(key);
-    _len += sizeof(_greh.key);
+    *options++ = htonl(key);
   }
   if (seq) {
     _greh.flags |= htons(GRE_SP);
-    _greh.seq = ~0;
-    _len += sizeof(_greh.seq);
+    *options++ = htonl(0);
   }
+  _len = (char *)options - (char *)&_greh;
 
 #if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
   // check alignment
@@ -95,25 +95,32 @@ GREEncap::simple_action(Packet *p_in)
   if (!p) return 0;
 
   click_gre *greh = reinterpret_cast<click_gre *>(p->data());
+  uint32_t *options = _greh.options;
 
-  if (_greh.flags & htons(GRE_CP)) {
-#if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
-    if (_aligned)
-      _greh.checksum = ip_fast_csum((unsigned char *)greh, p_in->length() >> 2);
-    else
-      _greh.checksum = click_in_cksum((unsigned char *)greh, p_in->length());
-#elif HAVE_FAST_CHECKSUM
-    _greh.checksum = ip_fast_csum((unsigned char *)greh, p_in->length() >> 2);
-#else
-    _greh.checksum = click_in_cksum((unsigned char *)greh, p_in->length());
-#endif
-    _greh.reserved1 = _greh.reserved1;
-  }
-
+  if (_greh.flags & htons(GRE_CP))
+    *options++ = 0;
+  if (_greh.flags & htons(GRE_KP))
+    options++;
   if (_greh.flags & htons(GRE_SP))
-    _greh.seq++;
+    *options++ = htonl(ntohl(*options) + 1);
+  assert(((char *)options - (char *)&_greh) == _len);
 
   memcpy(greh, &_greh, _len);
+
+  if (_greh.flags & htons(GRE_CP)) {
+    uint16_t checksum;
+#if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
+    if (_aligned)
+      checksum = ip_fast_csum(p->data(), p->length() >> 2);
+    else
+      checksum = click_in_cksum(p->data(), p->length());
+#elif HAVE_FAST_CHECKSUM
+    checksum = ip_fast_csum(p->data(), p->length() >> 2);
+#else
+    checksum = click_in_cksum(p->data(), p->length());
+#endif
+    memcpy(&greh->options, &checksum, sizeof(checksum));
+  }
 
   return p;
 }
