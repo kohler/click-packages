@@ -1,0 +1,5 @@
+/* Process this file with configure to produce config.h. -*- mode: c -*- */
+#ifndef CLICKMODULE_DHCP_CONFIG_H
+#define CLICKMODULE_DHCP_CONFIG_H
+
+#endif /* CLICKMODULE_DHCP_CONFIG_H */
