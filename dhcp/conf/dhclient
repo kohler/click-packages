@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+my $IP_FILE = "client_ip.txt";
+my $LEASE_FILE = "client.lease";
+open(IP_FH , "<$IP_FILE");
+open(LEASE_FH, ">$LEASE_FILE");
+
+my $CURR_IP_ADDR = <IP_FH>;
+
+while(1)
+{
+    open(IP_FH , $IP_FILE);
+    my $tmp_ip = <IP_FH>;
+    chomp($tmp_ip);
+    chomp($CURR_IP_ADDR);
+    
+    if($tmp_ip eq $CURR_IP_ADDR)
+    {
+	# do nothing
+	print "good\n";
+    }
+    else
+    {
+	print "file changed!\n";
+	$CURR_IP_ADDR = $tmp_ip;
+	system("ifconfig eth0 inet $CURR_IP_ADDR");
+	print LEASE_FH $CURR_IP_ADDR;
+    }
+
+    sleep(2);
+}
+#main

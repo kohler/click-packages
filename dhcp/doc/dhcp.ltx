@@ -1,0 +1,526 @@
+
+%\documentclass[twocolumn,12pt,letterpaper]{article}
+\documentclass[12pt, letterpaper]{article}
+
+%\pagestyle{empty}
+\usepackage{fullpage,amsmath,verbatim}
+% amsmath is for split command in equations
+
+\usepackage{epsfig}
+\usepackage{graphicx}
+\usepackage{eepic}
+\usepackage{floatflt}
+
+%\setlength{\paperwidth}{8.5in}
+%\setlength{\paperheight}{11in}
+\textheight=9.0in
+\textwidth=6.75in
+\setlength{\topmargin}{.30in}
+\setlength{\oddsidemargin}{-0.30in}
+\setlength{\evensidemargin}{0in}
+
+
+
+\begin{document}
+
+\title{DHCP in Click}
+
+\author{Lih Chen}
+
+\date{\small 2-10-2005}
+
+\maketitle
+
+
+%%%%%%%%%%%%%%%%%%%%%%
+% Intro
+%%%%%%%%%%%%%%%%%%%%%%
+\section{Abstract}
+The Click Modular Router Project provides a software architecture
+for interconnecting a number of various elements to construct a large
+variety of specific networking functions. Elements are glued together
+by the simple Click language. Because of this simple language, the
+user can easily comprehend the control flows and the inter-workings of
+networking systems. 
+
+Currently, most existing routers and other networking components do
+not provide interfaces or entry points, from which network
+administrator is able modify certain existing behaviors. Although
+network administrators have the privilege to enable to to disable a
+set of pre-defined functions, there isn't any clear conduit for them
+to inspect the forwarding path or the drop policy. On the other hand,
+A typical Click configuration is modular and easy to extend. My
+project leverages these specific characteristics to make DHCP
+protocol more readable and extensible.
+
+\section{Background}
+\subsection{Click}
+A Click configuration is composed of a number of fine grained
+computation units called Elements. An Element, typically, has a number
+of input and output ports for connecting with other elements in the
+system. Inside a configuration file, different instances of the same
+element can be instantiated. Under the cover, an Element can be viewed
+as simply a C++ class with the set of virtual functions, for which
+component designers have the choice of overriding.  Click's software
+architecture facilitates component designers' efforts in creating new
+components, while providing a great deal of flexibility. Component
+designers can also take a step back and inspect a configuration file
+for a high level overview of the system. This higher level view of the
+system provides even greater extensibility and readability to component
+designers for development and debugging purposes.
+
+The following is a list of important attributes of a Click Element.
+\begin{itemize}
+\item \textbf{- Element Class:}
+Responsible of initialization and configuration of that particular
+element. Specifies the behavior, either pulling or pushing, of its
+input and output ports. Timer and handler registration.
+
+\item \textbf{- Ports:}
+As briefly mentioned before, there are different types of ports,
+namely push, pull, and agnostic. An element can have any number of
+ports. 
+
+\item \textbf{- Configuration Strings:}
+During initialization time, the behavior of an element can be modified
+by passing in configuration strings. 
+
+\item\textbf{- Handlers:}
+
+Each element can also provide additional interfaces to the outside
+world through supplying handlers. There are 2 types of handles: read
+and write. If a configuration is installed as a kernel module, an user
+is able to interact with an element through its handlers. For example,
+if it's a handler, an user can inspect an elements internal state by
+viewing /click/<element name>/<read handler name>. Similarly, an user
+can also change an elements internal states by indirecting standard
+input to the write handler : /click/<element name>/<write handler
+name>. The names of the handlers are specified at compiled time.
+
+\end{itemize}
+
+\subsection{DHCP}
+DHCP service runs on a central server that dynamically assigns an IP
+address to individual PCs. This protocol delivers IP information on a
+local area network (LAN) or across several LANs. DHCP reduces the work
+spent administering statically assigned IP addresses on a large
+network. For example, the administrator does not have to visit each
+workstation on the network to configure it or manually make changes to
+its IP address if there is a network topology change. Other network
+configuration parameters (such as gateway and DNS, Domain Name
+Services) can be passed along to a workstation with the IP.
+
+The DHCP protocol provides a means of passing configuration parameters
+to requesting DHCP client workstation or hosts on a TCP/IP
+network. The term host refers to any IP device on a network such as a
+router, server or workstation. The term client refers to a host
+requesting information from another host or server that provides this
+information. A server is a host that is running a service that
+provides information to requesting clients.
+
+A DHCP server is a host on a network that runs a DHCP service. The
+DHCP service listens to network traffic waiting for DHCP broadcast
+discovers/requests. Once a request is heard, the server responds to
+the request with an IP address and additional (optional) configuration
+parameters.
+
+The goal my project is coming up with the design and implementation of
+DHCP client/server leverage Click's existing architecture to achieve
+readability and extensibility. 
+
+\section{Design Iterations}
+In this section, I will discuss my initial design, and the issues and
+problems I have faced during this phase of the project. I will also
+discuss how I address these problems in order to arrive at my final
+design. 
+
+Since I am building a collection of DHCP related elements, it makes
+sense to compile this collection as a package. This allows me to keep
+my package source code separate from the Click sources. 
+
+\subsection{DHCP Client First Design Iteration}
+The DHCP client can be viewed as a finite state machine. Similar to
+all other finite state machines, depending on its current state and
+its transition to the current state, certain action needs to be
+invoked. Based on this observation, the DCHP Client has a main element
+that is responsible of keeping track of its current state and enforces
+the rules for state transitions among the various states. Other
+elements are designed for only invoking the appropriate action. Figure
+1 virtualizes the main elements and the interconnections among
+them. Figure 2 is the actually configuration in Click language. 
+
+\begin{figure}[t]
+\center\includegraphics[height=3in,width=6in]{dhcp_client_first_iter.pdf}
+\caption{An incoming packet goes through CheckDCHPCookie element to be
+verified as a valid DHCP msg. If so, it is forwarded to DHCPClientFSM
+for further processing. Depending on the current state and the
+incoming DHCP msg, one of the down stream elements is triggered.}
+\label{fig:initialclient}
+\end{figure}
+
+\begin{figure}[t]
+\center\begin{verbatim}
+     require(dhcp); // separate from the core Click source code.
+  
+     FromDevice(eth0)
+       -> Strip(14); // strip the ethernet header
+       -> Align(4, 0);
+       -> CheckIPHeader
+       -> CheckUDPHeader
+       -> CheckDHCPCookie(reply, fsm)
+       -> fsm::DHCPClientFSM;; 
+
+     fsm[0] -> DHCPClientDiscover(fsm)->udp_encap->eth_encap
+        -> q::Queue(1000) -> ToDevice(eth0);
+
+     fsm[1] -> DHCPClientRequest(fsm)->udp_encap->eth_encap
+        -> q
+
+\end{verbatim}
+\caption{Click language definition of Figure 1}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{CheckDHCPCookie:}
+This element is somewhat a misnomer. Its original sole purpose is to
+check for the validity of the DHCP Cookie. However, as the code
+evolves, the logic of checking the DHCP op field is placed inside
+this element. If the op field is DHCP\_BOOTREQUEST, and this is a
+DHCP client, the packet will be dropped. Similarly, the incoming
+packet will be discarded if a DHCP server sees that the op field
+is DHCP\_BOOTREPLY. 
+
+\item \textbf{DHCPClientFSM:}
+
+DCHPClientFSM is in charge of dictating the transitions of the
+client's state machine. It also keeps a list of DHCP\_OFFER packets
+that it has received for its future selection. According to the type of
+the incoming DHCP packet, and the current state, it will trigger to
+appropriate elements for further processing. For example, when the
+internal timer expires, it does a check to see if it has received any
+DHCP\_OFFER packets. If so, it chooses one buffered DHCP\_OFFER packet
+and pushes it to DHCPClientRequest for further processing.
+
+In some cases, however, DHCPClientFSM may not have a packet to push to
+another element downstream. For instance, after a certain time out
+limit, if DHCPClientFSM hasn't seen any DHCP\_OFFER packets, it will
+retrigger a downstream element, in the case the DHCPClientDiscover
+Element. Since DHCPClientFSM has no packets to push to
+DHCPClientDisocver, it simply passes a null packet to trigger
+DHCPClientDiscover. Upon receiving a null packet, DHCPClientDiscover
+understands that another DHCP\_DISCOVER packet needs to be constructed
+and sent out. 
+
+Having implemented the design described above and taken a step back
+for evaluation, I came to a realization that this design can
+potentially lead to reconfigurability issues in the future. Later on,
+a network administration would have to know about the null packet
+exception, which is a contradiction with the convention of the Click
+configurations. Furthermore, if a network administrator would like to
+develop his or her own policy of selecting an DHCP\_OFFER packets, he
+or she would have to browse through the code in DHCPClientFSM to
+figure out what it is currently doing. Having acquired that knowledge,
+only then can an administrator make the appropriate changes. This
+defies my original goal of being extensible.
+
+\item \textbf{DHCPClientDiscover}
+
+The very first DHCP\_DISCOVER packet is sent directly from this
+element without the monitoring of DHCPClientFSM. From there after,
+DHCPClientFSM takes charge of commanding the sending of DHCP\_DISCOVER
+packets. Obviously, this is a design flaw. The component developer
+would have to be aware that DHCP\_DISCOVER is generated under two
+separate occasions. Not only is this a design flaw, it is also an
+incorrect implementation of a DHCP client. It's not true that a client
+sends out a DHCP\_DISCOVER upon bootup every time. If a client has a
+record of a previously allocated lease in its database, it will enter
+the INIT\_BOOT state. During this state, the client should send out a
+DHCP\_REQUEST packet in order to attempt to re-acquire the same
+lease. This design, obviously, does not have this semantic.
+
+\item \textbf{DHCPClientRequest}
+
+Upon its timer expiration, DHCPClientFSM selects a DHCP\_OFFER packet
+from its buffered pool and pushes it onto this
+element. DHCPClientRequest, in return, constructs a DHCP\_Request
+packet according to the information provided by the DHCP\_OFFER
+packet. Another issues is that since I made the decision of putting
+all the utility functions inside DHCPClientFSM, if another other
+elements needs access to those functions, they would have to have a
+reference to the DHCPClientFSM instance. This type of approach should
+be avoided if possible because it adds an extra layer of complexity.
+
+\end{itemize}
+
+ 
+\subsection{DHCP Server Initial Design}
+While a DHCP client is responsible of all the retransmissions, a DHCP
+server takes on a more passive role. When a DHCP packet arrives from a
+client, a DHCP server simply reacts to it. Asides from reacting to
+Client's incoming packets, another of its important responsibility is
+to keep track of the available IP addresses, the reserved IP addresses
+for the DHCP\_OFFER packets, and the bound IP addresses. Furthermore,
+it commits the bound IP addresses and their respective lease
+information to its local database periodically.
+
+\begin{figure}[t]
+\center\includegraphics[height=5in,width=5in]{initial_server.pdf}
+\caption{Initial Server Design}
+\end{figure}
+
+\begin{figure}[t]
+\center\begin{verbatim}
+    require(dhcp); // separate from the core Click source code.
+  
+    info::DHCPInfo(192.168.111.2);
+    FromDevice(eth0)
+      -> Strip(14) ->Align(4,0)
+      -> CheckIPHeader
+      -> CheckUDPHeader
+      -> CheckDHCPCookie(request)
+      -> class::DHCPServerClassifier(info, discover, request);
+
+    class[0] -> DHCPServerProcDiscover(info)->q::Queue(1000)->ToDevice(eth0);
+    class[1] -> DHCPServerProcRequest(info)->q;
+
+\end{verbatim}
+\caption{Click language definition of Figure 3}
+\end{figure}
+
+\begin{itemize}
+\item\textbf{DHCPInfo} DHCPInfo can be viewed as the lease database
+manager of a DHCP server. Internally, it keeps track of a list of
+available IP addresses, the reservered IP addresses, and the bound
+leases. It also provides a list of APIs for accessing and modifying
+these internal data structures. 
+
+\begin{verbatim}
+  bool reserveIPAddress(const EtherAddress &etherAddr, const timeval &tv)
+\end{verbatim}
+If the incoming packet is of type DHCP\_DISCOVER, the function can
+be invoked to temporarily reserve the IP address if it's available.
+
+\begin{verbatim}
+  bool isIPAddressReserved(const IPAddress &ipAddr) const
+\end{verbatim}
+Returns true if the ipAddr is reserved. False otherwise.
+
+\begin{verbatim}
+bool validateIPAddress(const EtherAddress &etherAddr, const IPAddress &ipAddr)
+\end{verbatim}
+Upon receiving a request message, the server will mark the previous
+reservered address as valid.
+
+\item\textbf{DHCPServerProcDiscover} Processes an incoming
+DHCP\_DISCOVER packet. It looks up the client's hardware address in
+DHCPInfo's database and determines if it is able to offer the client a
+lease, and what the terms of the lease will be. If the client has made
+requests for a particular IP address lease length, or other
+parameters, the server will attempt to satisfy these requests. 
+
+\item\textbf{DHCPServerProcRequest} Processes an incoming
+DHCP\_REQUEST packet. It will generate DHCP\_ACK or DHCP\_NACK packets
+accordingly.
+
+As I struggled to fix these short comings in my design, more problems
+and issues popped up. For example, some of the elements I described
+above deals with files directly. Unfortunately, this restricts the
+client to run as a user process only because the Kernel can't directly
+access the file system. Simply put, the client configuration would not
+be able to loaded in as a kernel module. By this time, I have already
+coded more than 1000 lines of code. Although it was a hard decision, I
+have decided to scrap my initial architecture and to start
+re-engineering a new design, a new separation among elements that makes
+sense. In retrospect, I am glad that I made that choice. Once the
+final design was in place, it didn't take me long to do the
+implementation. The code, naturally, looks a lot cleaner than before. 
+
+\end{itemize}
+
+\section{DHCP Client Final Design}
+The separation of DHCPClientDiscover and DHCPClientRequest from the
+rest of the client system seems to cause more headaches than
+benefits. For example, remember that in some cases, null packets is
+pushed from DHCPClientFSM to trigger a downstream element. According
+to the original design, the incoming DHCP\_OFFER packets are buffered
+inside DHCPClientFSM. Because of this design decision, it is difficult
+to change the policy of selecting the best lease. 
+
+Based on this observation, I employ the following major architectural
+changes: Combine DHCPClientDiscover, DHCPClientRequest, and
+DHCPClientFSM into one single component, Construct a queueing element
+that is responsible of queueing the incoming DHCP\_OFFER packets. The
+policy of selecting the best offered lease is also embedded in this
+queueing element. Lastly, handlers are put in place for the necessary
+communication between different elements, instead of relying on the
+unconventional way of pushing a null packet downstream. Figure 5 shows
+the overall final design.
+
+\begin{itemize}
+\item\textbf{DHCPClient} The core of the DHCP Client. The state
+machine resides in this element.  DHCPClient has at least 3 outgoing
+ports. Port 0 is designated for all broadcast packets. Port 1 is
+designated for all unicast packets. In the case that the server IP is
+known, a packet should be sent out using unicast. Port 2 is
+specifically for pushing DHCP\_OFFER packets received by the client to
+a queue element. 
+
+It has a timer internal. This timer is set upon the first reception of
+a DHCP\_OFFER packet. When it's expired, DHCPClient pulls from the
+queue element to retrieve the best lease. A network administrator has
+a choice of setting the policy so that DHCPClient picks the first
+lease available to minimize the wait time by setting the timer
+expiration time to zero. 
+
+There are two read handlers and one write handler for interacting with
+the outside world. Client\_Write handler's responsibility is
+bootstrapping the client. It reads in the client's information from
+its local database, which is simply a flat file called
+client.lease. Client\_IP\_Read handler returns the client's currently
+bound IP, and Server\_IP\_Read returns the server's IP. These 2 read
+handlers are extremely useful for sending out unicast packets (more
+details in DHCPUnicast Encap). 
+
+\item\textbf{CheckDHCPMsg} It is mostly the same element as the
+original CheckDHCPCookie. The original CheckDHCPCookie takes in a
+DHCPClientFSM as an argument if it is used on the client side. The
+reason is that CheckDHCPCookie needs to have access to its mac
+address, which is stored inside DHCPClientFSM. This unnecessarily
+makes the configuration file more confusing and less
+readable. Consequently, the logic of checking the mac address is moved
+to DHCPClient instead. The checking of the DHCP op field still happens
+here.
+
+\item\textbf{DHCPOfferMsgQueue} It stores DHCP\_OFFER packets in a
+queue ordered by the duration of the DHO\_DHCP\_LEASE\_TIME option
+field. When a down stream element (DHCPClient) pulls from this queue,
+it will invoke the downstream's registered read handler to see if
+there's a requested IP from the client. If so, DHCPOfferMsgQueue tries
+to find the match within its queue. If a match is not found, it will
+return a DHCP\_OFFER packet with the longest lease. Furthermore, once
+an offer is chosen, the rest of the queued-up packets will be
+discarded. With this separation from the rest of the client , a
+component designer can easily implement his or her own policy of the
+queue.
+
+\item\textbf{DHCPUnicastEncap} Whenever a client has the knowledge of
+the DHCP server's IP, it uses unicast for communication. Renewing a
+soon to be expired lease is a good example. Although the existing
+UDPIPEncap element provides a easy way of encapsulating IP and UPD
+headers for a packet, the source and the destination IP information
+has to be available prior to the running of the configuration. Since
+the IP address of both the client and the server may change, solely
+reply on UDPIPEncap is not sufficient. As a result, I implemented
+DHCPUnicastEncap element, which requires the user to register
+DHCPClient's Client\_IP\_Read handler and Server\_IP\_Read handler in
+order to convey the correct source and destination IP to the
+header. In other words, DHCPUnicastEncap intercepts a packet that has
+already been encapsulated with a proper UDP and IP header and changes
+the source and destination fields in the IP header. It also has to
+recompute the checksum for both IP and UDP headers. 
+
+\end{itemize}
+In addition to the elements described above, I also wrote a simple
+perl script that bootstrap the client automatically. The script is
+also made to aware if the lease database has changed. If so, it will
+call the ifconfig command to set the client IP address in order to
+synchronize with the lease database.
+
+\begin{figure}[t]
+\center\includegraphics[height=9in,width=7in]{final_client.pdf}
+\caption{Final Client Design}
+\end{figure}
+
+\section{DHCP Server Final Design}
+There were not as many architecture changes on the server side as on
+the client side. There were significant changes to the server's
+database internal. Instead of dealing with files directly, it
+discloses its database information through handlers. Similar to the
+client, a server script running as a user process handles committing
+the information from the handlers to a flag file. Figure 6 shows the
+overall final design of the server.
+
+\begin{itemize}
+\item\textbf{DHCPServerLeases} Originally, its name was
+DHCPSInfo. Same as before, the primary responsibility of
+DHCPServerleases is to keep track of free, reserved, and allocated
+leases. dhcpd\_kscrpt interacts with DHCPServerLeases with its handlers
+for bootstrapping and lease committing purposes.
+
+dhcpd\_kscript cats dhcpd.leases file to DHCPServerLeases's
+dhcpd\_leases handler to set up the committed leases upon
+reboot. Also, dhcpd\_kscript cats dhcpd.conf file to trigger
+DHCPServerLeases's dhcpd\_conf handler to setup all the default
+parameters and the free leases.
+
+read\_free\_leases handler discloses the available IPs. It's mostly
+for debugging and verification purposes. read\_leases discloses all
+the existing leases that are bound currently, so that dhcpd\_kscript is
+able to commit this information periodically to a flat file. 
+
+\item\textbf{DHCPServerOffer} DHCPServerOffer handles all incoming
+DHCP\_DISCOVER. It has at most 2 input and at most 2 output
+ports. Input port 0 is used for handling DHCP\_DISCOVER packets. Input
+port 1 is used for handling ICMP ECHO REPLY packets. DHCP\_OFFER
+packets go out from output port 0. ICMP\_PING packets go out from
+output port 1. The user can simply disconnect the ICMP related
+connections to disable pinging prior to sending the DHCP\_OFFER
+packet.
+
+\item\textbf{DHCPServerAckorNak} It handles all incoming DHCP\_REQUEST
+packets. It sends out DHCP\_ACK or DHCP\_NAK accordingly. It calls
+DHCPServerLeases API to find out whether it has a record for this
+particular client. If it has no record of this client, then it must
+remain silent. This is to ensure peaceful coexistence of
+non-communicating DHCP servers on the same wire.
+
+\item\textbf{DHCPServerRelease} It handles all incoming DHCP\_RELEASES
+packets. It simply calls DHCPServerLEases API to remove the record
+from its data structure in memory. The running dhcp\_kscript will
+eventually wake up in the near future to update the flat file to
+reflect this change.
+
+\end{itemize}
+
+\begin{figure}[t]
+\center\includegraphics[height=9in,width=7in]{final_server.pdf}
+\caption{Server Design (Final Iteration)}
+\end{figure}
+
+\section{Test Bed Setup}
+During the early phase of the project, I used KernelTun, an existing
+Click element, that reads IP packets from and writes IP packets to a
+/dev/net/tun device to test my version of DHCP client and server. In
+order to get this working properly, I simply downloaded a Linux
+Kernel's source tree and reconfigure it, so that the Universal Tun/Tap
+option was enable.
+
+During the ladder part of the project, my advisor brought up that
+eventually, I should run my client and server against an actual DHCP
+server and client. As a result, I connected my desktop and my laptop
+to a D-Link 10/100 Fast Ethernet switch to form its own little private
+network that is completely isolated from the outside world. Also, I
+had to make changes to the /etc/network/interface file to assign them
+some static IP. 
+
+To test out my client, I would choose one machine to run dhcpd from
+http://www.isc.org and another to run my implementation of a DHCP
+client. I used to the same method to test my server. Testing against
+already working DHCP client and server gave me a sense of confidence
+with I was going on the right path. Furthermore, both dhcpd and
+dhclient print out debugging type messages to standard out. This
+greatly facilitated my debugging efforts.
+
+%\section{Performance}
+
+\section{Summary}
+Click provides a modular software architecture. Not only are its
+existing elements and architecture advantageous for configuring a
+router, as I demonstrated with my DHCP project, its extensibility can
+be used in other areas in networking as well.
+
+%\begin{verbatim}sys_yield()\end{verbatim} 
+%We might also need to add the functionality to allow a component to
+
+
+\end{document}

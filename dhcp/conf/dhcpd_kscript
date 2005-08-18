@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+
+# This script is for running dhcpd as a kernel module.
+
+my $LEASES_FILE = "dhcpd.leases";
+my $CONF_FILE = "dhcpd.conf";
+my $CLICK_HOME ="/home/dafreak/click";
+
+#open( LEASES_INPUT_FH, "<$LEASES_FILE" );
+#open( CONF_INPUT_FH, "<$CONF_FILE" );
+
+# bootstrap the server
+system("$CLICK_HOME/sbin/click-install server.click");
+print STDOUT "cating LEASES_FILE\n";
+system("cat $LEASES_FILE");
+print STDOUT "cating CONF_FILE\n";
+system("cat $CONF_FILE");
+
+system("cat $LEASES_FILE > /click/server/dhcpd_leases");
+system("cat $CONF_FILE > /click/server/dhcpd_conf");
+
+#clena up !!
+sub catch_c {
+    print STDOUT "cleanup\n";
+    system("$CLICK_HOME/sbin/click-uninstall");
+    exit(0);
+}
+$SIG{INT} = \&catch_c;
+
+# saving the leases
+open( LEASES_FH, ">$LEASES_FILE");
+while(1)
+{
+    system("cat /click/server/read_leases > $LEASES_FILE");
+    sleep(10);
+}
+

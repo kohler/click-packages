@@ -1,0 +1,75 @@
+#!/usr/bin/perl
+
+my $LEASE_FILE = "client.lease";
+my $MY_IP_FILE = "/click/client/client_ip_read";
+my $CLIENT_LEASE_FILE = "/click/client/lease_read";
+my $CLIENT_RELEASE_FILE = "/click/client/release_write";
+my $CLICK_HOME ="//home/dafreak/click";
+
+open(LEASE_FH, "$LEASE_FILE");
+
+system("$CLICK_HOME/sbin/click-install client.click");
+print STDOUT "cating LEASE_FILE\n";
+system("cat $LEASE_FILE");
+print STDOUT "done cating LEASE_FILE\n";
+
+my $tmp_string = <LEASE_FH>;
+if(length($tmp_string) < 1)
+{
+    print STDOUT "no existing lease\n";
+}
+else
+{
+    print STDOUT ">>$tmp_string<< got HERE!!!\n";
+    system("cat $LEASE_FILE > /click/client/client_write");
+}
+
+open( IP_FH, "<$MY_IP_FILE" );
+my $CURR_IP = <IP_FH>;
+
+if( $CURR_IP eq "0.0.0.0" || length($CURR_IP) < 1 )
+{
+    print STDOUT $CURR_IP." don't set it up\n";
+    #nothing
+}
+else
+{
+    print STDOUT $CURR_IP." set it up\n";
+    system("ifconfig eth0 inet $CURR_IP");
+}
+close( IP_FH );
+
+#clean up !!!
+sub catch_c {
+    system("echo blah > CLIENT_RELEASE_FILE");
+    sleep(3);
+    system("$CLICK_HOME/sbin/click-uninstall");
+    exit(0);
+}
+
+$SIG{INT} = \&catch_c;
+
+while(1)
+{
+    open( IP_FH, $MY_IP_FILE );
+    my $tmp_ip = <IP_FH>;
+    chomp($tmp_ip);
+    chomp($CURR_IP);
+    
+    if($tmp_ip eq $CURR_IP_ADDR)
+    {
+	# do nothing
+    }
+    else
+    {
+	print "file changed!\n";
+	$CURR_IP_ADDR = $tmp_ip;
+	system("ifconfig eth0 inet $CURR_IP_ADDR");
+	system ("cat $CLIENT_LEASE_FILE > $LEASE_FILE");
+	
+    }
+    close(IP_FH);
+    
+    sleep(2);
+}
+
