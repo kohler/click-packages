@@ -42,7 +42,6 @@
 #include <clicknet/ip.h>
 
 GetSSRC::GetSSRC()
-  : Element(1, 2)
 {
 }
 

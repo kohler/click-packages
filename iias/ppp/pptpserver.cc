@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.cc,v 1.3 2005/02/07 21:20:56 eddietwo Exp $
+ * $Id: pptpserver.cc,v 1.4 2005/09/19 22:45:09 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -44,24 +44,12 @@
 CLICK_DECLS
 
 PPTPServer::PPTPServer()
-  : Element(1, 1), _verbose(false), _fd(-1)
+  : _verbose(false), _fd(-1)
 {
 }
 
 PPTPServer::~PPTPServer()
 {
-}
-
-void
-PPTPServer::notify_ninputs(int n)
-{
-  set_ninputs(n);
-}
-
-void
-PPTPServer::notify_noutputs(int n)
-{
-  set_noutputs(n);
 }
 
 int
@@ -174,7 +162,7 @@ PPTPServer::cleanup_connection(Connection *c)
   c = NULL;
 
   if (_verbose)
-    click_chatter("%s: closed connection %d", declaration().cc(), fd);
+    click_chatter("%s: closed connection %d", declaration().c_str(), fd);
 }
 
 void
@@ -209,7 +197,7 @@ PPTPServer::initialize_pptp(int listen_fd)
   pptp_fd = accept(listen_fd, (struct sockaddr *)&sin, &sin_len);
   if (pptp_fd < 0) {
     if (errno != EAGAIN)
-      click_chatter("%s: accept: %s", declaration().cc(), strerror(errno));
+      click_chatter("%s: accept: %s", declaration().c_str(), strerror(errno));
     return NULL;    
   }
 
@@ -223,8 +211,8 @@ PPTPServer::initialize_pptp(int listen_fd)
   _connections[pptp_fd] = c;
 
   if (_verbose)
-    click_chatter("%s: opened connection %d from %s:%d", declaration().cc(),
-		  pptp_fd, IPAddress(sin.sin_addr).unparse().cc(), ntohs(sin.sin_port));
+    click_chatter("%s: opened connection %d from %s:%d", declaration().c_str(),
+		  pptp_fd, IPAddress(sin.sin_addr).unparse().c_str(), ntohs(sin.sin_port));
 
   // nonblocking I/O and close-on-exec for the socket
   fcntl(pptp_fd, F_SETFL, O_NONBLOCK);
@@ -249,14 +237,14 @@ PPTPServer::initialize_gre(int pptp_fd)
       break;
   }
   if (input == ninputs()) {
-    click_chatter("%s: no more inputs", declaration().cc());
+    click_chatter("%s: no more inputs", declaration().c_str());
     return NULL;
   }
 
   // open GRE raw socket
   gre_fd = socket(PF_INET, SOCK_RAW, PPTP_PROTO);
   if (gre_fd < 0) {
-    click_chatter("%s: socket: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: socket: %s", declaration().c_str(), strerror(errno));
     return NULL;
   }
 
@@ -287,34 +275,34 @@ PPTPServer::initialize_gre(int pptp_fd)
   // bind to local address
   sin_len = sizeof(sin);
   if (getsockname(pptp_fd, (struct sockaddr *)&sin, &sin_len) < 0) {
-    click_chatter("%s: getsockname: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: getsockname: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
   assert(sin.sin_family == PF_INET);
   sin.sin_port = htons((short)pptp_fd);
   sin_len = sizeof(sin);
   if (bind(gre_fd, (struct sockaddr *)&sin, sin_len) < 0) {
-    click_chatter("%s: bind: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: bind: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
 
   // connect to remote peer
   sin_len = sizeof(sin);
   if (getpeername(pptp_fd, (struct sockaddr *)&sin, &sin_len) < 0) {
-    click_chatter("%s: getsockname: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: getsockname: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
   assert(sin.sin_family == PF_INET);
   sin.sin_port = htons((short)pptp_fd);
   sin_len = sizeof(sin);
   if (connect(gre_fd, (struct sockaddr *)&sin, sin_len) < 0) {
-    click_chatter("%s: connect: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: connect: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
 
   if (_verbose)
-    click_chatter("%s: opened connection %d to %s", declaration().cc(),
-		  gre_fd, IPAddress(sin.sin_addr).unparse().cc());
+    click_chatter("%s: opened connection %d to %s", declaration().c_str(),
+		  gre_fd, IPAddress(sin.sin_addr).unparse().c_str());
 
   // nonblocking I/O and close-on-exec for the socket
   fcntl(gre_fd, F_SETFL, O_NONBLOCK);
@@ -376,7 +364,7 @@ PPTPServer::send_gre(Connection *c, WritablePacket *p)
   while (p->length()) {
     int w = write(fd, p->data(), p->length());
     if (w < 0 && errno != EINTR) {
-      click_chatter("%s: %s:", declaration().cc(), strerror(errno));
+      click_chatter("%s: %s:", declaration().c_str(), strerror(errno));
       p->kill();
       return w;
     }
@@ -429,7 +417,7 @@ PPTPServer::handle_gre(Connection *c)
 
   // unrecoverable error
   if (r < 0 && errno != EAGAIN) {
-    click_chatter("%s: read: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: read: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
 
@@ -454,7 +442,7 @@ PPTPServer::handle_gre(Connection *c)
 
   // check length
   if (length > PACKET_MAX) {
-    click_chatter("%s: bad payload length %d", declaration().cc(), ntohs(gre->payload_len));
+    click_chatter("%s: bad payload length %d", declaration().c_str(), ntohs(gre->payload_len));
     goto err;
   }
   else if (p->length() > length) {
@@ -482,11 +470,11 @@ PPTPServer::handle_gre(Connection *c)
       PPTP_GRE_IS_R(gre->flags) ||
       !PPTP_GRE_IS_K(gre->flags) ||
       (gre->flags & 0xf)) {
-    click_chatter("%s: bad GRE header", declaration().cc());
+    click_chatter("%s: bad GRE header", declaration().c_str());
     goto err;
   }
   if (ntohs(gre->call_id) != (short)c->pptp->fd) {
-    click_chatter("%s: bad call ID %d", declaration().cc(), ntohs(gre->call_id));
+    click_chatter("%s: bad call ID %d", declaration().c_str(), ntohs(gre->call_id));
     goto err;
   }
 
@@ -553,7 +541,7 @@ PPTPServer::handle_pptp(Connection *c)
 
   // unrecoverable error
   if (r < 0 && errno != EAGAIN) {
-    click_chatter("%s: read: %s", declaration().cc(), strerror(errno));
+    click_chatter("%s: read: %s", declaration().c_str(), strerror(errno));
     goto err;
   }
 
@@ -568,7 +556,7 @@ PPTPServer::handle_pptp(Connection *c)
 
   // check length
   if (length < sizeof(struct pptp_header) || length > PPTP_MAX_CTRL_PCKT_SIZE) {
-    click_chatter("%s: bad message length %d", declaration().cc(), length);
+    click_chatter("%s: bad message length %d", declaration().c_str(), length);
     goto err;
   }
   else if (p->length() > length) {
@@ -591,11 +579,11 @@ PPTPServer::handle_pptp(Connection *c)
 
   // protocol errors
   if (ntohs(hdr->pptp_type) != PPTP_CTRL_MESSAGE) {
-    click_chatter("%s: unhandled message type %d", declaration().cc(), ntohs(hdr->pptp_type));
+    click_chatter("%s: unhandled message type %d", declaration().c_str(), ntohs(hdr->pptp_type));
     goto err;
   }
   if (ntohl(hdr->magic) != PPTP_MAGIC_COOKIE) {
-    click_chatter("%s: bad magic cookie 0x%08x", declaration().cc(), ntohl(hdr->magic));
+    click_chatter("%s: bad magic cookie 0x%08x", declaration().c_str(), ntohl(hdr->magic));
     goto err;
   }
 
@@ -698,7 +686,7 @@ PPTPServer::handle_pptp(Connection *c)
     break;
 
   default:
-    click_chatter("%s: unhandled control type %d", declaration().cc(), ntohs(hdr->ctrl_type));
+    click_chatter("%s: unhandled control type %d", declaration().c_str(), ntohs(hdr->ctrl_type));
     goto err;
   }
 
@@ -713,7 +701,7 @@ PPTPServer::handle_pptp(Connection *c)
     while (p->length()) {
       int w = write(fd, p->data(), p->length());
       if (w < 0 && errno != EINTR) {
-	click_chatter("%s: %s:", declaration().cc(), strerror(errno));
+	click_chatter("%s: %s:", declaration().c_str(), strerror(errno));
 	goto err;
       }
       p->pull(w);

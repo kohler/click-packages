@@ -49,6 +49,7 @@ public:
   ~DHCPClient();
   
   const char *class_name() const { return "DHCPClient"; }
+  const char *port_count() const { return "2/3-4"; }
   const char *processing() const { return "hl/hhh"; }
   
   Packet* pull();
@@ -68,7 +69,6 @@ public:
   void run_rebind_timer();
   void run_lease_expired_timer();
   
-  void notify_noutputs(int n);
   void set_my_ip(const String &ip);
   void set_server_ip(const String &ip);
   void set_my_lease_time(const int &time);

@@ -101,10 +101,10 @@ TCPAddressTranslator::TCPAddressTranslator()
 _tcp_done_tail(0),_tcp_gc_timer(tcp_gc_hook, this),
     _tcp_done_gc_timer(tcp_done_gc_hook, this)
 {
-  add_input(); /*IPv4 arriving packets */
-  add_input(); /*IPv6 arriving packets */
-  add_output(); /* IPv4 outgoing translated packets*/
-  add_output(); /* IPv6 outgoing translated packets*/
+    /* in 0: IPv4 arriving packets */
+    /* in 1: IPv6 arriving packets */
+    /* out 0: IPv4 outgoing translated packets*/
+    /* out 1: IPv6 outgoing translated packets*/
 } 
 
 
@@ -148,7 +148,6 @@ ErrorHandler *errh)
        cpEnd) < 0)
     return -1;
   */
-  set_ninputs(2);
 
   // change timeouts into jiffies
   _tcp_timeout_jiffies *= CLICK_HZ;

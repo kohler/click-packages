@@ -46,7 +46,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pppcontrolprotocol.hh,v 1.3 2005/02/07 21:20:56 eddietwo Exp $
+ * $Id: pppcontrolprotocol.hh,v 1.4 2005/09/19 22:45:08 eddietwo Exp $
  */
 
 /*
@@ -86,7 +86,6 @@ CLICK_DECLS
 class PPPControlProtocol : public Element { public:
 
   PPPControlProtocol(int protocol = 0) :
-    Element(1, 1),
     protocol(protocol),
     state(STOPPED),
     id(0), reqid(0), seen_ack(0),
@@ -98,6 +97,7 @@ class PPPControlProtocol : public Element { public:
   virtual ~PPPControlProtocol() { }
 
   const char *class_name() const { return "PPPControlProtocol"; }
+  const char *port_count() const { return PORTS_1_1; }
   const char *processing() const { return AGNOSTIC; }
 
   int configure(Vector<String> &, ErrorHandler *);

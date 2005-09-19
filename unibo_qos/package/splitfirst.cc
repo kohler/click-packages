@@ -42,7 +42,6 @@
 #include <click/confparse.hh>
 
 SplitFirst::SplitFirst()
-  : Element(1, 2)
 {
 }
 

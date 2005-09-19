@@ -49,6 +49,7 @@ class CheckAverageLength : public Element { public:
   ~CheckAverageLength();
   
   const char *class_name() const		{ return "CheckAverageLength"; }
+  const char *port_count() const		{ return "1/2"; }
   const char *processing() const		{ return PUSH; }
   
   CheckAverageLength *clone() const			{ return new CheckAverageLength; }

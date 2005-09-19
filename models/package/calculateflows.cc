@@ -933,12 +933,12 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
-		_aggregate, _flowid.saddr().s().cc(), ntohs(_flowid.sport()),
-		_flowid.daddr().s().cc(), ntohs(_flowid.dport()),
+		_aggregate, _flowid.saddr().s().c_str(), ntohs(_flowid.sport()),
+		_flowid.daddr().s().c_str(), ntohs(_flowid.dport()),
 		_init_time._sec, _init_time._subsec,
 		end_time._sec, end_time._subsec);
 	if (_filepos)
-	    fprintf(f, " filepos='%s'", String(_filepos).cc());
+	    fprintf(f, " filepos='%s'", String(_filepos).c_str());
 	fprintf(f, ">\n");
 
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
@@ -1094,7 +1094,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
 // CALCULATEFLOWS PROPER
 
 CalculateFlows::CalculateFlows()
-    : Element(1, 1), _tipfd(0), _tipsd(0), _traceinfo_file(0), _filepos_h(0),
+    : _tipfd(0), _tipsd(0), _traceinfo_file(0), _filepos_h(0),
       _free_pkt(0), _packet_source(0)
 {
 }
@@ -1104,12 +1104,6 @@ CalculateFlows::~CalculateFlows()
     for (int i = 0; i < _pkt_bank.size(); i++)
 	delete[] _pkt_bank[i];
     delete _filepos_h;
-}
-
-void
-CalculateFlows::notify_noutputs(int n)
-{
-    set_noutputs(n <= 1 ? 1 : 2);
 }
 
 int 
@@ -1166,18 +1160,18 @@ CalculateFlows::initialize(ErrorHandler *errh)
 	/* nada */;
     else if (_traceinfo_filename == "-")
 	_traceinfo_file = stdout;
-    else if (!(_traceinfo_file = fopen(_traceinfo_filename.cc(), "w")))
-	return errh->error("%s: %s", _traceinfo_filename.cc(), strerror(errno));
+    else if (!(_traceinfo_file = fopen(_traceinfo_filename.c_str(), "w")))
+	return errh->error("%s: %s", _traceinfo_filename.c_str(), strerror(errno));
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "<?xml version='1.0' standalone='yes'?>\n\
 <trace");
 	if (_tipfd)
 	    fprintf(_traceinfo_file, " flowfilepattern='%s'",
-		    _tipfd->output_pattern().cc());
+		    _tipfd->output_pattern().c_str());
 	if (String s = HandlerCall::call_read(_packet_source, "filename").trim_space())
-	    fprintf(_traceinfo_file, " file='%s'", s.cc());
+	    fprintf(_traceinfo_file, " file='%s'", s.c_str());
 	else if (_tipsd && _tipsd->filename())
-	    fprintf(_traceinfo_file, " file='%s'", _tipsd->filename().cc());
+	    fprintf(_traceinfo_file, " file='%s'", _tipsd->filename().c_str());
 	fprintf(_traceinfo_file, ">\n");
 	HandlerCall::reset_read(_filepos_h, _packet_source, "packet_filepos");
     }

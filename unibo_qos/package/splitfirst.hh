@@ -47,6 +47,7 @@ class SplitFirst : public Element { public:
   ~SplitFirst();
 
   const char *class_name() const		{ return "SplitFirst"; }
+  const char *port_count() const		{ return "1/2"; }
   const char *processing() const	        { return PUSH; }
   SplitFirst *clone() const			{ return new SplitFirst; }
  

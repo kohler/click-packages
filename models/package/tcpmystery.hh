@@ -95,6 +95,7 @@ class TCPMystery : public Element, public TCPCollector::AttachmentManager { publ
     ~TCPMystery();
 
     const char *class_name() const	{ return "TCPMystery"; }
+    const char *port_count() const	{ return "1/1-2"; }
 
     int configure(Vector<String> &, ErrorHandler *);
 

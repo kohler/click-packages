@@ -22,10 +22,10 @@ CLICK_DECLS
 
 DNSAlg::DNSAlg()
 {
-  add_input(); /*IPv4 arriving packets */
-  add_input(); /*IPv6 arriving packets */
-  add_output(); /* IPv4 outgoing translated packets*/
-  add_output(); /* IPv6 outgoing translated packets*/
+    /* in 0: IPv4 arriving packets */
+    /* in 1: IPv6 arriving packets */
+    /* out 0: IPv4 outgoing translated packets*/
+    /* out 1: IPv6 outgoing translated packets*/
 }
 
 DNSAlg::~DNSAlg()
@@ -177,7 +177,7 @@ DNSAlg::translate_ipv4_ipv6(Packet *p)
           if (_at->lookup(ipv6_internal_address, sport, ipv6_mapped_address, mport, ipv6_external_address, dport, 1))
           {
             //If found, create new PTR query with the mapped IPv4 address
-            char *new_ipv6_internal_address = dnsmsg->my_strdup(ipv6_internal_address.unparse().cc());
+            char *new_ipv6_internal_address = dnsmsg->my_strdup(ipv6_internal_address.unparse().c_str());
             dnsmsg->rfc1035BuildPTR6Query(new_ipv6_internal_address,newbuffer, &new_len, hdr.id);
             delete (ipv4_address);
             delete (ipv6_address);
@@ -303,7 +303,7 @@ DNSAlg::translate_ipv4_ipv6(Packet *p)
           if (qtype == RFC1035_TYPE_PTR)
           {
             memset(authorities[i].name,'\0',RFC1035_MAXHOSTNAMESZ);            
-            memcpy(authorities[i].name,ipv6_dns_server_ptr_domain.cc(),strlen(ipv6_dns_server_ptr_domain.cc()));
+            memcpy(authorities[i].name,ipv6_dns_server_ptr_domain.c_str(),strlen(ipv6_dns_server_ptr_domain.c_str()));
           }
           memset(authorities[i].rdata,'\0',RFC1035_MAXHOSTNAMESZ);
           memcpy(authorities[i].rdata,ipv4_dns_server_name.c_str(),strlen(ipv4_dns_server_name.c_str()));
@@ -537,7 +537,7 @@ DNSAlg::translate_ipv6_ipv4(Packet *p)
           //Lookup its original IPv6 address in the Address Translator
           if (_at->lookup(ipv6_internal_address,sport,ipv6_mapped_address,mport,ipv6_external_address,dport, 0))
           {
-            char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().cc());
+            char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().c_str());
             char *new_ipv4_address = new char[RFC1035_MAXHOSTNAMESZ];
             memset(new_ipv4_address, '\0', RFC1035_MAXHOSTNAMESZ);
             if (extract_ipv4_address_from_ipv6_address(new_ipv6_mapped_address,new_ipv4_address) == 0)
@@ -588,7 +588,7 @@ DNSAlg::translate_ipv6_ipv4(Packet *p)
             //Lookup in the Address Translator the mapped IPv4 address for the IPv6 address of the response
             if (_at->lookup(ipv6_internal_address,sport,ipv6_mapped_address,mport,ipv6_external_address,dport, 0))
             {
-              char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().cc());
+              char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().c_str());
               char *new_ipv4_address = new char[RFC1035_MAXHOSTNAMESZ];
               memset(new_ipv4_address, '\0', RFC1035_MAXHOSTNAMESZ);
               if (extract_ipv4_address_from_ipv6_address(new_ipv6_mapped_address,new_ipv4_address) == 0)
@@ -631,11 +631,11 @@ DNSAlg::translate_ipv6_ipv4(Packet *p)
           if (qtype == RFC1035_TYPE_PTR)
           {
             memset(authorities[i].name,'\0',RFC1035_MAXHOSTNAMESZ);
-            memcpy(authorities[i].name,ipv4_dns_server_ptr_domain.cc(),strlen(ipv4_dns_server_ptr_domain.cc()));
+            memcpy(authorities[i].name,ipv4_dns_server_ptr_domain.c_str(),strlen(ipv4_dns_server_ptr_domain.c_str()));
           }
-          authorities[i].rdlength = strlen(ipv6_dns_server_name.cc()) + 2;
+          authorities[i].rdlength = strlen(ipv6_dns_server_name.c_str()) + 2;
           memset(authorities[i].rdata,'\0',RFC1035_MAXHOSTNAMESZ);
-          memcpy(authorities[i].rdata,ipv6_dns_server_name.cc(),strlen(ipv6_dns_server_name.cc()));          
+          memcpy(authorities[i].rdata,ipv6_dns_server_name.c_str(),strlen(ipv6_dns_server_name.c_str()));          
           dnsmsg->rfc1035RRPack(&authorities[i],&off2,newbuffer,new_len);
           new_len -= off2;
         }
@@ -648,7 +648,7 @@ DNSAlg::translate_ipv6_ipv4(Packet *p)
           {
             if (_at->lookup(ipv6_internal_address,sport,ipv6_mapped_address,mport,ipv6_external_address,dport, 0))
             {
-              char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().cc());
+              char *new_ipv6_mapped_address = dnsmsg->my_strdup(ipv6_mapped_address.unparse().c_str());
               char *new_ipv4_address = new char[RFC1035_MAXHOSTNAMESZ];
               memset(new_ipv4_address, '\0', RFC1035_MAXHOSTNAMESZ);
               if (extract_ipv4_address_from_ipv6_address(new_ipv6_mapped_address,new_ipv4_address) == 0)

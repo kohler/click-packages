@@ -156,8 +156,8 @@ class MultiQ : public Element { public:
     ~MultiQ();
 
     const char *class_name() const	{ return "MultiQ"; }
+    const char *port_count() const	{ return "0-1/="; }
 
-    void notify_ninputs(int);
     int configure(Vector<String> &, ErrorHandler *);
     void add_handlers();
 

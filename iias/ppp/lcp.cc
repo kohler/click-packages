@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: lcp.cc,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: lcp.cc,v 1.2 2005/09/19 22:45:07 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -102,7 +102,7 @@ LCP::protreject(WritablePacket *p)
   sdata(PROTREJ, ++id, p->data(), p->length());
 
   if (_verbose)
-    click_chatter("%s: rejected protocol 0x%04x", declaration().cc(), *(uint16_t *)p->data());
+    click_chatter("%s: rejected protocol 0x%04x", declaration().c_str(), *(uint16_t *)p->data());
 }
 
 CLICK_ENDDECLS

@@ -46,7 +46,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pppcontrolprotocol.cc,v 1.1 2004/04/17 14:51:14 mhuang Exp $
+ * $Id: pppcontrolprotocol.cc,v 1.2 2005/09/19 22:45:08 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -139,7 +139,7 @@ PPPControlProtocol::sconfreq(bool retransmit)
   timer->schedule_after_s(timeouttime);
 
   if (_verbose)
-    click_chatter("%s: sent Configuration Request %d", declaration().cc(), reqid);
+    click_chatter("%s: sent Configuration Request %d", declaration().c_str(), reqid);
 }
 
 Packet *
@@ -149,7 +149,7 @@ PPPControlProtocol::rconfreq(WritablePacket *p)
   struct ppp_cp *cp = (struct ppp_cp *)&ppp[1];
 
   if (_verbose)
-    click_chatter("%s: received Configuration Request %d", declaration().cc(), cp->id);
+    click_chatter("%s: received Configuration Request %d", declaration().c_str(), cp->id);
 
   switch (state) {
   case OPENED:
@@ -174,7 +174,7 @@ PPPControlProtocol::rconfreq(WritablePacket *p)
       assert(timer->scheduled());
     }
     if (_verbose)
-      click_chatter("%s: sent Configuration Ack %d", declaration().cc(), cp->id);
+      click_chatter("%s: sent Configuration Ack %d", declaration().c_str(), cp->id);
   }
   else {
     // revert from ACKSENT to REQSENT since we are rejecting
@@ -183,7 +183,7 @@ PPPControlProtocol::rconfreq(WritablePacket *p)
       assert(timer->scheduled());
     }
     if (_verbose)
-      click_chatter("%s: sent Configuration %s %d", declaration().cc(), cp->code == CONFREJ ? "Reject" : "Nak", cp->id);
+      click_chatter("%s: sent Configuration %s %d", declaration().c_str(), cp->code == CONFREJ ? "Reject" : "Nak", cp->id);
   }
 
   return p;
@@ -210,12 +210,12 @@ PPPControlProtocol::timeout(Timer *t, void *thunk)
   case ACKRCVD:
   case ACKSENT:
     if (pppcp->retransmits <= 0) {
-      click_chatter("%s: timeout sending Configuration Requests", pppcp->declaration().cc());
+      click_chatter("%s: timeout sending Configuration Requests", pppcp->declaration().c_str());
       pppcp->state = STOPPED;
     }
     else {
       // retransmit
-      click_chatter("%s: resending Configuration Request %d", pppcp->declaration().cc(), pppcp->reqid);
+      click_chatter("%s: resending Configuration Request %d", pppcp->declaration().c_str(), pppcp->reqid);
       pppcp->sconfreq(true);
       // leave timer running until we receive CONFACK before timeout
       if (pppcp->state == ACKRCVD) {
@@ -234,10 +234,10 @@ PPPControlProtocol::rconfack(WritablePacket *p)
   struct ppp_cp *cp = (struct ppp_cp *)&ppp[1];
 
   if (_verbose)
-    click_chatter("%s: received Configuration Ack %d", declaration().cc(), cp->id);
+    click_chatter("%s: received Configuration Ack %d", declaration().c_str(), cp->id);
 
   if (cp->id != reqid || seen_ack) {
-    click_chatter("%s: bad Configuration Ack ID %d (expected %d)", declaration().cc(), cp->id, reqid);
+    click_chatter("%s: bad Configuration Ack ID %d (expected %d)", declaration().c_str(), cp->id, reqid);
     return;
   }
 
@@ -276,10 +276,10 @@ PPPControlProtocol::rconfnakrej(WritablePacket *p)
   struct ppp_cp *cp = (struct ppp_cp *)&ppp[1];
 
   if (_verbose)
-    click_chatter("%s: received Configuration Nak/Reject %d", declaration().cc(), cp->id);
+    click_chatter("%s: received Configuration Nak/Reject %d", declaration().c_str(), cp->id);
 
   if (cp->id != reqid || seen_ack) {
-    click_chatter("%s: bad Configuration Nak/Reject ID %d (expected %d)", declaration().cc(), cp->id, reqid);
+    click_chatter("%s: bad Configuration Nak/Reject ID %d (expected %d)", declaration().c_str(), cp->id, reqid);
     return;
   }
 
@@ -312,7 +312,7 @@ PPPControlProtocol::rtermreq(WritablePacket *p)
   struct ppp_cp *cp = (struct ppp_cp *)&ppp[1];
 
   if (_verbose)
-    click_chatter("%s: received Termination Request %d", declaration().cc(), cp->id);
+    click_chatter("%s: received Termination Request %d", declaration().c_str(), cp->id);
 
   switch (state) {
   case ACKRCVD:
@@ -335,7 +335,7 @@ void
 PPPControlProtocol::rtermack(WritablePacket *)
 {
   if (_verbose)
-    click_chatter("%s: received Termination Ack", declaration().cc());
+    click_chatter("%s: received Termination Ack", declaration().c_str());
 
   switch (state) {
   case STOPPING:
@@ -362,7 +362,7 @@ PPPControlProtocol::simple_action(Packet *p_in)
 
   // runt
   if (p->length() < sizeof(struct ppp_header)) {
-    click_chatter("%s: runt packet", declaration().cc());
+    click_chatter("%s: runt packet", declaration().c_str());
     goto done;
   }
 
@@ -375,7 +375,7 @@ PPPControlProtocol::simple_action(Packet *p_in)
   // runt or bad length field
   if ((unsigned char *)&cp->len >= p->end_data() ||
       (unsigned char *)((unsigned)cp + ntohs(cp->len)) > p->end_data()) {
-    click_chatter("%s: runt packet or bad length", declaration().cc());
+    click_chatter("%s: runt packet or bad length", declaration().c_str());
     goto done;
   }
 
@@ -397,12 +397,12 @@ PPPControlProtocol::simple_action(Packet *p_in)
     rtermack(p);
     break;
   case CODEREJ:
-    click_chatter("%s: Code Reject", declaration().cc());
+    click_chatter("%s: Code Reject", declaration().c_str());
     if (state == ACKRCVD)
       state = REQSENT;
     break;
   default:
-    click_chatter("%s: unhandled code %d", declaration().cc(), cp->code);
+    click_chatter("%s: unhandled code %d", declaration().c_str(), cp->code);
     break;
   }
 

@@ -63,6 +63,7 @@ class RTPClassifier : public Element {
   ~RTPClassifier();
 
   const char *class_name() const		{ return "RTPClassifier"; }
+  const char *port_count() const		{ return "1/2"; }
   const char *processing() const	        { return PUSH; }
   RTPClassifier *clone() const	        { return new RTPClassifier; }
   

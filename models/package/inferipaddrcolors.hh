@@ -162,6 +162,7 @@ class InferIPAddrColors : public Element, public IPAddrColors { public:
     ~InferIPAddrColors();
   
     const char *class_name() const	{ return "InferIPAddrColors"; }
+    const char *port_count() const	{ return PORTS_1_1; }
     const char *processing() const	{ return AGNOSTIC; }
 
     int configure(const Vector<String> &, ErrorHandler *);

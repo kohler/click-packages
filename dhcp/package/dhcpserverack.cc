@@ -17,8 +17,6 @@
 
 DHCPServerACKorNAK::DHCPServerACKorNAK()
 {
-  add_input();
-  //add_output();
 }
 
 DHCPServerACKorNAK::~DHCPServerACKorNAK()
@@ -42,12 +40,6 @@ DHCPServerACKorNAK::configure(Vector<String> &conf, ErrorHandler *errh)
     return -1;
   }
   return 0;
-}
-
-void
-DHCPServerACKorNAK::notify_noutputs(int n)
-{
-  set_noutputs(n < 2 ? 1 : 2);
 }
 
 void 

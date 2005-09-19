@@ -14,7 +14,6 @@
 
 CheckDHCPMsg::CheckDHCPMsg()
 {
-  add_input();
 }
 
 CheckDHCPMsg::~CheckDHCPMsg()
@@ -54,12 +53,6 @@ CheckDHCPMsg::configure(Vector<String> &conf, ErrorHandler *errh)
   }
 
   return 0;
-}
-
-void 
-CheckDHCPMsg::notify_noutputs(int n)
-{
-  set_noutputs(n < 2 ? 1 : 2);
 }
 
 Packet*

@@ -42,6 +42,7 @@ class DNSAlg : public Element {
   ~DNSAlg();
 
   const char *class_name() const	{ return "DNSAlg"; }
+  const char *port_count() const	{ return "2/2"; }
 
   int configure(Vector<String> &, ErrorHandler *);
   int initialize(ErrorHandler *);

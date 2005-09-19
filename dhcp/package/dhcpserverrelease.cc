@@ -15,7 +15,6 @@
 
 DHCPServerRelease::DHCPServerRelease()
 {
-  add_input();
 }
 
 DHCPServerRelease::~DHCPServerRelease()

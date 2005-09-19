@@ -593,7 +593,7 @@ TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
 	    duration._sec, duration._subsec);
 
     if (_filepos)
-	fprintf(f, " filepos='%s'", String(_filepos).cc());
+	fprintf(f, " filepos='%s'", String(_filepos).c_str());
 
     for (const XMLHook *x = owner->_conn_xmlattr.begin(); x < owner->_conn_xmlattr.end(); x++)
 	if (String value = x->hook.connection(this, x->name, x->thunk))
@@ -705,7 +705,7 @@ TCPCollector::Stream::interarrival_xmltag(FILE* f, Stream* stream, Conn*, const 
 /*******************************/
 
 TCPCollector::TCPCollector()
-    : Element(1, 1), _free_pkt(0),
+    : _free_pkt(0),
       _pkt_size(sizeof(Pkt)), _stream_size(sizeof(Stream)), _conn_size(sizeof(Conn)),
       _filepos_h(0), _packet_source(0)
 #if TCPCOLLECTOR_XML
@@ -719,12 +719,6 @@ TCPCollector::~TCPCollector()
     for (int i = 0; i < _pktbuf_bank.size(); i++)
 	delete[] _pktbuf_bank[i];
     delete _filepos_h;
-}
-
-void
-TCPCollector::notify_noutputs(int n)
-{
-    set_noutputs(n <= 1 ? 1 : 2);
 }
 
 int
@@ -826,8 +820,8 @@ TCPCollector::initialize(ErrorHandler *errh)
 	/* nada */;
     else if (_traceinfo_filename == "-")
 	_traceinfo_file = stdout;
-    else if (!(_traceinfo_file = fopen(_traceinfo_filename.cc(), "w")))
-	return errh->error("%s: %s", _traceinfo_filename.cc(), strerror(errno));
+    else if (!(_traceinfo_file = fopen(_traceinfo_filename.c_str(), "w")))
+	return errh->error("%s: %s", _traceinfo_filename.c_str(), strerror(errno));
     
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "<?xml version='1.0' standalone='yes'?>\n\

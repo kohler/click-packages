@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: greencap.cc,v 1.4 2005/07/24 16:40:16 eddietwo Exp $
+ * $Id: greencap.cc,v 1.5 2005/09/19 22:45:07 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -29,7 +29,6 @@
 CLICK_DECLS
 
 GREEncap::GREEncap()
-  : Element(1, 1)
 {
 }
 

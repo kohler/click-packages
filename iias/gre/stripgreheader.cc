@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: stripgreheader.cc,v 1.3 2005/07/24 16:40:17 eddietwo Exp $
+ * $Id: stripgreheader.cc,v 1.4 2005/09/19 22:45:07 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -24,7 +24,6 @@
 CLICK_DECLS
 
 StripGREHeader::StripGREHeader()
-  : Element(1, 1)
 {
 }
 

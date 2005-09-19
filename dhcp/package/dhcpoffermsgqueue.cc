@@ -20,8 +20,6 @@ DHCPOfferMsgQueue::DHCPOfferMsgQueue()
       _head(0),
       _client_read_handler_call(0)
 {
-  set_ninputs(1);
-  add_output();
 }
 
 DHCPOfferMsgQueue::~DHCPOfferMsgQueue()

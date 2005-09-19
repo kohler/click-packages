@@ -77,9 +77,9 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     ~CalculateCapacity();
 
     const char *class_name() const	{ return "CalculateCapacity"; }
+    const char *port_count() const	{ return "1/1-2"; }
     const char *processing() const	{ return "a/ah"; }
 
-    void notify_noutputs(int);
     int configure_phase() const		{ return ToIPFlowDumps::CONFIGURE_PHASE + 1; } // just after ToIPFlowDumps
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);

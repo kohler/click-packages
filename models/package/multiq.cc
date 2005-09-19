@@ -309,8 +309,7 @@ MultiQ::run(MultiQType type, Vector<double> &interarrivals, Vector<Capacity> &ca
 //                   //
 
 MultiQ::MultiQ()
-    : Element(0, 0),
-      INTERARRIVAL_CUTOFF(35000),
+    : INTERARRIVAL_CUTOFF(35000),
       MIN_SCALE(10),
       MAX_SCALE(10000),
       SCALE_STEP(1.1),
@@ -325,13 +324,6 @@ MultiQ::MultiQ()
 
 MultiQ::~MultiQ()
 {
-}
-
-void
-MultiQ::notify_ninputs(int n)
-{
-    set_ninputs(n == 0 ? 0 : 1);
-    set_noutputs(n == 0 ? 0 : 1);
 }
 
 int

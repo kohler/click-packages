@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: greencap.hh,v 1.3 2005/07/24 16:40:16 eddietwo Exp $
+ * $Id: greencap.hh,v 1.4 2005/09/19 22:45:07 eddietwo Exp $
  */
 
 #ifndef CLICK_GREENCAP_HH
@@ -74,6 +74,7 @@ class GREEncap : public Element { public:
   ~GREEncap();
   
   const char *class_name() const		{ return "GREEncap"; }
+  const char *port_count() const		{ return PORTS_1_1; }
   const char *processing() const		{ return AGNOSTIC; }
   
   int configure(Vector<String> &, ErrorHandler *);

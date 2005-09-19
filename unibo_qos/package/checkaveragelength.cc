@@ -45,7 +45,6 @@
 #include <click/error.hh>
 
 CheckAverageLength::CheckAverageLength()
-  : Element(1, 2)
 {
 }
 

@@ -47,7 +47,6 @@
 #include <click/packet_anno.hh>
 
 RTPClassifier::RTPClassifier()
-  : Element(1, 2)
 {
   FlowTable();
 }

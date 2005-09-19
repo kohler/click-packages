@@ -35,10 +35,9 @@ public:
   ~CheckDHCPMsg();
   
   const char *class_name() const	{ return "CheckDHCPMsg"; }
+  const char *port_count() const	{ return "1/1-2"; }
   const char *processing() const	{ return AGNOSTIC; }
   int configure(Vector<String> &conf, ErrorHandler *errh);
-  
-  void notify_noutputs(int n);
   
   Packet *simple_action(Packet *);
   //int initialize(ErrorHandler *);

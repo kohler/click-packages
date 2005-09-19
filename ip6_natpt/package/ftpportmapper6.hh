@@ -51,6 +51,7 @@ class FTPPortMapper6 : public Element {
     ~FTPPortMapper6();
 
     const char *class_name() const	{ return "FTPPortMapper6"; }
+    const char *port_count() const	{ return "2/2"; }
     const char *processing() const	{ return PUSH; }
     int configure(Vector<String> &, ErrorHandler *);
     int initialize(ErrorHandler *);

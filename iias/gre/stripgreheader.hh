@@ -14,7 +14,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: stripgreheader.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: stripgreheader.hh,v 1.3 2005/09/19 22:45:07 eddietwo Exp $
  */
 
 #ifndef CLICK_STRIPGREHEADER_HH
@@ -41,6 +41,7 @@ class StripGREHeader : public Element {
   ~StripGREHeader();
   
   const char *class_name() const		{ return "StripGREHeader"; }
+  const char *port_count() const		{ return PORTS_1_1; }
 
   Packet *simple_action(Packet *);
   

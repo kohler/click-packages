@@ -538,9 +538,9 @@ IPAddrColors::write_file(String where, bool binary, ErrorHandler *errh)
     if (where == "-")
 	f = stdout;
     else
-	f = fopen(where.cc(), (binary ? "wb" : "w"));
+	f = fopen(where.c_str(), (binary ? "wb" : "w"));
     if (!f)
-	return errh->error("%s: %s", where.cc(), strerror(errno));
+	return errh->error("%s: %s", where.c_str(), strerror(errno));
 
     fprintf(f, "$ncolors %u\n", _next_color);
     if (binary) {
@@ -563,7 +563,7 @@ IPAddrColors::write_file(String where, bool binary, ErrorHandler *errh)
     if (f != stdout)
 	fclose(f);
     if (had_err)
-	return errh->error("%s: file error", where.cc());
+	return errh->error("%s: file error", where.c_str());
     else
 	return 0;
 }
@@ -655,9 +655,9 @@ IPAddrColors::read_file(String where, ErrorHandler *errh)
     if (where == "-")
 	f = stdin;
     else
-	f = fopen(where.cc(), "rb");
+	f = fopen(where.c_str(), "rb");
     if (!f)
-	return errh->error("%s: %s", where.cc(), strerror(errno));
+	return errh->error("%s: %s", where.c_str(), strerror(errno));
     int retval = read_file(f, errh);
     if (f != stdin)
 	fclose(f);

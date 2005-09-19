@@ -17,7 +17,6 @@
 DHCPClassifier::DHCPClassifier()
     : _dhcp_msg_to_outport_map(-1)
 {
-    add_input();
 }
 
 DHCPClassifier::~DHCPClassifier()
@@ -26,9 +25,11 @@ DHCPClassifier::~DHCPClassifier()
 }
 
 int
-DHCPClassifier::configure(Vector<String> &conf, ErrorHandler *)
+DHCPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  set_noutputs(conf.size());
+    if (conf.size() != noutputs())
+	return errh->error("need %d arguments, one per output port", noutputs());
+
   for( int argno = 0 ; argno < conf.size(); argno++ )
   {
     String s = DHCPOptionUtil::getNextArg(conf[argno]);

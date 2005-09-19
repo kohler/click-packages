@@ -23,18 +23,11 @@
 #include <click/packet_anno.hh>
 
 IPAddrColorPaint::IPAddrColorPaint()
-    : Element(1, 1)
 {
 }
 
 IPAddrColorPaint::~IPAddrColorPaint()
 {
-}
-
-void
-IPAddrColorPaint::notify_noutputs(int n)
-{
-    set_noutputs(n <= 1 ? 1 : 2);
 }
 
 int

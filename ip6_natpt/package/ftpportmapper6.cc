@@ -23,10 +23,10 @@
 CLICK_DECLS
 FTPPortMapper6::FTPPortMapper6()
 {
-  add_input(); /*IPv4 arriving packets */
-  add_input(); /*IPv6 arriving packets */
-  add_output(); /* IPv4 outgoing translated packets*/
-  add_output(); /* IPv6 outgoing translated packets*/
+    /* in 0: IPv4 arriving packets */
+    /* in 1: IPv6 arriving packets */
+    /* out 0: IPv4 outgoing translated packets*/
+    /* out 1: IPv6 outgoing translated packets*/
   epsv_found = true;
 }
 
@@ -62,7 +62,7 @@ FTPPortMapper6::initialize(ErrorHandler *errh)
   for (int i = 0; i < downstream.size(); i++)
     if (downstream[i] == _tcp_a)
       goto found_tcp_a;
-  errh->warning("TCPAddressTranslator `%s' is not downstream", _tcp_a->declaration().cc());
+  errh->warning("TCPAddressTranslator `%s' is not downstream", _tcp_a->declaration().c_str());
 
  found_tcp_a:
   return 0;
@@ -431,7 +431,7 @@ FTPPortMapper6::translate_ipv4_ipv6(Packet *p)
               output(1).push(p);
 
      //Get the string representation of the IPv6 address
-      String new_saddr=ip6_src.unparse().cc();
+      String new_saddr=ip6_src.unparse().c_str();
       char *s= buf;
 
      //Build the ERPT command

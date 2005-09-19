@@ -26,7 +26,6 @@
 #include <click/straccum.hh>
 
 TestIPAddrColors::TestIPAddrColors()
-    : Element(1, 1)
 {
 }
 
@@ -79,15 +78,15 @@ TestIPAddrColors::test(Packet *p)
     if (scolor > MAXCOLOR) {
 	_n_bad_colors++;
 	if (_verbose)
-	    ErrorHandler::default_handler()->error("src %s: bad color %u", IPAddress(htonl(saddr)).s().cc(), scolor);
+	    ErrorHandler::default_handler()->error("src %s: bad color %u", IPAddress(htonl(saddr)).s().c_str(), scolor);
     } else if (dcolor > MAXCOLOR) {
 	_n_bad_colors++;
 	if (_verbose)
-	    ErrorHandler::default_handler()->error("dst %s: bad color %u", IPAddress(htonl(daddr)).s().cc(), scolor);
+	    ErrorHandler::default_handler()->error("dst %s: bad color %u", IPAddress(htonl(daddr)).s().c_str(), scolor);
     } else if (scolor != (dcolor ^ 1)) {
 	_n_bad_pairs++;
 	if (_verbose)
-	    ErrorHandler::default_handler()->error("src %s, dst %s: bad color pair %u, %u", IPAddress(htonl(saddr)).s().cc(), IPAddress(htonl(daddr)).s().cc(), scolor, dcolor);
+	    ErrorHandler::default_handler()->error("src %s, dst %s: bad color pair %u, %u", IPAddress(htonl(saddr)).s().c_str(), IPAddress(htonl(daddr)).s().c_str(), scolor, dcolor);
     } else if (scolor >= 2)
 	_n_large_colors++;
 }

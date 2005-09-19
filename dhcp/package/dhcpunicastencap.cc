@@ -19,8 +19,6 @@ DHCPUnicastEncap::DHCPUnicastEncap()
     :_src_ip_h(0),
      _dst_ip_h(0)
 {
-  add_input();
-  add_output();
 }
 
 DHCPUnicastEncap::~DHCPUnicastEncap()

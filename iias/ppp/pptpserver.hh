@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.hh,v 1.2 2004/05/03 17:04:03 eddietwo Exp $
+ * $Id: pptpserver.hh,v 1.3 2005/09/19 22:45:09 eddietwo Exp $
  */
 
 #ifndef CLICK_PPTPSERVER_HH
@@ -120,11 +120,9 @@ class PPTPServer : public Element { public:
   ~PPTPServer();
 
   const char *class_name() const	{ return "PPTPServer"; }
+  const char *port_count() const	{ return "-/-"; }
   const char *processing() const	{ return PUSH; }
   const char *flow_code() const		{ return "x/y"; }
-
-  void notify_ninputs(int n);
-  void notify_noutputs(int n);
 
   int configure(Vector<String> &conf, ErrorHandler *);
   int initialize(ErrorHandler *);

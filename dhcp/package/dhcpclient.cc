@@ -84,8 +84,6 @@ DHCPClient::DHCPClient()
       _lease_duration(0),
       _chosen_offer_pkt(NULL)
 {
-  set_ninputs(2);
-  //set_noutputs(4);
 }
 
 DHCPClient::~DHCPClient()
@@ -119,12 +117,6 @@ DHCPClient::configure(Vector<String> &conf, ErrorHandler *errh)
   //_my_ip_h = new HandlerCall(id() + ".client_read");
   
   return 0;
-}
-
-void
-DHCPClient::notify_noutputs(int n)
-{
-  set_noutputs( n < 4 ? 3 : 4);
 }
 
 Packet*

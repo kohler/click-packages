@@ -72,10 +72,8 @@ public:
   ~DHCPServerOffer();
 
   const char *class_name() const { return "DHCPServerOffer"; }
+  const char *port_count() const { return "1-2/1-2"; }
   const char *processing() const { return PUSH; }
-
-  void notify_noutputs(int n);
-  void notify_ninputs(int n);
 
   int initialize(ErrorHandler *);
   int configure(Vector<String> &conf, ErrorHandler *errh);

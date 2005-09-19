@@ -19,8 +19,6 @@ DHCP_ICMP_Encap::DHCP_ICMP_Encap()
     :_src_ip_h(0),
      _dst_ip_h(0)
 {
-  add_input();
-  add_output();
 }
 
 DHCP_ICMP_Encap::~DHCP_ICMP_Encap()

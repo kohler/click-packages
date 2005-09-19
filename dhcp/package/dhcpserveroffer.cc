@@ -48,18 +48,6 @@ DHCPServerOffer::initialize(ErrorHandler *)
   return 0;
 }
 
-void
-DHCPServerOffer::notify_noutputs(int n)
-{
-  set_noutputs(n < 2 ? 1 : 2);
-}
-
-void 
-DHCPServerOffer::notify_ninputs(int n)
-{
-  set_ninputs(n < 2? 1 : 2);
-}
-
 void 
 DHCPServerOffer::push(int port, Packet *p)
 {

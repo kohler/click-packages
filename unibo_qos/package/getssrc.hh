@@ -49,6 +49,7 @@ class GetSSRC : public Element {
   ~GetSSRC();
   
   const char *class_name() const		{ return "GetSSRC"; }
+  const char *port_count() const		{ return "1/2"; }
   const char *processing() const		{ return AGNOSTIC; }
   
   GetSSRC *clone() const			{ return new GetSSRC; }
