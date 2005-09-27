@@ -78,7 +78,7 @@ public:
   int initialize(ErrorHandler *);
   int configure(Vector<String> &conf, ErrorHandler *errh);
   virtual void push(int port, Packet *p);
-  void run_timer();
+  void run_timer(Timer *);
   Packet* make_offer_packet(LeaseNode *lease);
 
   void add_handlers();

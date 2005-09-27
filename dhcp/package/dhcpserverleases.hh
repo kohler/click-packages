@@ -118,7 +118,7 @@ public:
   Lease *eth_lease_map_find(const EtherAddress &ethaddr);
 
   String get_allocated_leases_string() const;
-  void run_timer();
+  void run_timer(Timer *);
   
 private:
   IPAddress _subnet_ip_addr;

@@ -241,7 +241,7 @@ DHCPServerOffer::push(int port, Packet *p)
 }
 
 void
-DHCPServerOffer::run_timer()
+DHCPServerOffer::run_timer(Timer *)
 {
   click_chatter("[o] Time out!! Time to send an offer");
   if(_send_offer_timer.scheduled())

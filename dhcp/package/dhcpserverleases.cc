@@ -51,7 +51,7 @@ DHCPServerLeases::initialize(ErrorHandler *)
 }
 
 void 
-DHCPServerLeases::run_timer()
+DHCPServerLeases::run_timer(Timer *)
 {
   Timestamp now = Timestamp::now();
   

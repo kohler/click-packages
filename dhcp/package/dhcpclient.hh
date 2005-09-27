@@ -60,7 +60,7 @@ public:
   void add_handlers();
   int configure(Vector<String> &conf, ErrorHandler *errh);
 
-  //void run_timer();
+  //void run_timer(Timer *);
   void run_resend_discover_timer();
   void run_timeout_timer();
   void run_select_timer();
