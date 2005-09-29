@@ -97,7 +97,33 @@ LeaseTable::insert(Lease l) {
 	return true;
 }
 
-
+enum {H_LEASES};
+String
+LeaseTable::read_handler(Element *e, void *thunk)
+{
+	LeaseTable *lt = (LeaseTable *)e;
+	switch ((uintptr_t) thunk) {
+	case H_LEASES: {
+		StringAccum sa;
+		for (LeaseIter iter = lt->_leases.begin(); iter; iter++) {
+			Lease l = iter.value();
+			sa << "lease " << l._ip << " {\n";
+			sa << "  starts " << l._start.sec() << ";\n";
+			sa << "  ends " << l._end.sec() << ";\n";
+			sa << "  hardware ethernet " << l._eth << ";\n";
+			sa << "}\n";
+		}
+		return sa.take_string() + "\n";
+	}
+	default:
+		return String();
+	}
+}
+void
+LeaseTable::add_handlers() 
+{
+	add_read_handler("leases", read_handler, (void *) H_LEASES);
+}
 
 EXPORT_ELEMENT(LeaseTable)
 

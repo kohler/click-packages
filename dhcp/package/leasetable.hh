@@ -57,13 +57,20 @@ public:
   }
   virtual bool insert(Lease);
 
+
   IPAddress _ip;
   IPAddress _subnet;
   EtherAddress _eth;
-  HashMap<IPAddress, Lease> _leases;
+  typedef HashMap<IPAddress, Lease> LeaseMap;
+  typedef LeaseMap::const_iterator LeaseIter;
+  LeaseMap _leases;
+
   HashMap<EtherAddress, IPAddress> _ips;
 
 
+  static String read_handler(Element *e, void *thunk);
+  void add_handlers();
+  
 };
 
 CLICK_ENDDECLS

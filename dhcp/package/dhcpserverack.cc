@@ -68,33 +68,35 @@ DHCPServerACKorNAK::push(int, Packet *p)
 	unsigned char *buf;
 	int size;
 	IPAddress ciaddr = IPAddress(req_msg->ciaddr);
-	EtherAddress etherAddr(req_msg->chaddr);
+	EtherAddress eth(req_msg->chaddr);
 	IPAddress requested_ip = IPAddress(0);
-	Lease *lease = _leases->rev_lookup(etherAddr);
+	Lease *lease = _leases->rev_lookup(eth);
 	IPAddress server = IPAddress(0);
-	buf = DHCPOptionUtil::getOption(req_msg->options, DHO_DHCP_SERVER_IDENTIFIER, &size);
+	buf = DHCPOptionUtil::getOption(req_msg->options, 
+					DHO_DHCP_SERVER_IDENTIFIER, &size);
 	if (buf != NULL) {
 		uint32_t server_id;
 		memcpy(&server_id, buf, size);
 		server = IPAddress(server_id);
 	}
 	
-	buf = DHCPOptionUtil::getOption( req_msg->options, DHO_DHCP_REQUESTED_ADDRESS, &size );
+	buf = DHCPOptionUtil::getOption( req_msg->options, 
+					 DHO_DHCP_REQUESTED_ADDRESS, &size );
 	if (buf != NULL) {
 		uint32_t requested_ip;
 		memcpy( &requested_ip, buf, size );
 		requested_ip = IPAddress(requested_ip);
 	}
-	click_chatter("%s:%d server_id %s requested_ip %s ciaddr %s\n", 
-		      __FILE__, __LINE__,
-		      server.s().c_str(), requested_ip.s().c_str(), 
-		      ciaddr.s().c_str());
-	
+
 	if (!ciaddr && !requested_ip) {
-		/* ??? */
-		if (lease && lease->_ip) {
+		/* this is outside of the spec, but dhclient seems to
+		   do this, so just give it an address */
+		if (!lease) {
+			lease = _leases->new_lease_any(eth);
+		}
+		if (lease) {
 			q = make_ack_packet(p, lease);
-		} 
+		}
 	} else if (server && !ciaddr && requested_ip) {
 		/* SELECTING */
 		if(lease && lease->_ip == requested_ip) {
