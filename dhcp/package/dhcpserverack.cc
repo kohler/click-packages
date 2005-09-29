@@ -60,76 +60,86 @@ DHCPServerACKorNAK::configure(Vector<String> &conf, ErrorHandler *errh)
 void 
 DHCPServerACKorNAK::push(int, Packet *p)
 {
-  dhcpMessage *req_msg 
-    = (dhcpMessage*)(p->data() + sizeof(click_ether) + 
-		     sizeof(click_udp) + sizeof(click_ip));
-  Packet *q = 0;
-  unsigned char *buf;
-  int size;
-  IPAddress ciaddr = IPAddress(req_msg->ciaddr);
-  EtherAddress etherAddr(req_msg->chaddr);
-  IPAddress requested_ip = IPAddress(0);
-  Lease *lease = _leases->rev_lookup(etherAddr);
-  IPAddress server = IPAddress(0);
-  buf = DHCPOptionUtil::getOption(req_msg->options, DHO_DHCP_SERVER_IDENTIFIER, &size);
-  if (buf != NULL) {
-	  uint32_t server_id;
-	  memcpy(&server_id, buf, size);
-	  server = IPAddress(server_id);
-  }
-  
-  buf = DHCPOptionUtil::getOption( req_msg->options, DHO_DHCP_REQUESTED_ADDRESS, &size );
-  if (buf != NULL) {
-	  uint32_t requested_ip;
-	  memcpy( &requested_ip, buf, size );
-	  requested_ip = IPAddress(requested_ip);
-  }
-  click_chatter("%s:%d server_id %s requested_ip %s ciaddr %s\n", 
-		__FILE__, __LINE__,
-		server.s().c_str(), requested_ip.s().c_str(), 
-		ciaddr.s().c_str());
-
-  if (server && !ciaddr && !requested_ip) {
-	  /* ??? */
-	  if (lease && lease->_ip) {
-		  q = make_ack_packet(p, lease);
-	  } 
-  } else if (server && !ciaddr && requested_ip) {
-	  /* SELECTING */
-	  if(lease && lease->_ip == requested_ip) {
-		  q = make_ack_packet(p, lease);
-		  lease->_valid = true;
-	  }
-  } else if (!server && requested_ip && !ciaddr) {
-	  /* INIT-REBOOT */
-	  bool network_is_correct = true;
-	  if (!network_is_correct) {
-		  q = make_nak_packet(p, lease);
-	  } else {	  
-		  if (lease && lease->_ip == requested_ip) {
-			  if (lease->_end <  Timestamp::now() ) {
-				  q = make_nak_packet(p, lease);
-			  } else {
-				  lease->_valid = true;
-				  q = make_ack_packet(p, lease);
-			  }
-		  }
-	  }
-  } else if (!server && !requested_ip && ciaddr) {
-	  /* RENEW or REBIND */
-	  if (lease) {
-		  lease->_valid = true;
-		  lease->extend();
-		  q = make_ack_packet(p, lease);
-	  }
-  } else {
-	  click_chatter("%s:%d\n", __FILE__, __LINE__);
-  }
-
-  if (q) {
-	  output(0).push(q);
-  }
-  p->kill();
+	click_ether *eh = (click_ether *) p->data();
+	dhcpMessage *req_msg 
+		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
+				 sizeof(click_udp) + sizeof(click_ip));
+	Packet *q = 0;
+	unsigned char *buf;
+	int size;
+	IPAddress ciaddr = IPAddress(req_msg->ciaddr);
+	EtherAddress etherAddr(req_msg->chaddr);
+	IPAddress requested_ip = IPAddress(0);
+	Lease *lease = _leases->rev_lookup(etherAddr);
+	IPAddress server = IPAddress(0);
+	buf = DHCPOptionUtil::getOption(req_msg->options, DHO_DHCP_SERVER_IDENTIFIER, &size);
+	if (buf != NULL) {
+		uint32_t server_id;
+		memcpy(&server_id, buf, size);
+		server = IPAddress(server_id);
+	}
+	
+	buf = DHCPOptionUtil::getOption( req_msg->options, DHO_DHCP_REQUESTED_ADDRESS, &size );
+	if (buf != NULL) {
+		uint32_t requested_ip;
+		memcpy( &requested_ip, buf, size );
+		requested_ip = IPAddress(requested_ip);
+	}
+	click_chatter("%s:%d server_id %s requested_ip %s ciaddr %s\n", 
+		      __FILE__, __LINE__,
+		      server.s().c_str(), requested_ip.s().c_str(), 
+		      ciaddr.s().c_str());
+	
+	if (!ciaddr && !requested_ip) {
+		/* ??? */
+		if (lease && lease->_ip) {
+			q = make_ack_packet(p, lease);
+		} 
+	} else if (server && !ciaddr && requested_ip) {
+		/* SELECTING */
+		if(lease && lease->_ip == requested_ip) {
+			q = make_ack_packet(p, lease);
+			lease->_valid = true;
+		}
+	} else if (!server && requested_ip && !ciaddr) {
+		/* INIT-REBOOT */
+		bool network_is_correct = true;
+		if (!network_is_correct) {
+			q = make_nak_packet(p, lease);
+		} else {	  
+			if (lease && lease->_ip == requested_ip) {
+				if (lease->_end <  Timestamp::now() ) {
+					q = make_nak_packet(p, lease);
+				} else {
+					lease->_valid = true;
+					q = make_ack_packet(p, lease);
+				}
+			}
+		}
+	} else if (!server && !requested_ip && ciaddr) {
+		/* RENEW or REBIND */
+		if (lease) {
+			lease->_valid = true;
+			lease->extend();
+			q = make_ack_packet(p, lease);
+		}
+	} else {
+		click_chatter("%s:%d\n", __FILE__, __LINE__);
+	}
+	
+	if (q) {
+		
+		Packet *o = DHCPOptionUtil::push_dhcp_udp_header(q, _leases->_ip);
+		WritablePacket *s = o->push_mac_header(14);
+		
+		click_ether *eh2 = (click_ether *)s->data();
+		memcpy(eh2->ether_shost, _leases->_eth.data(), 6);
+		memcpy(eh2->ether_dhost, eh->ether_shost, 6);
+		memset(eh2->ether_dhost, 0xff, 6);
+		eh2->ether_type = htons(ETHERTYPE_IP);
+		output(0).push(s);
+	}
+	p->kill();
 }
 
 
