@@ -1,9 +1,9 @@
-#ifndef DHCPSERVEROFF_HH
-#define DHCPSERVEROFF_HH
+#ifndef DHCPSERVEROFFER_HH
+#define DHCPSERVEROFFER_HH
 
 #include <click/element.hh>
 #include <click/timer.hh>
-#include "dhcpserverleases.hh"
+#include "leasetable.hh"
 
 /*
  * =c
@@ -44,29 +44,6 @@
 
 class DHCPServerOffer : public Element
 {
-private:
-  typedef struct _lease_node
-  {
-    DHCPServerLeases::Lease *v;
-    Packet *dm;
-    struct _lease_node *next;
-    ~_lease_node(){
-      dm->kill();
-    }
-  }LeaseNode;
-
-  class LeaseFIFOQueue{
-  public:
-    LeaseFIFOQueue();
-    ~LeaseFIFOQueue();
-    void enqueue(DHCPServerLeases::Lease *lease, Packet *p);
-    DHCPServerOffer::LeaseNode * dequeue();
-    
-  private:
-    LeaseNode *_lease_fifo_head;
-    LeaseNode *_lease_fifo_tail;
-  };
-
 public:
   DHCPServerOffer();
   ~DHCPServerOffer();
@@ -75,28 +52,15 @@ public:
   const char *port_count() const { return "1-2/1-2"; }
   const char *processing() const { return PUSH; }
 
-  int initialize(ErrorHandler *);
   int configure(Vector<String> &conf, ErrorHandler *errh);
   virtual void push(int port, Packet *p);
-  void run_timer(Timer *);
-  Packet* make_offer_packet(LeaseNode *lease);
+  Packet* make_offer_packet(dhcpMessage *discover_msg, Lease *lease);
 
   void add_handlers();
   
-  const DHCPServerLeases* getServerLeases() const;
-  const IPAddress &get_curr_icmp_dst_ipAddr() const;
 
 private:
-  DHCPServerLeases *_serverLeases;
-  Timer _send_offer_timer;
-  IPAddress _curr_icmp_dst_ipAddr;
-
-  ///// begin lease FIFO queue related stuff /////
-      
-  
-  ///// end lease FIFO queue related stuff /////
-
-  LeaseFIFOQueue _lease_fifo_queue;
+  LeaseTable *_leases;
 };
 
 #endif

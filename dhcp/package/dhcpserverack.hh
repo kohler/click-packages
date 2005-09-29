@@ -2,7 +2,7 @@
 #define DHCPSERVERACKNAK_HH
 
 #include <click/element.hh>
-#include "dhcpserverleases.hh"
+#include "leasetable.hh"
 
 /*
  * =c
@@ -37,11 +37,10 @@ public:
   int initialize(ErrorHandler *);
   int configure(Vector<String> &conf, ErrorHandler *errh);
   virtual void push(int port, Packet *p);
-  Packet *make_ack_packet(Packet *p, DHCPServerLeases::Lease *lease);
-  Packet *make_nak_packet(Packet *p, DHCPServerLeases::Lease *lease);
-  Packet* drop(Packet *p);
+  Packet *make_ack_packet(Packet *p, Lease *lease);
+  Packet *make_nak_packet(Packet *p, Lease *lease);
   
 private:
-  DHCPServerLeases *_serverLeases;
+  class LeaseTable *_leases;
 };
 #endif

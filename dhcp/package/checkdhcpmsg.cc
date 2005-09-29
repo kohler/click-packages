@@ -1,5 +1,21 @@
-#include <click/config.h>
+/*
+ * checkdhcpmsg.{cc,hh} -- check the magic bytes of a dhcp message
+ * Lih Chen
+ * 
+ * Copyright (c) 2004 Regents of the University of California
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, subject to the conditions
+ * listed in the Click LICENSE file. These conditions include: you must
+ * preserve this copyright notice, and you cannot mention the copyright
+ * holders in advertising related to the Software without their permission.
+ * The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
+ * notice is a summary of the Click LICENSE file; the license in that file is
+ * legally binding.
+ */
 
+#include <click/config.h>
 #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif
@@ -9,8 +25,11 @@
 #include <click/confparse.hh>
 #include "checkdhcpmsg.hh"
 
+#include <clicknet/ether.h>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
+
+CLICK_DECLS
 
 CheckDHCPMsg::CheckDHCPMsg()
 {
@@ -20,87 +39,32 @@ CheckDHCPMsg::~CheckDHCPMsg()
 {
 }
 
-/*
-int 
-CheckDHCPMsg::initialize(ErrorHandler *errh)
-{
-  return 0;
-}
-*/
-
 int
 CheckDHCPMsg::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  String tmp;
-  if(cp_va_parse(conf, this, errh,
-                 cpString, "request or reply", &tmp,
-                 cpEnd) < 0)
-  {
-    return -1;
-  }
-  
-  if( tmp == "request" )
-  {
-    _checkType = CHECK_REQ;
-  }
-  else if( tmp == "reply" )
-  {
-    _checkType = CHECK_REP;
-  }
-  else
-  {
-    return -1;
-  }
-
-  return 0;
+	String tmp;
+	if (cp_va_parse(conf, this, errh,
+			cpEnd) < 0) {
+		return -1;
+	}
+	return 0;
 }
 
 Packet*
 CheckDHCPMsg::simple_action(Packet *p)
 {
-  dhcpMessage *dm = (dhcpMessage*)(p->data()+sizeof(click_udp)+sizeof(click_ip));
-  //dhcpMessage *dm = (dhcpMessage*)(p->data()+sizeof(click_udp));
-
-  if( !( dm->op == DHCP_BOOTREQUEST && _checkType == CHECK_REQ ||
-         dm->op == DHCP_BOOTREPLY   && _checkType == CHECK_REP ) )
-  {
-    click_chatter("%s, %d bad stuff", __FILE__, __LINE__);
-    click_chatter("\tdm->op : %x\n", dm->op);
-    click_chatter("\t_checkType: %x\n", _checkType);
-    
-    return drop(p);
-  }
-  
-  uint32_t dm_cookie ;
-  uint32_t good_cookie;
-  
-  memcpy(&dm_cookie, dm->options, 4);
-  memcpy(&good_cookie, DHCP_OPTIONS_COOKIE, 4);
-  //int good_cookie;
-
-  if( dm_cookie == good_cookie )
-  {
-    click_chatter("%s, %d good stuff", __FILE__, __LINE__);
-    return p;
-  }
-  else
-  {
-    click_chatter("%s, %d bad stuff", __FILE__, __LINE__);
-    click_chatter("\t good_cookie : %d", good_cookie);
-    click_chatter("\t dm_cookie   : %d", dm_cookie);
-    return drop(p);
-  }
+	dhcpMessage *dm = (dhcpMessage*)(((char *) p->ip_header()) +
+					 sizeof(click_ip) + 
+					 sizeof(click_udp));
+	
+	if (dm->magic != DHCP_MAGIC) {
+		click_chatter("%s, %d bad magic 0x%08x vs 0x%08x", 
+			      __FILE__, __LINE__, 
+			      ntohl(dm->magic), ntohl(DHCP_MAGIC));
+		checked_output_push(1, p);
+		return 0;
+	}
+	return p;
 }
-
-Packet*
-CheckDHCPMsg::drop(Packet *p)
-{
-  click_chatter("not a valid dhcp message");
-  if(noutputs() == 2)
-    output(1).push(p);
-  else
-    p->kill();
-  return 0;
-}
-
+CLICK_ENDDECLS
 EXPORT_ELEMENT(CheckDHCPMsg)

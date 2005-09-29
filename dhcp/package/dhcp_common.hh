@@ -44,6 +44,8 @@ typedef enum _client_state
    extensions field). */
 #define DHCP_OPTIONS_COOKIE	"\143\202\123\143"
 
+#define BOOTMAGIC { 99, 130, 83, 99 }/* rfc1048 magic cookie */
+
 /* DHCP Option codes: */
 #define DHO_PAD				0
 #define DHO_SUBNET_MASK			1
@@ -126,23 +128,25 @@ typedef enum _client_state
 #define dhcp_hour 3600
 #define hdcp_minute 60
 
+#define DHCP_MAGIC 0x63538263
 typedef struct dhcpMessage
 {
-  uint8_t  op;		/* message type */
-  uint8_t  htype;	/* hardware address type */
-  uint8_t  hlen;		/* hardware address length */
-  uint8_t  hops;		/* should be zero in client's message */
-  uint32_t   xid;		/* transaction id */
-  uint16_t secs;		/* elapsed time in sec. from trying to boot */
+  uint8_t  op;	         /* message type */
+  uint8_t  htype;        /* hardware address type */
+  uint8_t  hlen;         /* hardware address length */
+  uint8_t  hops;         /* should be zero in client's message */
+  uint32_t xid;	         /* transaction id */
+  uint16_t secs;         /* elapsed time in sec. from trying to boot */
   uint16_t flags;
-  uint32_t   ciaddr;	/* (previously allocated) client IP address */
-  uint32_t	  yiaddr;	/* 'your' client IP address */
-  uint32_t	  siaddr;	/* should be zero in client's messages */
-  uint32_t	  giaddr;	/* should be zero in client's messages */
-  uint8_t  chaddr[16];	/* client's hardware address */
-  uint8_t  sname[64];	/* server host name, null terminated string */
-  uint8_t  file[128];	/* boot file name, null terminated string */
-  uint8_t  options[312];	/* message options */
+  uint32_t ciaddr;       /* (previously allocated) client IP address */
+  uint32_t yiaddr;       /* 'your' client IP address */
+  uint32_t siaddr;       /* should be zero in client's messages */
+  uint32_t giaddr;       /* should be zero in client's messages */
+  uint8_t  chaddr[16];	 /* client's hardware address */
+  uint8_t  sname[64];    /* server host name, null terminated string */
+  uint8_t  file[128];	 /* boot file name, null terminated string */
+  uint32_t magic;        /* magic cookie */
+  uint8_t  options[312]; /* message options */
 } __attribute__((packed)) dhcpMessage;
 
 #endif

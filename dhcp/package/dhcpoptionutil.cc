@@ -5,7 +5,7 @@ namespace DHCPOptionUtil {
 unsigned char* 
 getOption(unsigned char *options, int option_val, int *option_size)
 {
-  unsigned char *curr_ptr = options + 4; //skip the cookie
+  unsigned char *curr_ptr = options;
   while(curr_ptr[0] != DHO_END)
   {
     //click_chatter("curr_ptr[0] : %d | input: %d", curr_ptr[0], option_val);
@@ -20,36 +20,8 @@ getOption(unsigned char *options, int option_val, int *option_size)
   return NULL;
 }
 
-/*
-unsigned char* 
-getOption(unsigned char *options, int option_val, int *option_size)
-{
-  while(options[0] != 0xff) {
-    click_chatter("option_val : %d | curr: %d", option_val, options[0]);
-    if(options[0] == 0) {
-      options++;
-      continue;
-    }
-//    if(options[0] == 0xff)
-//      return NULL;
-    
-    if(options[0] == option_val)
-    {
-      *option_size = *(options + 1);
-      return options+2;
-    }
-    options++;
-  }
-  return NULL; 
-}
-*/
-
 inline void insertMagicCooke(unsigned char **options)
 {
-  //char magic_cookie[4];
-  //memcpy(magic_cookie, DHCP_OPTIONS_COOKIE, 4);
-  memcpy(*options, &DHCP_OPTIONS_COOKIE, 4);
-  *options += 4; 
 }
 
 String getNextArg(const String &s)
@@ -124,6 +96,43 @@ uint32_t rand_exp_backoff(uint32_t backoff_center)
 	return backoff_center;
     else
 	return backoff_center + 1;
+}
+
+
+#include <click/atomic.hh>
+Packet *
+push_dhcp_udp_header(Packet *p_in, IPAddress src) {
+	WritablePacket *p = p_in->push(sizeof(click_udp) + sizeof(click_ip));
+	click_ip *ip = reinterpret_cast<click_ip *>(p->data());
+	click_udp *udp = reinterpret_cast<click_udp *>(ip + 1);
+	
+	// set up IP header
+	ip->ip_v = 4;
+	ip->ip_hl = sizeof(click_ip) >> 2;
+	ip->ip_len = htons(p->length());
+	static atomic_uint32_t id = 0;
+	ip->ip_id = htons(id.read_and_add(1));
+	ip->ip_p = IP_PROTO_UDP;
+	ip->ip_src = src;
+	ip->ip_dst = IPAddress(~0);
+	ip->ip_tos = 0;
+	ip->ip_off = 0;
+	ip->ip_ttl = 250;
+	
+	ip->ip_sum = 0;
+	ip->ip_sum = click_in_cksum((unsigned char *)ip, sizeof(click_ip));
+	p->set_dst_ip_anno(IPAddress(~0));
+	p->set_ip_header(ip, sizeof(click_ip));
+	
+	// set up UDP header
+	udp->uh_sport = htons(67);
+	udp->uh_dport = htons(68);
+	uint16_t len = p->length() - sizeof(click_ip);
+	udp->uh_ulen = htons(len);
+	udp->uh_sum = 0;
+	unsigned csum = click_in_cksum((unsigned char *)udp, len);
+	udp->uh_sum = click_in_cksum_pseudohdr(csum, ip, len);
+	return p;
 }
 
 }

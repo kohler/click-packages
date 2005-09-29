@@ -37,11 +37,10 @@ public:
   ~DHCPClassifier();
   
   const char *class_name() const	{ return "DHCPClassifier"; }
-  const char *port_count() const	{ return PORTS_1_0; }
+  const char *port_count() const	{ return "1/-"; }
   const char *processing() const	{ return PUSH; }
   
   int configure(Vector<String> &, ErrorHandler *);
-  int initialize(ErrorHandler *);
   virtual void push(int port, Packet *p);
   
 private:

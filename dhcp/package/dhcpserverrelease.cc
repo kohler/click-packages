@@ -6,6 +6,7 @@
 
 #include <click/error.hh>
 #include <click/confparse.hh>
+#include <clicknet/ether.h>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
 
@@ -19,19 +20,17 @@ DHCPServerRelease::DHCPServerRelease()
 
 DHCPServerRelease::~DHCPServerRelease()
 {
-
 }
 
 int
 DHCPServerRelease::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if( cp_va_parse(conf, this, errh,
-		  cpElement, "server leases", &_serverLeases,
-		  cpEnd) < 0 )
-  {
-    return -1;
-  }
-  return 0;
+	if (cp_va_parse(conf, this, errh,
+			cpElement, "server leases", &_leases,
+			cpEnd) < 0 ) {
+		return -1;
+	}
+	return 0;
 }
 
 
@@ -42,30 +41,29 @@ DHCPServerRelease::initialize(ErrorHandler *)
 }
 
 void
-DHCPServerRelease::push(int port, Packet *p)
+DHCPServerRelease::push(int, Packet *p)
 {
-  dhcpMessage *release_msg 
-    = (dhcpMessage*)(p->data() + sizeof(click_udp) + sizeof(click_ip));
-  unsigned char *buf;
-  int optionFieldSize;
-  
-  buf =
-    DHCPOptionUtil::getOption(release_msg->options, DHO_DHCP_SERVER_IDENTIFIER, &optionFieldSize);
-  IPAddress incoming_server_id(buf);
-  IPAddress server_id = _serverLeases->get_server_ip_addr();
-  if(incoming_server_id != server_id)
-  {
-    click_chatter("[R] I am not the Server");
-    return;
-  }
-  
-  IPAddress ipAddr(release_msg->ciaddr);
-  EtherAddress ethAddr(release_msg->chaddr);
-  DHCPServerLeases::Lease *lease = _serverLeases->ip_lease_map_find(ipAddr);
-  _serverLeases->ip_lease_map_rm(ipAddr);
-  _serverLeases->eth_lease_map_rm(ethAddr);
-  delete lease;
-  p->kill();
+	dhcpMessage *release_msg 
+		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
+				 sizeof(click_udp) + sizeof(click_ip));
+	unsigned char *buf;
+	int optionFieldSize;
+	EtherAddress eth(release_msg->chaddr);
+	
+	buf = DHCPOptionUtil::getOption(release_msg->options, 
+					DHO_DHCP_SERVER_IDENTIFIER, 
+					&optionFieldSize);
+	IPAddress incoming_server_id(buf);
+	IPAddress server_id = _leases->_ip;
+	if (incoming_server_id != server_id) {
+		click_chatter("[R] I am not the Server");
+		goto done;
+	}
+	
+	_leases->remove(eth);
+
+ done:
+	p->kill();
 }
 
 EXPORT_ELEMENT(DHCPServerRelease)

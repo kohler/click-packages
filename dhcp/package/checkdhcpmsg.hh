@@ -6,7 +6,7 @@
 
 /*
  * =c
- * CheckDHCPMsg(request/reply)
+ * CheckDHCPMsg()
  * =s 
  * Checks to see if an incoming packet is, in fact, a valid DHCP Message.
  * 
@@ -19,12 +19,6 @@
  * If a packet is classified as valid, it will be pushed out on
  * outgoing port 0. Otherwise, discarded by default, if port 1 is not
  * connected to any elemenets.
- *
- *
- * =e CheckDHCPCookie(request) or
- *    
- *    CheckDHCPCookie(reply)
- *
  */
 
 class CheckDHCPMsg : public Element {
@@ -40,18 +34,6 @@ public:
   int configure(Vector<String> &conf, ErrorHandler *errh);
   
   Packet *simple_action(Packet *);
-  //int initialize(ErrorHandler *);
-  
-private:
-  enum CHECK_TYPE
-  {
-    CHECK_REQ = 0,
-    CHECK_REP
-  };
-  
-  Packet* drop(Packet *p);
-  CHECK_TYPE _checkType;
-  
 };
 
 #endif

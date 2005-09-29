@@ -3,7 +3,7 @@
 
 #include <click/element.hh>
 #include <click/timer.hh>
-#include "dhcpserverleases.hh"
+#include "leasetable.hh"
 
 class DHCPServerRelease : public Element
 {
@@ -21,7 +21,7 @@ public:
   virtual void push(int port, Packet *p);
   
 private:
-  DHCPServerLeases *_serverLeases;
+  class LeaseTable *_leases;
 };
 
 #endif
