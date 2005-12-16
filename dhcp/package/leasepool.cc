@@ -26,6 +26,7 @@
 #include <click/straccum.hh>
 #include "dhcpoptionutil.hh"
 #include "leasepool.hh"
+CLICK_DECLS
 
 LeasePool::LeasePool()
 {
@@ -135,4 +136,7 @@ LeasePool::add_handlers()
 EXPORT_ELEMENT(LeasePool)
 #include <click/dequeue.cc>
 #include <click/vector.cc>
+#if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<IPAddress>;
+#endif
+CLICK_ENDDECLS

@@ -4,6 +4,7 @@
 #include <click/element.hh>
 #include <click/timer.hh>
 #include "leasetable.hh"
+#include "dhcp_common.hh"
 
 /*
  * =c

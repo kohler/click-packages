@@ -27,6 +27,7 @@
 #include <click/crc32.h>
 #include "dhcpoptionutil.hh"
 #include "leasehash.hh"
+CLICK_DECLS
 
 LeaseHash::LeaseHash()
 {
@@ -117,4 +118,8 @@ LeaseHash::add_handlers()
 EXPORT_ELEMENT(LeaseHash)
 #include <click/dequeue.cc>
 #include <click/vector.cc>
+#if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<IPAddress>;
+#endif
+CLICK_ENDDECLS
+

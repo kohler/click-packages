@@ -110,7 +110,7 @@ push_dhcp_udp_header(Packet *p_in, IPAddress src) {
 	ip->ip_v = 4;
 	ip->ip_hl = sizeof(click_ip) >> 2;
 	ip->ip_len = htons(p->length());
-	static atomic_uint32_t id = 0;
+	static atomic_uint32_t id;
 	ip->ip_id = htons(id.read_and_add(1));
 	ip->ip_p = IP_PROTO_UDP;
 	ip->ip_src = src;
