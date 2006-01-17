@@ -351,7 +351,7 @@ MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
 bool
 MultiQ::significant_flow(const TCPCollector::Stream* stream, const TCPCollector::Conn* conn) const
 {
-    double duration = conn->duration().to_double();
+    double duration = conn->duration().doubleval();
     uint32_t data_packets = stream->total_packets - stream->ack_packets;
     return (data_packets >= 50
 	    && data_packets / duration >= 9.5
@@ -370,7 +370,7 @@ MultiQ::multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollecto
 	// collect interarrivals
 	Vector<double> interarrivals;
 	for (const TCPCollector::Pkt *k = stream->pkt_head->next; k; k = k->next)
-	    interarrivals.push_back((k->timestamp - k->prev->timestamp).to_double() * 1000000);
+	    interarrivals.push_back((k->timestamp - k->prev->timestamp).doubleval() * 1000000);
 
 	// run MultiQ
 	Vector<Capacity> capacities;
@@ -389,7 +389,7 @@ MultiQ::multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollecto
 Packet *
 MultiQ::simple_action(Packet *p)
 {
-    double time = p->timestamp_anno().to_double() * 1000000.;
+    double time = p->timestamp_anno().doubleval() * 1000000.;
     if (_thru_last == -2.)
 	_thru_interarrivals.push_back(time);
     else {

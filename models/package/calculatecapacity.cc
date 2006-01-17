@@ -96,8 +96,8 @@ static int compare(const void *a, const void *b){
     ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
     bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
     
-    iratea = ac->interval.to_double() / ((ac->size)*8.0);
-    irateb = bc->interval.to_double() / ((bc->size)*8.0);
+    iratea = ac->interval.doubleval() / ((ac->size)*8.0);
+    irateb = bc->interval.doubleval() / ((bc->size)*8.0);
 
     if(ac->interval < bc->interval) return -1;
     if(ac->interval == bc->interval) return -1;
@@ -146,7 +146,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	if(i->size < 500 && i->newack < 500){
 	    continue;
 	}
-	logs[n] = log(t->to_double());
+	logs[n] = log(t->doubleval());
 	n++;
 	//printf("%d %f\n", j - pkt_cnt + n, logs[j - pkt_cnt + n]);
     }
@@ -235,7 +235,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	for(uint32_t j = 0 ; j < pkt_cnt; j++){
 	    struct IntervalStream *i = intervals + j;
 	    Timestamp *t = &(i->interval);
-	    double ft = t->to_double();
+	    double ft = t->doubleval();
 	    if(cnt == 0 && ft < p->left)
 		continue;
 	    if(cnt > 0 && ft > p->right)
@@ -296,7 +296,7 @@ CalculateCapacity::StreamInfo::histogram()
 	valid[i] = 1;
 	
 	while(j < pkt_cnt &&
-	      intervals[j].interval.to_double() < curr){
+	      intervals[j].interval.doubleval() < curr){
 	    if(mss == intervals[j].size ||
 	       (intervals[j].size < 100 &&
 		intervals[j].newack > 500)){
@@ -400,7 +400,7 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 	databytes = intervals[i].size;
 	Timestamp start = intervals[i].time;
 	for(j=i+1 ; j<pkt_cnt ; j++){
-	    if((intervals[j].time - start).to_double() < time_windowsize){
+	    if((intervals[j].time - start).doubleval() < time_windowsize){
 		ackbytes += intervals[j].newack;
 		databytes += intervals[j].size;
 	    } else {
@@ -415,7 +415,7 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 	//printf("j-1: %d\n", j-i);
 	//must be larger than any single flight
 	double timetmp = j - i > 20 ?
-	    (intervals[j].time - start).to_double() : time_windowsize;
+	    (intervals[j].time - start).doubleval() : time_windowsize;
 	double tmp = ackbytes / timetmp;
 	if(tmp > ackrate){
 	    ackrate = tmp;

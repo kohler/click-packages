@@ -79,8 +79,8 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    // Assume we have a retransmission if np->ts >= x->ts + FAC * rtt.
 	    // FAC depends on how many packets have passed.
 	    if (!rexmit) {
-		double rtt = conn->rtt().to_double();
-		double factor = (np->timestamp - x->timestamp).to_double() / (rtt ? rtt : 0.1);
+		double rtt = conn->rtt().doubleval();
+		double factor = (np->timestamp - x->timestamp).doubleval() / (rtt ? rtt : 0.1);
 		if (sequence >= 3 ? factor >= 0.4 : factor >= 0.85) {
 		    for (rexmit = x; rexmit->next != np && SEQ_LEQ(rexmit->end_seq, np->seq); rexmit = rexmit->next)
 			/* nada */;

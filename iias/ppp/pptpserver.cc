@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.cc,v 1.4 2005/09/19 22:45:09 eddietwo Exp $
+ * $Id: pptpserver.cc,v 1.5 2006/01/17 07:35:37 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -142,7 +142,6 @@ PPTPServer::cleanup_connection(Connection *c)
   else {
     // delete acknowledgement timer
     if (c->ack_timer) {
-      c->ack_timer->cleanup();
       delete c->ack_timer;
       c->ack_timer = NULL;
     }
@@ -500,7 +499,7 @@ PPTPServer::handle_gre(Connection *c)
   else {
     output(c->input).push(p);
     // schedule acknowledgement
-    c->ack_timer->schedule_after_ms(50);
+    c->ack_timer->schedule_after_msec(50);
   }
 
   return c->next;

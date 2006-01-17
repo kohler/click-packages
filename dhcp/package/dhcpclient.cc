@@ -166,7 +166,7 @@ DHCPClient::push(int, Packet *p)
     
     if(!_select_timeout_timer.scheduled())
     {
-      _select_timeout_timer.schedule_after_s(_select_interval.sec());
+      _select_timeout_timer.schedule_after_sec(_select_interval.sec());
     }
     
     // enqueue it
@@ -322,7 +322,7 @@ DHCPClient::run_resend_request_timer()
   if(_curr_backoff > _backoff_cutoff.sec())
     _curr_backoff = _backoff_cutoff.sec();
   
-  _resend_request_timer.schedule_after_s(DHCPOptionUtil::rand_exp_backoff(_curr_backoff));
+  _resend_request_timer.schedule_after_sec(DHCPOptionUtil::rand_exp_backoff(_curr_backoff));
 }
 
 void
@@ -330,7 +330,7 @@ DHCPClient::run_timeout_timer()
 {
   click_chatter("no DISCOVER_OFFER received");
   //assert(0);
-  _timeout_timer.schedule_after_s(_timeout.sec());
+  _timeout_timer.schedule_after_sec(_timeout.sec());
   
   /*_curr_retries++;
   if(_curr_retries < _max_retries)
@@ -361,7 +361,7 @@ DHCPClient::run_resend_discover_timer()
 {
   click_chatter("sending DHCPDISCOVER");
   output(0).push(make_discovery());
-  _resend_discover_timer.schedule_after_s(6);
+  _resend_discover_timer.schedule_after_sec(6);
   
   if(_state == DHCP_CLIENT_INIT_STATE)
     enter_selecting_state();
@@ -672,7 +672,7 @@ DHCPClient::enter_init_state()
 {
   click_chatter("[c] Enter INIT STATE");
   _state = DHCP_CLIENT_INIT_STATE;
-  //_retry_discover_timer.schedule_after_s(15);
+  //_retry_discover_timer.schedule_after_sec(15);
   if(_renew_timer.scheduled())
     _renew_timer.unschedule();
   if(_rebind_timer.scheduled())
@@ -692,9 +692,9 @@ DHCPClient::enter_init_state()
   
   if(_timeout_timer.scheduled())
     _timeout_timer.unschedule();
-  _timeout_timer.schedule_after_s(_timeout.sec());
+  _timeout_timer.schedule_after_sec(_timeout.sec());
   
-  _resend_discover_timer.schedule_after_s(random() % 10);
+  _resend_discover_timer.schedule_after_sec(random() % 10);
 }
 
 void
@@ -706,7 +706,7 @@ DHCPClient::enter_init_reboot_state()
 
   Packet *q = make_request_with_ciaddr();
   output(0).push(q); // broadcast;
-  _lease_expired_timer.schedule_after_s(60); // 10 secs? 
+  _lease_expired_timer.schedule_after_sec(60); // 10 secs? 
   enter_rebooting_state();
 }
 
@@ -737,7 +737,7 @@ DHCPClient::enter_requesting_state()
 {
   _state = DHCP_CLIENT_REQUESTING_STATE;
   _curr_backoff = _initial_interval.sec();
-  _resend_request_timer.schedule_after_s(DHCPOptionUtil::rand_exp_backoff(_curr_backoff));
+  _resend_request_timer.schedule_after_sec(DHCPOptionUtil::rand_exp_backoff(_curr_backoff));
 }
 
 void 
@@ -750,7 +750,7 @@ DHCPClient::enter_renew_state()
   
   uint32_t next_timeout_sec = ( _t2_timestamp_sec - Timestamp::now().sec() ) / 2;
   if(next_timeout_sec > 60) 
-    _renew_timer.schedule_after_s(next_timeout_sec);
+    _renew_timer.schedule_after_sec(next_timeout_sec);
 }
 
 
@@ -762,7 +762,7 @@ DHCPClient::enter_rebind_state()
   
   uint32_t next_timeout_sec = ( _lease_expired_sec - Timestamp::now().sec() ) / 2;
   if(next_timeout_sec > 60)
-    _rebind_timer.schedule_after_s(next_timeout_sec);
+    _rebind_timer.schedule_after_sec(next_timeout_sec);
 }
 
 void 
@@ -880,15 +880,15 @@ DHCPClient::save_lease(Packet *p)
   
   if(_renew_timer.scheduled())
     _renew_timer.unschedule();
-  _renew_timer.schedule_after_s( _lease_duration/2 + random()%10 );
+  _renew_timer.schedule_after_sec( _lease_duration/2 + random()%10 );
   
   if(_rebind_timer.scheduled())
     _rebind_timer.unschedule();
-  _rebind_timer.schedule_after_s( (_lease_duration * 7 / 8) + random()%10 );
+  _rebind_timer.schedule_after_sec( (_lease_duration * 7 / 8) + random()%10 );
 
   if(_lease_expired_timer.scheduled())
     _lease_expired_timer.unschedule();
-  _lease_expired_timer.schedule_after_s( _lease_duration );
+  _lease_expired_timer.schedule_after_sec( _lease_duration );
 
   // TODO: save it to a file !! using DriverManager!!?
 }

@@ -147,7 +147,7 @@ TCPMystery::calculate_semirtt(Stream* s, Conn* c)
     for (Pkt* k = s->pkt_head; k; k = k->next) {
 	MyPkt* mk = mypkt(k);
 	if (mk->flags & MyPkt::F_TRUE_CAUSED_ACK) {
-	    double semirtt = (mk->caused_ack->timestamp - k->timestamp).to_double();
+	    double semirtt = (mk->caused_ack->timestamp - k->timestamp).doubleval();
 	    if (k == s->pkt_head)
 		ms->semirtt_syn = semirtt;
 	    ms->semirtt_min = std::min(ms->semirtt_min, semirtt);

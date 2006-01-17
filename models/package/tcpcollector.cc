@@ -689,7 +689,7 @@ TCPCollector::Stream::interarrival_xmltag(FILE* f, Stream* stream, Conn*, const 
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head->next; k; k = k->next) {
 	    Timestamp diff = k->timestamp - k->prev->timestamp;
-	    fprintf(f, "%.0f\n", diff.to_double() * 1e6);
+	    fprintf(f, "%.0f\n", diff.doubleval() * 1e6);
 	}
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }

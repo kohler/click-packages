@@ -46,7 +46,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pppcontrolprotocol.cc,v 1.2 2005/09/19 22:45:08 eddietwo Exp $
+ * $Id: pppcontrolprotocol.cc,v 1.3 2006/01/17 07:35:37 eddietwo Exp $
  */
 
 #include <click/config.h>
@@ -86,7 +86,6 @@ PPPControlProtocol::cleanup(CleanupStage)
 {
   if (timer) {
     timer->unschedule();
-    timer->cleanup();
     delete timer;
     timer = NULL;
   }
@@ -136,7 +135,7 @@ PPPControlProtocol::sconfreq(bool retransmit)
 
   // start the retransmit timer
   --retransmits;
-  timer->schedule_after_s(timeouttime);
+  timer->schedule_after_sec(timeouttime);
 
   if (_verbose)
     click_chatter("%s: sent Configuration Request %d", declaration().c_str(), reqid);
@@ -201,7 +200,7 @@ PPPControlProtocol::timeout(Timer *t, void *thunk)
     else {
       // retransmit
       pppcp->sdata(TERMREQ, pppcp->reqid = ++pppcp->id, NULL, 0);
-      t->schedule_after_s(pppcp->timeouttime);
+      t->schedule_after_sec(pppcp->timeouttime);
       --pppcp->retransmits;
     }
     break;
@@ -324,7 +323,7 @@ PPPControlProtocol::rtermreq(WritablePacket *p)
     // restart negotiation
     retransmits = 0;
     state = STOPPING;
-    timer->schedule_after_s(timeouttime);
+    timer->schedule_after_sec(timeouttime);
     break;
   }
 
