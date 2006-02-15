@@ -36,7 +36,7 @@ provides:
 COPYRIGHT AND LICENSE
 ---------------------
 
-    Copyright (c) 2001-2004 Eddie Kohler unless otherwise specified.
+    Copyright (c) 2001-2005 Eddie Kohler unless otherwise specified.
 Distributed under the Click license.
 
 AUTHORS
@@ -44,3 +44,5 @@ AUTHORS
 
     Eddie Kohler <kohler@cs.ucla.edu>
     Some elements by Jinyang Li <jinyang@csail.mit.edu>
+    MultiQ element based on code from Chuck Blake (Histogram), Dina Katabi, 
+    and Sachin Katti (MultiQ)
