@@ -13,7 +13,7 @@ class Histogram;
 
 MultiQ([I<keywords> TCPCOLLECTOR, RAW_TIMESTAMP, MIN_SCALE])
 
-=s
+=s ipmeasure
 
 calculates capacity information using EMG
 

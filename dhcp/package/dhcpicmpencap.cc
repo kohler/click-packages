@@ -63,7 +63,7 @@ DHCP_ICMP_Encap::simple_action(Packet *p)
   
   click_icmp_echo *icmp = (struct click_icmp_echo *) (ip + 1);
   
-  #if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
+#if HAVE_FAST_CHECKSUM && FAST_CHECKSUM_ALIGNED
   if (_aligned)
     ip->ip_sum = ip_fast_csum((unsigned char *)ip, sizeof(click_ip) >> 2);
   else

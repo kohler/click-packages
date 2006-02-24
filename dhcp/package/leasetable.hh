@@ -35,17 +35,16 @@ class Lease {
  * implement new_lease_any and new_lease. See leasepool.cc
  * for an example
  */
-class LeaseTable : public Element {
+class DHCPLeaseTable : public Element {
 public:
-  LeaseTable();  
-  ~LeaseTable();
-  const char* class_name() const { return "LeaseTable"; }
+  DHCPLeaseTable();  
+  ~DHCPLeaseTable();
+  const char* class_name() const { return "DHCPLeaseTable"; }
   void* cast(const char*);
   int configure( Vector<String> &conf, ErrorHandler *errh );
   virtual Lease *lookup(IPAddress ip);
   virtual Lease *rev_lookup(EtherAddress eth);
   
-  virtual void remove(IPAddress ip);
   virtual void remove(EtherAddress eth);
   virtual Lease *new_lease_any(EtherAddress) {
 	click_chatter("%{element}::%s: %s\n", this, __FILE__, __func__);

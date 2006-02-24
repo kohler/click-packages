@@ -27,16 +27,16 @@
 #include "dhcpoptionutil.hh"
 #include "leasetable.hh"
 
-LeaseTable::LeaseTable()
+DHCPLeaseTable::DHCPLeaseTable()
 {
 }
 
-LeaseTable::~LeaseTable()
+DHCPLeaseTable::~DHCPLeaseTable()
 {
 }
 
 int
-LeaseTable::configure( Vector<String> &conf, ErrorHandler *errh )
+DHCPLeaseTable::configure( Vector<String> &conf, ErrorHandler *errh )
 {
   if (cp_va_parse(conf, this, errh,
 		  cpEtherAddress, "eth addr", &_eth, 
@@ -49,47 +49,38 @@ LeaseTable::configure( Vector<String> &conf, ErrorHandler *errh )
 }
 
 void *
-LeaseTable::cast(const char *n)
+DHCPLeaseTable::cast(const char *n)
 {
-	if (strcmp(n, "LeaseTable") == 0)
-		return (Element *)this;
+	if (strcmp(n, "DHCPLeaseTable") == 0)
+		return (DHCPLeaseTable *)this;
 	return 0;
 }
 
 Lease *
-LeaseTable::rev_lookup(EtherAddress eth)
+DHCPLeaseTable::rev_lookup(EtherAddress eth)
 {
 	IPAddress *ip = _ips.findp(eth);
 	return ip ? _leases.findp(*ip) : 0;
 }
 
 Lease *
-LeaseTable::lookup(IPAddress ip)
+DHCPLeaseTable::lookup(IPAddress ip)
 {
 	return _leases.findp(ip);
 }
 
 void
-LeaseTable::remove(IPAddress ip) 
+DHCPLeaseTable::remove(EtherAddress eth) 
 {
-	Lease *l = lookup(ip);
-	EtherAddress eth = l->_eth;
+    if (Lease *l = rev_lookup(eth)) {
+	IPAddress ip = l->_ip;
 	_leases.remove(ip);
 	_ips.remove(eth);
+    }
 }
 
-void
-LeaseTable::remove(EtherAddress eth) 
-{
-	Lease *l = rev_lookup(eth);
-	if (l) {
-		IPAddress ip = l->_ip;
-		_leases.remove(ip);
-		_ips.remove(eth);
-	}
-}
 bool
-LeaseTable::insert(Lease l) {
+DHCPLeaseTable::insert(Lease l) {
 	IPAddress ip = l._ip;
 	EtherAddress eth = l._eth;
 	_ips.insert(eth, ip);
@@ -99,9 +90,9 @@ LeaseTable::insert(Lease l) {
 
 enum {H_LEASES};
 String
-LeaseTable::read_handler(Element *e, void *thunk)
+DHCPLeaseTable::read_handler(Element *e, void *thunk)
 {
-	LeaseTable *lt = (LeaseTable *)e;
+	DHCPLeaseTable *lt = (DHCPLeaseTable *)e;
 	switch ((uintptr_t) thunk) {
 	case H_LEASES: {
 		StringAccum sa;
@@ -120,10 +111,10 @@ LeaseTable::read_handler(Element *e, void *thunk)
 	}
 }
 void
-LeaseTable::add_handlers() 
+DHCPLeaseTable::add_handlers() 
 {
 	add_read_handler("leases", read_handler, (void *) H_LEASES);
 }
 
-EXPORT_ELEMENT(LeaseTable)
+EXPORT_ELEMENT(DHCPLeaseTable)
 

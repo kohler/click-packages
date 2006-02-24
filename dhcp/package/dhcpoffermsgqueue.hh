@@ -8,7 +8,7 @@
  * =c
  * DHCPOfferMsgQueue(read_handler)
  *
- * =s
+ * =s DHCP
  * Stores DHCPOffer packets in a queue ordered by the duration of the leases.
 
  * =d 

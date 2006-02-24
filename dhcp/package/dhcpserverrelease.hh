@@ -5,6 +5,13 @@
 #include <click/timer.hh>
 #include "leasetable.hh"
 
+/*
+ * =c 
+ * DHCPServerRelease(...)
+ * =s DHCP
+ * handles DHCP release address messages
+ */
+
 class DHCPServerRelease : public Element
 {
 public:
@@ -21,7 +28,7 @@ public:
   virtual void push(int port, Packet *p);
   
 private:
-  class LeaseTable *_leases;
+  DHCPLeaseTable *_leases;
 };
 
 #endif

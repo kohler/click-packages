@@ -8,7 +8,7 @@
  * =c
  * DHCPServerACKorNAK( DHCPServerLeases )
  *
- * =s 
+ * =s DHCP
  * 
  * Handles incoming DHCP_REQUEST. Sends out DHCP_ACK or DHCP_NAK
  * accordingly.
@@ -41,6 +41,6 @@ public:
   Packet *make_nak_packet(Packet *p, Lease *lease);
   
 private:
-  class LeaseTable *_leases;
+  DHCPLeaseTable *_leases;
 };
 #endif

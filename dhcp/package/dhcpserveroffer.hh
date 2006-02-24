@@ -10,7 +10,7 @@
  * =c
  * DHCPServerOffer( DHCPServerLeases )
  *
- * =s 
+ * =s DHCP
  *
  * Handles incoming DHCP_DISCOVER. Sends out DHCP_OFFER if appropriate.
  *
@@ -36,7 +36,7 @@
  * class[0]-> [0]serverOffer
  * 
  * serverOffer[0] -> .... //udp_encap->eth_encap->...->ToDevice
- * serverOffer[1] -> ....// icmpEncap -> DHCP_ICMP_ENncap ->...->ToDevice
+ * serverOffer[1] -> ....// icmpEncap -> DHCPICMPEncap ->...->ToDevice
  *
  * =a
  * DHCPServerLeases, DHCPServerACKorNACK, DHCPServerRelease
@@ -61,7 +61,7 @@ public:
   
 
 private:
-  LeaseTable *_leases;
+  DHCPLeaseTable *_leases;
 };
 
 #endif

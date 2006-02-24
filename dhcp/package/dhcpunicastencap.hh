@@ -9,7 +9,7 @@ class HandlerCall;
  * =c
  * DHCPUnicastEncap(src_ip_read_handler, dst_ip_read_handler)
  *
- * =s 
+ * =s DHCP
  * Changes the ip_src and ip_dst of an outgoing packet, according to
  * the read_handlers output.
  *

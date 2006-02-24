@@ -9,7 +9,7 @@
 
 IPAddrColorPaint(FILENAME [, I<KEYWORDS>])
 
-=s analysis
+=s ipmeasure
 
 Sets paint annotations based on destination IP address color.
 

@@ -13,7 +13,7 @@ CLICK_DECLS
 
 TCPMystery(TCPCOLLECTOR [, I<keywords> RTT, SEMIRTT, ACKCAUSATION])
 
-=s
+=s ipmeasure
 
 analyzes TCP flows
 

@@ -13,7 +13,7 @@ CLICK_DECLS
  * =c
  * DHCPClient( etheraddress )
  *
- * =s
+ * =s DHCP
  * The core of the DHCP Client. The state machine resides in this element.
  *
  * =d 

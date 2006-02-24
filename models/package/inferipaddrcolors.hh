@@ -9,7 +9,7 @@
 
 InferIPAddrColors([I<KEYWORDS>])
 
-=s analysis
+=s ipmeasure
 
 Infer a graph-coloring for IP addresses.
 

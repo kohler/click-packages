@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: pppencap.hh,v 1.4 2005/09/19 22:45:08 eddietwo Exp $
+ * $Id: pppencap.hh,v 1.5 2006/02/24 17:18:19 eddietwo Exp $
  */
 
 /*
@@ -23,7 +23,7 @@
 
 PPPEncap(PROTOCOL, I<KEYWORDS>)
 
-=s GRE, encapsulation
+=s PPP
 
 encapsulates packets in static PPP header
 

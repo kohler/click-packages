@@ -7,7 +7,7 @@
 /*
  * =c
  * CheckDHCPMsg()
- * =s 
+ * =s DHCP
  * Checks to see if an incoming packet is, in fact, a valid DHCP Message.
  * 
  * =d

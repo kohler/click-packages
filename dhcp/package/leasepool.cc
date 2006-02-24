@@ -39,17 +39,16 @@ LeasePool::~LeasePool()
 void *
 LeasePool::cast(const char *n) 
 {
-	if (strcmp(n, "LeasePool") == 0)
-		return (LeasePool *)this;
-	else if (strcmp(n, "LeaseTable") == 0) 
-		return (LeasePool *)this;
-	return 0;
+    if (strcmp(n, "DHCPLeasePool") == 0 || strcmp(n, "LeasePool") == 0)
+	return (LeasePool *) this;
+    else
+	return DHCPLeaseTable::cast(n);
 }
 
 Lease *
 LeasePool::new_lease_any(EtherAddress eth) 
 {
-	Lease *l = LeaseTable::rev_lookup(eth);
+	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
 		return l;
 	}
@@ -66,7 +65,7 @@ LeasePool::new_lease_any(EtherAddress eth)
 Lease *
 LeasePool::new_lease(EtherAddress eth, IPAddress ip) 
 {
-	Lease *l = LeaseTable::rev_lookup(eth);
+	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
 		return l;
 	}
@@ -82,26 +81,20 @@ LeasePool::new_lease(EtherAddress eth, IPAddress ip)
 	}
 	return 0;
 }
+
 bool
 LeasePool::insert(Lease l) {
 	_free.remove(l._ip);
-	return LeaseTable::insert(l);
+	return DHCPLeaseTable::insert(l);
 }
 
 void
 LeasePool::remove(EtherAddress eth) {
-	Lease *l = rev_lookup(eth);
-	if (l) {
+	if (Lease *l = rev_lookup(eth)) {
 		_free.insert(l->_ip, l->_ip);
 		_free_list.push_back(l->_ip);
 	}
-	return LeaseTable::remove(eth);	
-}
-
-void
-LeasePool::remove(IPAddress ip) {
-	Lease *l = lookup(ip);
-	remove(l->_eth);
+	return DHCPLeaseTable::remove(eth);	
 }
 
 int
@@ -127,13 +120,7 @@ LeasePool::configure( Vector<String> &conf, ErrorHandler *errh )
 }
 
 
-void 
-LeasePool::add_handlers()
-{
-	LeaseTable::add_handlers();
-}
-
-EXPORT_ELEMENT(LeasePool)
+EXPORT_ELEMENT(LeasePool LeasePool-LeasePool)
 #include <click/dequeue.cc>
 #include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES

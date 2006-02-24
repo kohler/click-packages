@@ -47,18 +47,17 @@ LeaseHash::hash(EtherAddress eth)
 void *
 LeaseHash::cast(const char *n) 
 {
-	if (strcmp(n, "LeaseHash") == 0)
-		return (LeaseHash *)this;
-	else if (strcmp(n, "LeaseTable") == 0) 
-		return (LeaseHash *)this;
-	return 0;
+    if (strcmp(n, "LeaseHash") == 0 || strcmp(n, "DHCPLeaseHash") == 0)
+	return (LeaseHash *) this;
+    else
+	return DHCPLeaseTable::cast(n);
 }
 
 Lease *
 LeaseHash::new_lease_any(EtherAddress eth) 
 {
 	IPAddress ip = hash(eth);
-	Lease *l = LeaseTable::rev_lookup(eth);
+	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
 		return l;
 	} else {
@@ -79,21 +78,6 @@ LeaseHash::new_lease(EtherAddress eth, IPAddress)
 	/* ignore the requested ip */
 	return new_lease_any(eth);
 }
-bool
-LeaseHash::insert(Lease l) {
-	return LeaseTable::insert(l);
-}
-
-void
-LeaseHash::remove(EtherAddress eth) {
-	return LeaseTable::remove(eth);	
-}
-
-void
-LeaseHash::remove(IPAddress ip) {
-	Lease *l = lookup(ip);
-	remove(l->_eth);
-}
 
 int
 LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
@@ -109,17 +93,10 @@ LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 }
 
 
-void 
-LeaseHash::add_handlers()
-{
-	LeaseTable::add_handlers();
-}
-
-EXPORT_ELEMENT(LeaseHash)
+EXPORT_ELEMENT(LeaseHash LeaseHash-LeaseHash)
 #include <click/dequeue.cc>
 #include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<IPAddress>;
 #endif
 CLICK_ENDDECLS
-

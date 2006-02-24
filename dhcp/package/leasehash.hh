@@ -13,35 +13,34 @@
 #include "leasetable.hh"
 /*
  * =c
- * LeaseHash( ServerIPAddress, SubnetMask )
+ * DHCPLeaseHash( ServerIPAddress, SubnetMask )
  *
- * =s 
+ * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of
  * free and allocated leases
  *
  * =d 
  * 
- * LeaseHash is responsible of keeping track of free,
+ * DHCPLeaseHash is responsible of keeping track of free,
  * reservered, and allocated leases. 
  *   
  * =e
- * LeaseHash(192.168.10.9, 192.168.10.0);
+ * DHCPLeaseHash(192.168.10.9, 192.168.10.0);
  *
  * =a
  * DHCPServerOffer, DHCPServerACKorNACK, DHCPServerRelease
  *
  */
 
-class LeaseHash : public LeaseTable
+class LeaseHash : public DHCPLeaseTable
 {
 public:
   LeaseHash();
   ~LeaseHash();
-  const char* class_name() const { return "LeaseHash"; }
+  const char* class_name() const { return "DHCPLeaseHash"; }
   const char* processing() const { return AGNOSTIC; }
   void* cast(const char*);
   int configure(Vector<String> &conf, ErrorHandler *errh);
-  void add_handlers();
 
   uint32_t get_default_duration();
   uint32_t get_max_duration();
@@ -58,12 +57,9 @@ public:
 
   String get_allocated_leases_string() const;
 
-  void remove(IPAddress ip);
-  void remove(EtherAddress eth);
   Lease *new_lease(EtherAddress, IPAddress);
   Lease *new_lease_any(EtherAddress);
   IPAddress get_server_ip();
-  bool insert(Lease);
   IPAddress hash(EtherAddress);
 private:
 

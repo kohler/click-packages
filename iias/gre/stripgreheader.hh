@@ -14,7 +14,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: stripgreheader.hh,v 1.3 2005/09/19 22:45:07 eddietwo Exp $
+ * $Id: stripgreheader.hh,v 1.4 2006/02/24 17:18:18 eddietwo Exp $
  */
 
 #ifndef CLICK_STRIPGREHEADER_HH
@@ -25,7 +25,7 @@ CLICK_DECLS
 /*
  * =c
  * StripGREHeader()
- * =s encapsulation, GRE
+ * =s GRE
  * strips outermost GRE header
  * =d
  * Removes the outermost GRE header from GRE packets.

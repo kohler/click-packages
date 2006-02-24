@@ -33,7 +33,7 @@ class[3] -> Print(OTHER) -> Discard;
 
 serverOffer[0]-> udp_encap -> eth_encap-> q;
 serverOffer[1]-> icmpEncap::ICMPPingEncap(192.168.10.10, 255.255.255.255) 
-	      -> DHCP_ICMP_Encap(serverOffer.dhcp_icmp_ping_src, serverOffer.dhcp_icmp_ping_dst)
+	      -> DHCPICMPEncap(serverOffer.dhcp_icmp_ping_src, serverOffer.dhcp_icmp_ping_dst)
               -> q; 
 
 

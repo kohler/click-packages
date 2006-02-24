@@ -9,7 +9,7 @@
 
 TestIPAddrColors(FILENAME, I<KEYWORDS>)
 
-=s analysis
+=s ipmeasure
 
 tests an IP address coloring
 

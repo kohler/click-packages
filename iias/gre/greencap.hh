@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: greencap.hh,v 1.4 2005/09/19 22:45:07 eddietwo Exp $
+ * $Id: greencap.hh,v 1.5 2006/02/24 17:18:18 eddietwo Exp $
  */
 
 #ifndef CLICK_GREENCAP_HH
@@ -31,7 +31,7 @@ CLICK_DECLS
 
 GREEncap(PROTOCOL, I<KEYWORDS>)
 
-=s GRE, encapsulation
+=s GRE
 
 encapsulates packets in static GRE header
 

@@ -19,7 +19,7 @@ class HandlerCall;
 
 TCPCollector([TRACEINFO, I<keywords> TRACEINFO, SOURCE, NOTIFIER, IP_ID, PACKET, FULLRCVWINDOW, WINDOWPROBE, INTERARRIVAL])
 
-=s
+=s ipmeasure
 
 collects information about TCP flows
 

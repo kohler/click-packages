@@ -24,7 +24,7 @@
  * with  Poptop; see the file COPYING.  If not, write to the Free Software
  * Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Id: pptpserver.hh,v 1.3 2005/09/19 22:45:09 eddietwo Exp $
+ * $Id: pptpserver.hh,v 1.4 2006/02/24 17:18:19 eddietwo Exp $
  */
 
 #ifndef CLICK_PPTPSERVER_HH
@@ -35,13 +35,13 @@
 CLICK_DECLS
 
 /*
-=title PPTPServer.u
+=title PPTPServer
 
 =c
 
 PPTPServer([I<KEYWORDS>])
 
-=s devices
+=s comm
 
 Handles PPTP-over-TCP connections.
 

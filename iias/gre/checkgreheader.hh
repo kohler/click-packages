@@ -15,7 +15,7 @@
  * notice is a summary of the Click LICENSE file; the license in that file is
  * legally binding.
  *
- * $Id: checkgreheader.hh,v 1.4 2005/09/19 22:45:07 eddietwo Exp $
+ * $Id: checkgreheader.hh,v 1.5 2006/02/24 17:18:18 eddietwo Exp $
  */
 
 #ifndef CLICK_CHECKGREHEADER_HH
@@ -29,9 +29,9 @@ CLICK_DECLS
 
 CheckGREHeader([I<keywords> OFFSET, CHECKSUM, KEY, SEQUENCE, VERBOSE, DETAILS])
 
-=s IP, checking
+=s GRE
 
-checks IP header
+checks GRE header
 
 =d
 

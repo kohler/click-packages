@@ -6,7 +6,7 @@ CLICK_DECLS
 /*
  * =c
  * FTPPortMapper6(TCPAddressTranslator)
- * =s TCP
+ * =s nat
  * Translates FTP control commands.
  * =d
  *

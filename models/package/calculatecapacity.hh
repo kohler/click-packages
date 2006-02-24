@@ -14,7 +14,7 @@ class ToIPSummaryDump;
 
 CalculateTCPLossEvents([TRACEINFO, I<keywords> TRACEINFO, TRACEINFO_FILEPOS, TRACEINFO_TRACEFILE, NOTIFIER, FLOWDUMPS, SUMMARYDUMP, IP_ID, ACK_MATCH])
 
-=s
+=s ipmeasure
 
 analyzes TCP flows for loss events
 

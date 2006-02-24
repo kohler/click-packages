@@ -8,7 +8,7 @@
 /*
  * =c 
  * DHCPClassifier([ discover | offer | request | deline | ack | nack | release | inform ], -)
- * =s
+ * =s DHCP
  * Classifies dhcp packets by DHCP_MESSAGE_TYPE
  *
  * =d 

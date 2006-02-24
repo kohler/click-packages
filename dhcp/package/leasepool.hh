@@ -13,9 +13,9 @@
 #include "leasetable.hh"
 /*
  * =c
- * LeasePool( ServerIPAddress, SubnetMask )
+ * DHCPLeasePool( ServerIPAddress, SubnetMask )
  *
- * =s 
+ * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of
  * free and allocated leases
  *
@@ -32,16 +32,15 @@
  *
  */
 
-class LeasePool : public LeaseTable
+class LeasePool : public DHCPLeaseTable
 {
 public:
   LeasePool();
   ~LeasePool();
-  const char* class_name() const { return "LeasePool"; }
+  const char* class_name() const { return "DHCPLeasePool"; }
   const char* processing() const { return AGNOSTIC; }
   void* cast(const char*);
   int configure( Vector<String> &conf, ErrorHandler *errh );
-  void add_handlers();
 
   uint32_t get_default_duration();
   uint32_t get_max_duration();
@@ -58,7 +57,6 @@ public:
 
   String get_allocated_leases_string() const;
 
-  void remove(IPAddress ip);
   void remove(EtherAddress eth);
   Lease *new_lease(EtherAddress, IPAddress);
   Lease *new_lease_any(EtherAddress);
