@@ -2901,7 +2901,7 @@ ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ex
 ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
     if test -n "$GXX"; then
-	GXX_VERSION=`$CXX --version | head -1 | sed 's/^[^0-9]*\([0-9.]*\).*/\1/'`
+	GXX_VERSION=`$CXX --version | head -n 1 | sed 's/^[^0-9]*\([0-9.]*\).*/\1/'`
 	GXX_MAJOR=`echo $GXX_VERSION | sed 's/\..*//'`
 	GXX_MINOR=`echo $GXX_VERSION | sed 's/^[^.]*\.\([^.]*\).*/\1/'`
 
@@ -3072,7 +3072,7 @@ _ACEOF
 
     ac_base_cxx="$CXX"
     test -z "$ac_user_cxx" -a -n "$GXX" -a -n "$ac_compile_with_warnings" && \
-	CXX="$CXX $CXX_WARNINGS -fno-exceptions -fno-rtti $VTABLE_THUNKS"
+	CXX="$CXX $CXX_WARNINGS $VTABLE_THUNKS"
 
     CXXFLAGS_NDEBUG=`echo "$CXXFLAGS" | sed 's/-g//'`
 
@@ -3593,7 +3593,7 @@ echo "${ECHO_T}no" >&6
 echo $ECHO_N "checking for working autoconf... $ECHO_C" >&6
     AUTOCONF="${AUTOCONF-autoconf}"
     if ($AUTOCONF --version) < /dev/null > conftest.out 2>&1; then
-	if test `head -1 conftest.out | sed 's/.*2\.\([0-9]*\).*/\1/'` -ge 13 2>/dev/null; then
+	if test `head -n 1 conftest.out | sed 's/.*2\.\([0-9]*\).*/\1/'` -ge 13 2>/dev/null; then
 	    echo "$as_me:$LINENO: result: found" >&5
 echo "${ECHO_T}found" >&6
 	else
