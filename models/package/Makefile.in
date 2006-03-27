@@ -24,12 +24,11 @@ MAKE_BPACKAGE = 0
 
 # Set 'STRIP_UPACKAGE' to 'strip -g' to strip debugging symbols from the
 # userlevel package before installing.
-STRIP_UPACKAGE = true
 #STRIP_UPACKAGE = $(STRIP) -g
 
 # Set these variables as required.
-DEFS = $(CLICKDEFS) @DEFS@
-INCLUDES = $(CLICKINCLUDES) -I. -I$(top_builddir) -I$(srcdir)
+DEFS = @DEFS@ $(CLICKDEFS)
+INCLUDES = -I. -I$(top_builddir) -I$(srcdir) $(CLICKINCLUDES)
 
 # Set this variable to force 'click-elem2package' to include a header,
 # such as your package's '<config.h>', if necessary.
