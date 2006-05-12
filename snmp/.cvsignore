@@ -1,0 +1,6 @@
+Makefile autom4te* *.d *.kd *.ud *.ko *.uo
+config.log config.status config.h
+kelements.conf uelements.conf
+kelements.mk uelements.mk
+kpackage.cc upackage.cc
+elementmap-snmp.xml
