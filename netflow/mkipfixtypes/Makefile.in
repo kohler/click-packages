@@ -1,0 +1,37 @@
+#
+# Build ipfixtypes.hh from the IPFIX specification and schema
+#
+# Copyright (c) 2006 Mazu Networks, Inc.
+#
+# $Id: Makefile.in,v 1.1 2006/05/12 16:43:43 eddietwo Exp $
+#
+
+SHELL = @SHELL@
+PYTHON = python
+
+top_srcdir = @top_srcdir@
+srcdir = @srcdir@
+top_builddir = ..
+subdir = mkipfixtypes
+
+all: $(top_srcdir)/ipfixtypes.hh
+all-local: all
+
+IPFIXTYPES_XML = $(wildcard $(srcdir)/*.xml)
+$(top_srcdir)/ipfixtypes.hh: $(srcdir)/ipfixtypes.py $(IPFIXTYPES_XML) always
+	$(PYTHON) $(srcdir)/ipfixtypes.py $(IPFIXTYPES_XML) > $@
+
+install: all-local
+install-local: all-local
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) \
+	  && CONFIG_FILES=$(subdir)/$@ CONFIG_ELEMLISTS=no CONFIG_HEADERS= $(SHELL) ./config.status
+
+clean:
+distclean:
+uninstall:
+always:
+	@:
+
+.PHONY: all all-local clean distclean install install-local uninstall always

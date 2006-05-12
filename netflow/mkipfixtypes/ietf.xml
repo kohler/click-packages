@@ -1,0 +1,2577 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Formal Specification of IPFIX Information Element
+http://www.ietf.org/internet-drafts/draft-ietf-ipfix-info-11.txt
+-->
+
+<fieldDefinitions>
+
+  <field name="ipVersion" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="60" applicability="all" status="current">
+    <description>
+      The IP version field in the IP packet header.
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for a definition of the version field in the
+      IPv4 packet header.
+      See RFC 2460 for a definition of the version field in the
+      IPv6 packet header.
+      Additional information on defined version numbers
+      can be found at
+      http://www.iana.org/assignments/version-numbers.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="sourceIPv4Address" dataType="ipv4Address"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="8" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv4 source address in the IP packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 source address
+      field.
+    </reference>
+  </field>
+
+  <field name="sourceIPv6Address" dataType="ipv6Address"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="27" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv6 source address in the IP packet header.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="sourceIPv4Mask" dataType="octet"
+         group="IpHeader"
+         fieldId="9" applicability="option" status="current">
+    <description>
+      <paragraph>
+      The number of contiguous bits that are relevant in the
+      sourceIPv4Prefix Information Element.
+      </paragraph>
+    </description>
+    <units>bits</units>
+    <range>0-32</range>
+  </field>
+
+  <field name="sourceIPv6Mask" dataType="octet"
+         group="IpHeader"
+         fieldId="29" applicability="option" status="current">
+    <description>
+      <paragraph>
+      The number of contiguous bits that are relevant in the
+      sourceIPv6Prefix Information Element.
+      </paragraph>
+    </description>
+    <units>bits</units>
+    <range>0-128</range>
+  </field>
+
+  <field name="sourceIPv4Prefix" dataType="ipv4Address"
+         group="IpHeader"
+         fieldId="44" applicability="data" status="current">
+    <description>
+      <paragraph>
+      IPv4 source address prefix.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="sourceIPv6Prefix" dataType="ipv6Address"
+         group="IpHeader"
+         fieldId="170" applicability="data" status="current">
+    <description>
+      <paragraph>
+      IPv6 source address prefix.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="destinationIPv4Address" dataType="ipv4Address"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="12" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv4 destination address in the IP packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 destination address
+      field.
+    </reference>
+  </field>
+
+  <field name="destinationIPv6Address" dataType="ipv6Address"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="28" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv6 destination address in the IP packet header.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="destinationIPv4Mask" dataType="octet"
+         group="IpHeader"
+         fieldId="13" applicability="option" status="current">
+    <description>
+      <paragraph>
+      The number of contiguous bits that are relevant in the
+      destinationIPv4Prefix Information Element.
+      </paragraph>
+    </description>
+    <units>bits</units>
+    <range>0-32</range>
+  </field>
+
+  <field name="destinationIPv6Mask" dataType="octet"
+         group="IpHeader"
+         fieldId="30" applicability="option" status="current">
+    <description>
+      <paragraph>
+      The number of contiguous bits that are relevant in the
+      destinationIPv6Prefix Information Element.
+      </paragraph>
+    </description>
+    <units>bits</units>
+    <range>0-128</range>
+  </field>
+
+  <field name="destinationIPv4Prefix" dataType="ipv4Address"
+         group="IpHeader"
+         fieldId="45" applicability="data" status="current">
+    <description>
+      <paragraph> IPv4 destination address prefix. </paragraph>
+    </description>
+  </field>
+
+  <field name="destinationIPv6Prefix" dataType="ipv6Address"
+         group="IpHeader"
+         fieldId="169" applicability="data" status="current">
+    <description>
+      <paragraph> IPv6 destination address prefix. </paragraph>
+    </description>
+  </field>
+
+  <field name="ipTimeToLive" dataType="octet"
+         group="IpHeader"
+         fieldId="192" applicability="all" status="current">
+    <description>
+      <paragraph>
+      For IPv4, the value of the Information Element matches
+      the value of the Time to Live field in the IPv4 packet
+      header.  For IPv6, the value of the Information Element
+      matches the value of the Hop Limit field in the IPv6
+      packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 Time to Live
+      field.
+      See RFC 2460 for the definition of the IPv6 Hop Limit
+      field.
+    </reference>
+    <units>hops</units>
+  </field>
+
+  <field name="protocolIdentifier" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="4" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the protocol number in the IP packet header.
+      The protocol number identifies the IP packet payload type.
+      Protocol numbers are defined in the IANA Protocol Numbers
+      registry.</paragraph>
+
+      <paragraph>
+      In Internet Protocol version 4 (IPv4) this is carried in the
+      "Protocol" field. In Internet Protocol version 6 (IPv6) this
+      is carried in the "Next Header" field in the last extension
+      header of the packet.</paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 protocol field.
+      See RFC 2460 for the specification of the IPv6 protocol field.
+      See the list of protocol numbers assigned by IANA at
+      http://www.iana.org/assignments/protocol-numbers.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="nextHeaderIPv6" dataType="octet"
+         group="IpHeader"
+         fieldId="193" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the Next Header field of the IPv6 header.
+      The value identifies the type of the following IPv6
+      extension header or of the following IP payload.
+      Valid values are defined in the IANA
+      Protocol Numbers registry.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2460 for the definition of the IPv6 Next Header field.
+      See the list of protocol numbers assigned by IANA at
+      http://www.iana.org/assignments/protocol-numbers.
+    </reference>
+  </field>
+
+  <field name="ipClassOfService" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="194" applicability="all" status="current">
+    <description>
+      <paragraph>
+      For IPv4 packets, this is the value of the TOS field in
+      the IPv4 packet header. For IPv6 packets, this is the
+      value of the Traffic Class field in the IPv6 packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See section 5.3.2 of RFC 1812 and RFC 791 for the
+      definition of the IPv4 TOS field.
+      See RFC 2460 for the definition of the IPv6 Traffic Class
+      field.
+    </reference>
+  </field>
+
+  <field name="ipDiffServCodePoint" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="195" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of a Differentiated Services Code Point (DSCP)
+      encoded in the Differentiated Services Field. The
+      Differentiated Services Field spans the most significant
+      6 bits of the IPv4 TOS field or the IPv6 Traffic class
+      field, respectively.
+      </paragraph>
+      <paragraph>
+      This Information Element encodes only the 6 bits of the
+      Differentiated Services field. Therefore its value may
+      range from 0 to 63.
+      </paragraph>
+    </description>
+    <range>0-63</range>
+    <reference>
+      See RFC 3260 for the definition of the Differentiated
+      Services Field.
+      See section 5.3.2 of RFC 1812 and RFC 791 for the
+      definition of the IPv4 TOS field.
+      See RFC 2460 for the definition of the IPv6 Traffic Class
+      field.
+    </reference>
+  </field>
+
+  <field name="ipPrecedence" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="196" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the IP Precedence.  The IP Precedence value
+      is encoded in the first 3 bits of the IPv4 TOS field
+      or the IPv6 Traffic class field, respectively.
+      </paragraph>
+      <paragraph>
+      This Information Element encodes only the 3 bits of the
+      Differentiated Services field. Therefore its value may
+      range from 0 to 7.
+      </paragraph>
+    </description>
+    <range>0-7</range>
+    <reference>
+      See section 5.3.3 of RFC 1812 and RFC 791 for the
+      definition of the IP Precedence.
+      See section 5.3.2 of RFC 1812 and RFC 791 for the
+      definition of the IPv4 TOS field.
+      See RFC 2460 for the definition of the IPv6 Traffic Class
+      field.
+    </reference>
+  </field>
+
+  <field name="classOfServiceIPv4" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="5" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the TOS field in the IPv4 packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 TOS field.
+    </reference>
+  </field>
+
+  <field name="postClassOfServiceIPv4" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="55" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'classOfServiceIPv4', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 TOS field.
+      See RFC 3234 for the definition of middleboxes.
+    </reference>
+  </field>
+
+  <field name="classOfServiceIPv6" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="137" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The value of the Traffic Class field in the
+      IPv6 packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2460 for the definition of the IPv6 Traffic Class
+      field.
+    </reference>
+  </field>
+
+  <field name="postClassOfServiceIPv6" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="138" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'classOfServiceIPv6', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2460 for the definition of the IPv6 traffic class
+      field.
+    </reference>
+  </field>
+
+  <field name="flowLabelIPv6" dataType="unsigned32"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="31" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the IPv6 Flow Label field in the IP packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2460 for a definition of the flow label field in the
+      IPv6 packet header.
+    </reference>
+  </field>
+
+  <field name="isMulticast" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="flags"
+         fieldId="206" applicability="data" status="current">
+    <description>
+      <paragraph>
+        If the IP destination address is a reserved multicast
+        address then the value of this Information Element is
+        not equal to zero.  Otherwise, the value of all bits
+        of the octet is zero.
+      </paragraph>
+      <paragraph>
+        The first bit of this octet is set to 1 if the Version
+        field of the IP header has the value 4 and if the
+        Destination Address field contains a reserved multicast
+        address in the range from 224.0.0.0 to 239.255.255.255.
+        Otherwise, this bit is set to 0.
+      </paragraph>
+      <paragraph>
+        The second and third bit of this octet are reserved for
+        future use.
+      </paragraph>
+      <paragraph>
+        The remaining bits of the octet are only set to values
+        other than zero if th IP Destination Address is a
+        reserved IPv6 multicast address. Then the fourth bit
+        of the octet is set to the value of the T flag in the
+        IPv6 multicast address and the remaining four bits are
+        set to the value of the scope field in the IPv6
+        multicast address.
+      </paragraph>
+      <artwork>
+          0      1      2      3      4      5      6      7
+       +------+------+------+------+------+------+------+------+
+       | MCv4 | RES. | RES. |  T   |   IPv6 multicast scope    |
+       +------+------+------+------+------+------+------+------+
+
+       Bit 0:    set to 1 if IPv4 multicast
+       Bit 1-2:  reserved for future use
+       Bit 4:    set to value of T-flag, if IPv6 multicast
+       Bit 4-7:  set to value of multicast scope if IPv6 multicast
+      </artwork>
+    </description>
+    <reference>
+      See RFC 1112 for the specification of reserved IPv4 multicast
+      addresses.
+      See RFC 3513 for the specification of reserved IPv6 multicast
+      addresses and the definition of the T-flag and the IPv6
+      multicast scope.
+    </reference>
+  </field>
+
+  <field name="identificationIPv4" dataType="unsigned16"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="54" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The value of the IPv4 packet identification field
+      in the IP packet header.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 791 for the definition of the IPv4 identification
+      field.
+    </reference>
+  </field>
+
+    <field name="fragmentOffsetIPv4" dataType="unsigned16"
+         group="IpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="88" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the IPv4 fragment offset field
+      in the IP packet header.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 fragment offset.
+      </paragraph>
+    </reference>
+  </field>
+
+    <field name="fragmentFlagsIPv4" dataType="octet"
+         group="IpHeader"
+         dataTypeSemantics="flags"
+         fieldId="197" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the fragmentation bits
+      in the IPv4 packet header.
+      </paragraph>
+      <artwork>
+      Bit 0:    reserved, must be zero.
+      Bit 1:    (DF) 0 = May Fragment,  1 = Don't Fragment.
+      Bit 2:    (MF) 0 = Last Fragment, 1 = More Fragments.
+      Bits 3-7: (DC) Don't Care, value is irrelevant.
+
+          0   1   2   3   4   5   6   7
+        +---+---+---+---+---+---+---+---+
+        |   | D | M | D | D | D | D | D |
+        | 0 | F | F | C | C | C | C | C |
+        +---+---+---+---+---+---+---+---+
+      </artwork>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 fragment flags.
+      </paragraph>
+    </reference>
+  </field>
+
+    <field name="ipHeaderLength" dataType="octet"
+         group="IpHeader"
+         fieldId="189" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The length of the IP header.  For IPv6, the value of this
+      Information Element is 40.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 header.
+      See RFC 2460 for the specification of the IPv6 header.
+      </paragraph>
+    </reference>
+    <units>octets</units>
+  </field>
+
+    <field name="headerLengthIPv4" dataType="octet"
+         group="IpHeader"
+         fieldId="213" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The length of the IPv4 header.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 header.
+      </paragraph>
+    </reference>
+    <units>octets</units>
+  </field>
+
+    <field name="internetHeaderLengthIPv4" dataType="octet"
+         group="IpHeader"
+         fieldId="207" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The value of the Internet Header Length (IHL) field in
+      the IPv4 header. It specifies the length of the header
+      in units of 4 octets.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 header.
+      </paragraph>
+    </reference>
+    <units>4 octets</units>
+  </field>
+
+    <field name="totalLengthIPv4" dataType="unsigned16"
+         group="IpHeader"
+         fieldId="190" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The total length of the IPv4 packet.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of the IPv4 total length.
+      </paragraph>
+    </reference>
+    <units>octets</units>
+  </field>
+
+    <field name="payloadLengthIPv6" dataType="unsigned32"
+         group="IpHeader"
+         fieldId="191" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The length of the IPv6 payload, i.e., the rest of the
+      packet following the IPv6 header, in octets.  Note that any
+      extension headers present are considered part
+      of the payload, i.e., included in the length count.
+      </paragraph>
+      <paragraph>
+      This Information Element reports the value of the Payload
+      Length field in the IPv6 header except in the case that
+      the value of this field is zero and that there is a valid
+      jumbo payload option. Then the value of the Jumbo Payload
+      Length field in the jumbo payload option is reported.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 2460 for the specification of the IPv6 payload length.
+      See RFC 2675 for the specification of the IPv6 jumbo payload
+      length.
+      </paragraph>
+    </reference>
+  </field>
+
+    <field name="ipPayloadLength" dataType="unsigned64"
+         group="IpHeader"
+         fieldId="204" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The effective length of the IP payload.
+      </paragraph>
+      <paragraph>
+      For IPv4 packets the value of this Information Element is
+      the difference between the total length of the IPv4 packet
+      (as reported by Information Element totalLengthIPv4) and the
+      length of the IPv4 header (as reported by Information Element
+      headerLengthIPv4).
+      </paragraph>
+      <paragraph>
+      For IPv6, the value of the Payload Length field
+      in the IPv6 header is reported except in the case that
+      the value of this field is zero and that there is a valid
+      jumbo payload option. In this case the value of the
+      Jumbo Payload Length field in the jumbo payload option
+      is reported.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 791 for the specification of IPv4 packets.
+      See RFC 2460 for the specification of the IPv6 payload length.
+      See RFC 2675 for the specification of the IPv6 jumbo payload
+      length.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="sourceTransportPort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="7" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The source port identifier in the transport header.
+      For the transport
+      protocols UDP, TCP and SCTP this is the source port number
+      given in the respective header.  This field MAY also be used
+      for future transport protocols that have 16 bit source port
+      identifiers.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 768 for the definition of the UDP source port field.
+      See RFC 793 for the definition of the TCP source port field.
+      See RFC 2960 for the definition of SCTP.</paragraph>
+      <paragraph>
+      Additional information on defined UDP and TCP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="destinationTransportPort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="11" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The destination port identifier in the transport header.
+      For the transport protocols UDP, TCP and SCTP this is the
+      destination port number given in the respective header.
+      This field MAY also be used for future transport protocols
+      that have 16 bit destination port identifiers.
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+      See RFC 768 for the definition of the UDP source port field.
+      See RFC 793 for the definition of the TCP source port field.
+      See RFC 2960 for the definition of SCTP.  </paragraph>
+
+      <paragraph>
+      Additional information on defined UDP and TCP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="udpSourcePort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="180" applicability="all" status="current">
+    <description>
+      The source port identifier in the UDP header.
+    </description>
+    <reference>
+      See RFC 768 for the definition of the UDP source port field.
+      Additional information on defined UDP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+    </reference>
+  </field>
+
+  <field name="udpDestinationPort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="181" applicability="all" status="current">
+    <description>
+      The destination port identifier in the UDP header.
+    </description>
+    <reference>
+      See RFC 768 for the definition of the UDP source port field.
+      Additional information on defined UDP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+    </reference>
+  </field>
+
+  <field name="udpMessageLength" dataType="unsigned16"
+         group="transportHeader"
+         fieldId="205" applicability="all" status="current">
+    <description>
+      The value of the Length field in the UDP header.
+    </description>
+    <reference>
+      See RFC 768 for the specification of the UDP header.
+    </reference>
+    <units>octets</units>
+  </field>
+
+  <field name="tcpSourcePort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="182" applicability="all" status="current">
+    <description>
+      The source port identifier in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP source port field.
+      Additional information on defined TCP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+    </reference>
+  </field>
+
+  <field name="tcpDestinationPort" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="183" applicability="all" status="current">
+    <description>
+      The destination port identifier in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP source port field.
+      Additional information on defined TCP port numbers can
+      be found at http://www.iana.org/assignments/port-numbers.
+    </reference>
+  </field>
+
+  <field name="tcpSequenceNumber" dataType="unsigned32"
+         group="transportHeader"
+         fieldId="184" applicability="all" status="current">
+    <description>
+      The sequence number in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP sequence number.
+    </reference>
+  </field>
+
+  <field name="tcpAcknowledgementNumber" dataType="unsigned32"
+         group="transportHeader"
+         fieldId="185" applicability="all" status="current">
+    <description>
+      The acknowledgement number in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP acknowledgement
+      number.
+    </reference>
+  </field>
+
+  <field name="tcpWindowSize" dataType="unsigned16"
+         group="transportHeader"
+         fieldId="186" applicability="all" status="current">
+    <description>
+      The window field in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP window field.
+    </reference>
+  </field>
+
+  <field name="tcpUrgentPointer" dataType="unsigned16"
+         group="transportHeader"
+         fieldId="187" applicability="all" status="current">
+    <description>
+      The urgent pointer in the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP urgent pointer.
+    </reference>
+  </field>
+
+  <field name="tcpHeaderLength" dataType="unsigned16"
+         group="transportHeader"
+         fieldId="188" applicability="all" status="current">
+    <description>
+      The length of the TCP header.
+    </description>
+    <reference>
+      See RFC 793 for the definition of the TCP header.
+    </reference>
+    <units>octets</units>
+  </field>
+
+  <field name="icmpTypeCodeIPv4" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="32" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Type and Code of the IPv4 ICMP message. The combination of
+      both values is reported as (ICMP type * 256) + ICMP code.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 792 for a definition of the IPv4 ICMP type and code
+      fields.
+    </reference>
+  </field>
+
+  <field name="icmpTypeIPv4" dataType="octet"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="176" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Type of the IPv4 ICMP message.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 792 for a definition of the IPv4 ICMP type field.
+    </reference>
+  </field>
+
+  <field name="icmpCodeIPv4" dataType="octet"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="177" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Code of the IPv4 ICMP message.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 792 for a definition of the IPv4 ICMP code field.
+    </reference>
+  </field>
+
+  <field name="icmpTypeCodeIPv6" dataType="unsigned16"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="139" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Type and Code of the IPv6 ICMP message. The combination of
+      both values is reported as (ICMP type * 256) + ICMP code.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2463 for a definition of the IPv6 ICMP type and code
+      fields.
+    </reference>
+  </field>
+
+  <field name="icmpTypeIPv6" dataType="octet"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="178" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Type of the IPv6 ICMP message.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2463 for a definition of the IPv6 ICMP type field.
+    </reference>
+  </field>
+
+  <field name="icmpCodeIPv6" dataType="octet"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="179" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Code of the IPv6 ICMP message.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2463 for a definition of the IPv6 ICMP code field.
+    </reference>
+  </field>
+
+  <field name="igmpType" dataType="octet"
+         group="transportHeader"
+         dataTypeSemantics="identifier"
+         fieldId="33" applicability="all" status="current">
+    <description>
+      The type field of the IGMP message.
+    </description>
+    <reference>
+      See RFC 2236 for a definition of the IGMP type field.
+    </reference>
+  </field>
+
+  <field name="sourceMacAddress" dataType="macAddress"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="56" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The IEEE 802 source MAC address field.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-3.2002.
+    </reference>
+  </field>
+
+  <field name="postSourceMacAddress" dataType="macAddress"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="81" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'sourceMacAddress', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-3.2002.
+    </reference>
+  </field>
+
+  <field name="vlanId" dataType="unsigned16"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="58" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The IEEE 802.1Q VLAN identifier (VID) extracted from the Tag
+        Control Information field that was attached to the IP packet.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-1Q.2003.
+    </reference>
+  </field>
+
+  <field name="postVlanId" dataType="unsigned16"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="59" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'vlanId', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-1Q.2003.
+    </reference>
+  </field>
+
+  <field name="destinationMacAddress" dataType="macAddress"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="80" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The IEEE 802 destination MAC address field.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-3.2002.
+    </reference>
+  </field>
+
+  <field name="postDestinationMacAddr" dataType="macAddress"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="57" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'destinationMacAddress', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-3.2002.
+    </reference>
+  </field>
+
+  <field name="wlanChannelId" dataType="octet"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="146" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The identifier of the 802.11 (Wi-Fi) channel used.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-11.1999.
+    </reference>
+  </field>
+
+  <field name="wlanSsid" dataType="string"
+         group="subIpHeader"
+         fieldId="147" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The Service Set IDentifier (SSID) identifying an 802.11
+        (Wi-Fi) network used.  According to IEEE.802-11.1999 the
+        SSID is encoded into a string of up to 32 characters.
+      </paragraph>
+    </description>
+    <reference>
+      See IEEE.802-11.1999.
+    </reference>
+  </field>
+
+  <field name="mplsTopLabelTtl" dataType="unsigned32"
+         group="subIpHeader"
+         fieldId="200" applicability="all" status="current">
+    <description>
+      The TTL field from the top MPLS label stack entry,
+      i.e. the last label that was pushed.
+    </description>
+    <reference>
+      See RFC 3032 for the specification of the TTL field.
+    </reference>
+  </field>
+
+  <field name="mplsTopLabelExp" dataType="octet"
+         group="subIpHeader"
+         dataTypeSemantics="flags"
+         fieldId="203" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The Exp field from the top MPLS label stack entry,
+      i.e. the last label that was pushed.
+      </paragraph>
+      <artwork>
+      Bit 0-4:  Don't Care, value is irrelevant.
+      Bit 5-7:  MPLS Exp field
+
+          0   1   2   3   4   5   6   7
+        +---+---+---+---+---+---+---+---+
+        |     don't care    |    Exp    |
+        +---+---+---+---+---+---+---+---+
+      </artwork>
+    </description>
+    <reference>
+      See RFC 3032 for the specification of the Exp field.
+      See RFC 3270 for usage of the Exp field.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackDepth" dataType="unsigned32"
+         group="subIpHeader"
+         fieldId="202" applicability="all" status="current">
+    <description>
+      The number of labels in the MPLS label stack.
+    </description>
+    <reference>
+      See RFC 3032 for the specification of the MPLS label
+      stack.
+    </reference>
+    <units>label stack entries</units>
+  </field>
+
+  <field name="mplsLabelStackLength" dataType="unsigned32"
+         group="subIpHeader"
+         fieldId="201" applicability="all" status="current">
+    <description>
+      The length of the MPLS label stack in units of octets.
+    </description>
+    <reference>
+      See RFC 3032 for the specification of the MPLS label
+      stack.
+    </reference>
+    <units>octets</units>
+  </field>
+
+  <field name="mplsPayloadLength" dataType="unsigned32"
+         group="subIpHeader"
+         fieldId="214" applicability="all" status="current">
+    <description>
+      The size of the MPLS packet without the label stack.
+    </description>
+    <reference>
+      See RFC 3031 for the specification of MPLS packets.
+      See RFC 3032 for the specification of the MPLS label
+      stack.
+    </reference>
+    <units>octets</units>
+  </field>
+
+  <field name="mplsTopLabelStackEntry" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="70" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp and s fields from the top MPLS label
+      stack entry, i.e. the last label that was pushed.
+      </paragraph>
+      <artwork>
+    0                   1                   2
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                Label                  | Exp |S|
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Label:  Label Value, 20 bits
+   Exp:    Experimental Use, 3 bits
+   S:      Bottom of Stack, 1 bit
+      </artwork>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry2" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="71" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsTopLabelStackEntry. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry3" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="72" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry2. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry4" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="73" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry3. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry5" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="74" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry4. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry6" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="75" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry5. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry7" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="76" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry6. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry8" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="77" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry7. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry9" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="78" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry8. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="mplsLabelStackEntry10" dataType="unsigned32"
+         group="subIpHeader"
+         dataTypeSemantics="identifier"
+         fieldId="79" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The label, exp, and s fields from the label stack entry that
+      was pushed immediately before the label stack entry that would
+      be reported by mplsLabelStackEntry9. See the definition of
+      mplsTopLabelStackEntry for further details.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3032.
+    </reference>
+  </field>
+
+  <field name="ipNextHopIPv4Address" dataType="ipv4Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="15" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The IPv4 address of the next IPv4 hop.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="ipNextHopIPv6Address" dataType="ipv6Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="62" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The IPv6 address of the next IPv6 hop.
+      </paragraph>
+    </description>
+  </field>
+
+<!--
+  <field name="ipNextHopAsNumber" dataType="unsigned16"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="162" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The autonomous system (AS) number of the next IP hop.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+      see RFC 1930 for a definition of the AS number.
+    </reference>
+  </field>
+-->
+
+  <field name="bgpSourceAsNumber" dataType="unsigned16"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="16" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The autonomous system (AS) number of the source IP address.
+      If AS path information for this Flow is only available as
+      unordered AS set (and not as ordered AS sequence),
+      then the value of this Information Element is 0.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+      see RFC 1930 for a definition of the AS number.
+    </reference>
+  </field>
+
+  <field name="bgpDestinationAsNumber" dataType="unsigned16"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="17" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The autonomous system (AS) number of the destination IP
+      address.  If AS path information for this Flow is only
+      available as unordered AS set (and not as ordered AS
+      sequence), then the value of this Information Element is 0.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+      see RFC 1930 for a definition of the AS number.
+    </reference>
+  </field>
+
+  <field name="bgpNextAdjacentAsNumber" dataType="unsigned16"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="128" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The autonomous system (AS) number of the first AS in the AS
+      path to the destination IP address.  The path is deduced
+      by looking up the destination IP address of the Flow in the
+      BGP routing information base.  If AS path information for
+      this Flow is only available as unordered AS set (and not as
+      ordered AS sequence),
+      then the value of this Information Element is 0.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+      see RFC 1930 for a definition of the AS number.
+    </reference>
+  </field>
+
+  <field name="bgpPrevAdjacentAsNumber" dataType="unsigned16"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="129" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The autonomous system (AS) number of the last AS in the AS
+      path from the source IP address.  The path is deduced
+      by looking up the source IP address of the Flow in the BGP
+      routing information base.  If AS path information for this
+      Flow is only available as unordered AS set (and not as
+      ordered AS sequence), then the value of this Information
+      Element is 0.  In case of BGP asymmetry, the
+      bgpPrevAdjacentAsNumber might not be
+      able to report the correct value.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+      see RFC 1930 for a definition of the AS number.
+    </reference>
+  </field>
+
+  <field name="bgpNextHopIPv4Address" dataType="ipv4Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="18" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv4 address of the next (adjacent) BGP hop.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4 and
+    </reference>
+  </field>
+
+  <field name="bgpNextHopIPv6Address" dataType="ipv6Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="63" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv6 address of the next (adjacent) BGP hop.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 1771 for a description of BGP-4.
+    </reference>
+  </field>
+
+  <field name="mplsTopLabelType" dataType="octet"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="46" applicability="data" status="current">
+    <description>
+      <paragraph>
+      This field identifies the control protocol that allocated the
+      top of stack label.  Defined values for this field include:
+      <artwork>
+     - 0x01 TE-MIDPT: Any TE tunnel mid-point or tail label
+     - 0x02 Pseudowire: Any PWE3 or Cisco AToM based label
+     - 0x03 VPN: Any label associated with VPN
+     - 0x04 BGP: Any label associated with BGP or BGP routing
+     - 0x05 LDP: Any label associated with dynamically assigned
+                 labels using LDP
+      </artwork>
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3031 for the MPLS label structure.
+      See RFC 2547 for the association of MPLS labels with VPNs.
+      See RFC 1771 for BGP and BGP routing.
+      See RFC 3036 for LDP.
+      and IP addresses.
+    </reference>
+  </field>
+
+  <field name="mplsTopLabelIPv4Address" dataType="ipv4Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="47" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The IPv4 address of the system that the MPLS top label will
+        cause this Flow to be forwarded to.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3031 for the association between MPLS labels
+      and IP addresses.
+    </reference>
+  </field>
+
+  <field name="mplsTopLabelIPv6Address" dataType="ipv6Address"
+         group="derived"
+         dataTypeSemantics="identifier"
+         fieldId="140" applicability="data" status="current">
+    <description>
+      <paragraph>
+        The IPv6 address of the system that the MPLS top label will
+        cause this Flow to be forwarded to.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 3031 for the association between MPLS labels
+      and IP addresses.
+    </reference>
+  </field>
+
+  <field name="exporterIPv4Address" dataType="ipv4Address"
+         dataTypeSemantics="identifier"
+         group="config"
+         fieldId="130" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv4 address used by the Exporting Process.  This is used
+      by the Collector to identify the Exporter in cases where the
+      identity of the Exporter may have been obscured by the use of
+      a proxy.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="exporterIPv6Address" dataType="ipv6Address"
+         dataTypeSemantics="identifier"
+         group="config"
+         fieldId="131" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The IPv6 address used by the Exporting Process.  This is used
+      by the Collector to identify the Exporter in cases where the
+      identity of the Exporter may have been obscured by the use of
+      a proxy.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="minimumPacketLength" dataType="unsigned16"
+         group="minMax"
+         fieldId="25" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Length of the smallest packet observed for this Flow.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="maximumPacketLength" dataType="unsigned16"
+         group="minMax"
+         fieldId="26" applicability="all" status="current">
+    <description>
+      <paragraph>
+      Length of the largest packet observed for this Flow.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="minimumTtl" dataType="octet"
+         group="minMax"
+         fieldId="52" applicability="data" status="current">
+    <description>
+      <paragraph>
+        Minimum TTL value observed for any packet in this Flow.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="maximumTtl" dataType="octet"
+         group="minMax"
+         fieldId="53" applicability="data" status="current">
+    <description>
+      <paragraph>
+        Maximum TTL value observed for any packet in this Flow.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="ipv4Options" dataType="unsigned32"
+         dataTypeSemantics="flags"
+         group="minMax"
+         fieldId="208" applicability="all" status="current">
+    <description>
+      <paragraph>
+      IPv4 options in packets of this Flow.
+      The information is encoded in a set of bit fields.  For
+      each valid IPv4 option type there is a bit in this set.
+      The bit is set to 1 if any observed packet of this Flow
+      contains the corresponding IPv4 option type.  Otherwise,
+      if no observed packet of this Flow contained the
+      respective IPv4 option type, the value of the
+      corresponding bit is 0.
+      </paragraph>
+      <paragraph>
+      The list of valid IPv4 options is maintained by IANA.
+      Note that for identifying an option not just the 5-bit
+      Option Number, but all 8 bits of the Option Type need to
+      match one of the IPv4 options specified at
+      http://www.iana.org/assignments/ip-parameters.
+      </paragraph>
+      <paragraph>
+      Options are mapped to bits according to their option numbers.
+      Option number X is mapped to bit X.
+      The mapping is illustrated by the figure below.
+      </paragraph>
+      <artwork>
+        0      1      2      3      4      5      6      7
+    +------+------+------+------+------+------+------+------+
+    | EOOL | NOP  | SEC  | LSR  |  TS  |E-SEC |CIPSO |  RR  | ...
+    +------+------+------+------+------+------+------+------+
+
+        8      9     10     11     12     13     14     15
+    +------+------+------+------+------+------+------+------+
+... | SID  | SSR  | ZSU  | MTUP | MTUR | FINN | VISA |ENCODE| ...
+    +------+------+------+------+------+------+------+------+
+
+       16     17     18     19     20     21     22     23
+    +------+------+------+------+------+------+------+------+
+... |IMITD | EIP  |  TR  |ADDEXT|RTRALT| SDB  |NSAPA | DPS  | ...
+    +------+------+------+------+------+------+------+------+
+
+       24     25     26     27     28     29     30     31
+    +------+------+------+------+------+------+------+------+
+... | UMP  |             to be assigned by IANA             |
+    +------+------+------+------+------+------+------+------+
+
+
+        Type   Option
+    Bit Value  Name    Reference
+    ---+-----+-------+------------------------------------
+     0     0   EOOL    End of Options List, RFC 791
+     1     1   NOP     No Operation, RFC 791
+     2   130   SEC     Security, RFC 1108
+     3   131   LSR     Loose Source Route, RFC 791
+     4    68   TS      Time Stamp, RFC 791
+     5   133   E-SEC   Extended Security, RFC 1108
+     6   134   CIPSO   Commercial Security
+     7     7   RR      Record Route, RFC 791
+     8   136   SID     Stream ID, RFC 791
+     9   137   SSR     Strict Source Route, RFC 791
+    10    10   ZSU     Experimental Measurement
+    11    11   MTUP    (obsoleted) MTU Probe, RFC 1191
+    12    12   MTUR    (obsoleted) MTU Reply, RFC 1191
+    13   205   FINN    Experimental Flow Control
+    14   142   VISA    Experimental Access Control
+    15    15   ENDOCE
+    16   144   IMITD   IMI Traffic Descriptor
+    17   145   EIP     Extended Internet Protocol, RFC 1385
+    18    82   TR      Traceroute, RFC 3193
+    19   147   ADDEXT  Address Extension
+    20   148   RTRALT  Router Alert, RFC 2113
+    21   149   SDB     Selective Directed Broadcast
+    22   150   NSAPA   NSAP Address
+    23   151   DPS     Dynamic Packet State
+    24   152   UMP     Upstream Multicast Pkt.
+    ...  ...   ...     Further options numbers
+                       may be assigned by IANA
+      </artwork>
+    </description>
+    <reference>
+      See RFC 791 for the definition of IPv4 options.
+      See the list of IPv4 option numbers assigned by IANA
+      at http://www.iana.org/assignments/ip-parameters.
+    </reference>
+  </field>
+
+  <field name="ipv6ExtensionHeaders" dataType="unsigned32"
+         dataTypeSemantics="flags"
+         group="minMax"
+         fieldId="64" applicability="all" status="current">
+    <description>
+      <paragraph>
+     IPv6 extension headers observed in packets of this Flow.
+     The information is encoded in a set of bit fields.  For
+     each IPv6 option header there is a bit in this set.
+     The bit is set to 1 if any observed packet of this Flow
+     contains the corresponding IPv6 extension header.
+     Otherwise, if no observed packet of this Flow contained
+     the respective IPv6 extension header, the value of the
+     corresponding bit is 0.
+      </paragraph>
+      <artwork>
+           0     1     2     3     4     5     6     7
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+       | Res | FRA1| ROU | FRA0| UNK | Res | HOP | DST |  ...
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+
+           8     9    10    11    12    13    14    15
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+   ... | PAY | AUT | ENC |         Reserved            | ...
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+
+          16    17    18    19    20    21    22    23
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+   ... |                  Reserved                     | ...
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+
+          24    25    26    27    28    29    30    31
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+   ... |                  Reserved                     |
+       +-----+-----+-----+-----+-----+-----+-----+-----+
+
+     Bit    IPv6 Option   Description
+
+    0, Res               Reserved
+    1, FRA1     44       Fragmentation header - not first fragment
+    2, ROU      43       Routing header
+    3, FRA0     44       Fragment header - first fragment
+    4, UNK               Unknown Layer 4 header
+                         (compressed, encrypted, not supported)
+    5, Res               Reserved
+    6, HOP       0       Hop-by-hop option header
+    7, DST      60       Destination option header
+    8, PAY     108       Payload compression header
+    9, AUT      51       Authentication Header
+   10, ENC      50       Encrypted security payload
+   11 to 31              Reserved
+      </artwork>
+    </description>
+    <reference>
+     See RFC 2460 for the general definition of IPv6 extensions
+     headers and for the specification of the hop-by-hop options
+     header, the routing header, the fragment header, and the
+     destination options header.
+     See RFC 2402 for the specification of the authentication
+     header.
+     See RFC 2406 for the specification of the encapsulating
+     security payload.
+    </reference>
+  </field>
+
+  <field name="tcpControlBits" dataType="octet"
+         dataTypeSemantics="flags"
+         group="minMax"
+         fieldId="6" applicability="all" status="current">
+    <description>
+      <paragraph>
+      TCP control bits observed for packets of this Flow.
+      The information is encoded in a set of bit fields.
+      For each TCP control bit there is a bit in this
+      set.  A bit is set to 1 if any observed packet of this
+      Flow has the corresponding TCP control bit set to 1.
+      A value of 0 for a bit indicates that the corresponding
+      bit was not set in any of the observed packets
+      of this Flow.
+      </paragraph>
+      <artwork>
+       0     1     2     3     4     5     6     7
+   +-----+-----+-----+-----+-----+-----+-----+-----+
+   |  Reserved | URG | ACK | PSH | RST | SYN | FIN |
+   +-----+-----+-----+-----+-----+-----+-----+-----+
+
+   Reserved:  Reserved for future use by TCP.  Must be zero.
+        URG:  Urgent Pointer field significant
+        ACK:  Acknowledgment field significant
+        PSH:  Push Function
+        RST:  Reset the connection
+        SYN:  Synchronize sequence numbers
+        FIN:  No more data from sender
+      </artwork>
+    </description>
+    <reference>See RFC 793 for a definition of the TCP control bits
+    in the TCP header.</reference>
+  </field>
+
+  <field name="tcpOptions" dataType="unsigned64"
+         dataTypeSemantics="flags"
+         group="minMax"
+         fieldId="209" applicability="all" status="current">
+    <description>
+      <paragraph>
+     TCP options in packets of this Flow.
+     The information is encoded in a set of bit fields.  For
+     each TCP option there is a bit in this set.
+     The bit is set to 1 if any observed packet of this Flow
+     contains the corresponding TCP option.
+     Otherwise, if no observed packet of this Flow contained
+     the respective TCP option, the value of the
+     corresponding bit is 0.
+      </paragraph>
+      <paragraph>
+      Options are mapped to bits according to their option
+      numbers.  Option number X is mapped to bit X.
+      TCP option numbers are maintained by IANA.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 793 for the definition of TCP options.
+      See the list of TCP option numbers assigned by IANA
+      at http://www.iana.org/assignments/tcp-parameters.
+    </reference>
+  </field>
+
+  <field name="flowStartSeconds" dataType="dateTimeSeconds"
+         group="timestamp"
+         fieldId="150" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the first packet of this Flow.
+    </description>
+    <units>seconds</units>
+  </field>
+
+  <field name="flowEndSeconds" dataType="dateTimeSeconds"
+         group="timestamp"
+         fieldId="151" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the last packet of this Flow.
+    </description>
+    <units>seconds</units>
+  </field>
+
+  <field name="flowStartMilliSeconds" dataType="dateTimeMilliSeconds"
+         group="timestamp"
+         fieldId="152" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the first packet of this Flow.
+    </description>
+    <units>milliseconds</units>
+  </field>
+
+  <field name="flowEndMilliSeconds" dataType="dateTimeMilliSeconds"
+         group="timestamp"
+         fieldId="153" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the last packet of this Flow.
+    </description>
+    <units>milliseconds</units>
+  </field>
+
+  <field name="flowStartMicroSeconds" dataType="dateTimeMicroSeconds"
+         group="timestamp"
+         fieldId="154" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the first packet of this Flow.
+    </description>
+    <units>microseconds</units>
+  </field>
+
+  <field name="flowEndMicroSeconds" dataType="dateTimeMicroSeconds"
+         group="timestamp"
+         fieldId="155" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the last packet of this Flow.
+    </description>
+    <units>microseconds</units>
+  </field>
+
+  <field name="flowStartNanoSeconds" dataType="dateTimeNanoSeconds"
+         group="timestamp"
+         fieldId="156" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the first packet of this Flow.
+    </description>
+    <units>nanoseconds</units>
+  </field>
+
+  <field name="flowEndNanoSeconds" dataType="dateTimeNanoSeconds"
+         group="timestamp"
+         fieldId="157" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the last packet of this Flow.
+    </description>
+    <units>nanoseconds</units>
+  </field>
+
+  <field name="flowStartDeltaMicroSeconds" dataType="unsigned32"
+         group="timestamp"
+         fieldId="158" applicability="data" status="current">
+    <description>
+      This is a relative time stamp only valid within the scope
+      of a single IPFIX Message.  It contains the negative time
+      offset of the first observed packet of this Flow relative
+      to the export time specified in the IPFIX Message header.
+    </description>
+    <reference>
+      See [I-D.ietf-ipfix-protocol] for the definition of the IPFIX
+      Message header.
+    </reference>
+    <units>microseconds</units>
+  </field>
+
+  <field name="flowEndDeltaMicroSeconds" dataType="unsigned32"
+         group="timestamp"
+         fieldId="159" applicability="data" status="current">
+    <description>
+      This is a relative time stamp only valid within the scope
+      of a single IPFIX Message.  It contains the negative time
+      offset of the last observed packet of this Flow relative
+      to the export time specified in the IPFIX Message header.
+    </description>
+    <reference>
+      See [I-D.ietf-ipfix-protocol] for the definition of the IPFIX
+      Message header.
+    </reference>
+    <units>microseconds</units>
+  </field>
+
+  <field name="systemInitTimeMilliSeconds"
+         dataType="dateTimeMilliSeconds"
+         group="timestamp"
+         fieldId="160" applicability="data" status="current">
+    <description>
+      The absolute timestamp of the last (re-)initialization of the
+      IPFIX Device.
+    </description>
+    <units>milliseconds</units>
+  </field>
+
+  <field name="flowStartSysUpTime" dataType="unsigned32"
+         group="timestamp"
+         fieldId="22" applicability="data" status="current">
+    <description>
+      The relative timestamp of the first packet of this Flow.
+      It indicates the number of milliseconds since the
+      last (re-)initialization of the IPFIX Device (sysUpTime).
+    </description>
+    <units>milliseconds</units>
+  </field>
+
+  <field name="flowEndSysUpTime" dataType="unsigned32"
+         group="timestamp"
+         fieldId="21" applicability="data" status="current">
+    <description>
+      The relative timestamp of the last packet of this Flow.
+      It indicates the number of milliseconds since the
+      last (re-)initialization of the IPFIX Device (sysUpTime).
+    </description>
+    <units>milliseconds</units>
+  </field>
+  <field name="flowActiveTimeOut" dataType="unsigned16"
+         group="misc"
+         fieldId="36" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The number of seconds after which an active Flow is timed out
+      anyway, even if there is still a continuous flow of packets.
+      </paragraph>
+    </description>
+    <units>seconds</units>
+  </field>
+
+  <field name="flowInactiveTimeout" dataType="unsigned16"
+         group="misc"
+         fieldId="37" applicability="all" status="current">
+    <description>
+      <paragraph>
+       A Flow is considered to be timed out if no packets belonging
+       to the Flow have been observed for the number of seconds
+       specified by this field.
+      </paragraph>
+    </description>
+    <units>seconds</units>
+  </field>
+
+  <field name="flowEndReason" dataType="octet"
+         group="misc"
+         dataTypeSemantics="identifier"
+         fieldId="136" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The reason for Flow termination. The range of values includes
+      <artwork>
+   0x01: idle timeout
+         The flow was terminated because it was considered to be
+         idle.
+   0x02: active timeout
+         The flow was terminated for reporting purposes while it was
+         still active, for example, after the maximum lifetime of
+         unreported flows was reached.
+   0x03: end of Flow detected
+         The flow was terminated because the Metering Process
+         detected signals indicating the end of the flow,
+         for example, the TCP FIN flag.
+   0x04: forced end
+         The flow was terminated because of some external event,
+         for example, a shut down of the Metering Process initiated
+         by a network management application.
+   0x05: cache full
+         the flow was terminated because of lack of resources
+         available to the Metering Process and/or the Exporting
+         Process
+      </artwork>
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="flowDurationMilliSeconds" dataType="unsigned32"
+         group="misc"
+         fieldId="161" applicability="data" status="current">
+    <description>
+      The difference between in time between the observation of the
+      first packet of this Flow and the observation of the last
+      packet of this Flow.
+    </description>
+    <units>milliseconds</units>
+  </field>
+
+  <field name="flowDurationMicroSeconds" dataType="unsigned32"
+         group="misc"
+         fieldId="162" applicability="data" status="current">
+    <description>
+      The difference between in time between the observation of the
+      first packet of this Flow and the observation of the last
+      packet of this Flow.
+    </description>
+    <units>microseconds</units>
+  </field>
+
+  <field name="octetDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="1" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of octets since the previous report (if any)
+      in incoming packets for this Flow at the Observation Point.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="postOctetDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="23" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'octetDeltaCount', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="octetDeltaSumOfSquares" dataType="unsigned64"
+         group="flowCounter"
+         fieldId="198" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The sum of the squared numbers of octets per incoming
+      packet since the previous report (if any) for this
+      Flow at the Observation Point.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="octetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="85" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The total number of octets in incoming packets
+      for this Flow at the Observation Point since the Metering
+      Process (re-)initialization for this Observation Point. The
+      number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="postOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="171" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'octetTotalCount', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="octetTotalSumOfSquares" dataType="unsigned64"
+         group="flowCounter"
+         fieldId="199" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The total sum of the squared numbers of octets in incoming
+      packets for this Flow at the Observation Point since the
+      Metering Process (re-)initialization for this Observation
+      Point. The number of octets include IP header(s) and IP
+      payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="packetDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="2" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of incoming packets since the previous report
+      (if any) for this Flow at the Observation Point.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="postPacketDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="24" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'packetDeltaCount', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="packetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="86" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The total number of incoming packets for this Flow
+      at the Observation Point since the Metering Process
+      (re-)initialization for this Observation Point.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="postPacketTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="172" applicability="all" status="current">
+    <description>
+      <paragraph>
+      The definition of this Information Element is identical
+      to the definition of Information Element
+      'packetTotalCount', except that it reports a
+      potentially modified value caused by a middlebox
+      function after the packet passed the observation point.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="droppedOctetDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="132" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of octets since the previous report (if any)
+      in packets of this Flow dropped by packet treatment.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+  <field name="droppedPacketDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="133" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of packets since the previous report (if any)
+      of this Flow dropped by packet treatment.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="droppedOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="134" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of octets in packets of this Flow dropped
+      by packet treatment since the Metering Process
+      (re-)initialization for this Observation Point.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="droppedPacketTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="135" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of packets of this Flow dropped by packet
+      treatment since the Metering Process
+      (re-)initialization for this Observation Point.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="postMCastPacketDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="19" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of outgoing multicast packets since the
+      previous report (if any) sent for packets of this Flow
+      by a multicast daemon within the Observation Domain.
+      This property cannot necessarily be observed at the
+      Observation Point, but may be retrieved by other means.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="postMCastOctetDeltaCount" dataType="unsigned64"
+         dataTypeSemantics="deltaCounter"
+         group="flowCounter"
+         fieldId="20" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The number of octets since the previous report (if any)
+      in outgoing multicast packets sent for packets of this
+      Flow by a multicast daemon within the Observation Domain.
+      This property cannot necessarily be observed at the
+      Observation Point, but may be retrieved by other means.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="postMCastPacketTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="174" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of outgoing multicast packets sent for
+      packets of this Flow by a multicast daemon within the
+      Observation Domain since the Metering Process
+      (re-)initialization.  This property cannot necessarily
+      be observed at the Observation Point, but may be retrieved
+      by other means.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="postMCastOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="flowCounter"
+         fieldId="175" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of octets in outgoing multicast packets
+      sent for packets of this Flow by a multicast daemon in the
+      Observation Domain since the Metering Process
+      (re-)initialization.  This property cannot necessarily be
+      observed at the Observation Point, but may be retrieved by
+      other means.
+      The number of octets include IP header(s) and IP payload.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="exportedMessageTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="41" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of IPFIX Messages that the Exporting Process
+      successfully sent since the Exporting Process
+      (re-)initialization to the Collecting Process receiving a
+      report that contains this Information Element.
+      </paragraph>
+    </description>
+    <units>messages</units>
+  </field>
+
+  <field name="exportedOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="40" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of octets that the Exporting Process
+         successfully sent since the Exporting Process
+         (re-)initialization to the Collecting Process receiving a
+         report that contains this Information Element.  The value
+         of this Information Element is calculated by summing up
+         the IPFIX Message header length values of all IPFIX Messages
+         that were successfully sent to the Collecting Process
+         receiving a report that contains this Information Element.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="exportedFlowTotalCount" dataType="unsigned64"
+         group="processCounter"
+         dataTypeSemantics="totalCounter"
+         fieldId="42" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of Flows Records that the Exporting
+      Process successfully sent as Data Records since the Exporting
+      Process (re-)initialization to the Collecting Process receiving
+      a report that contains this Information Element.
+      </paragraph>
+    </description>
+    <units>Flows</units>
+  </field>
+
+  <field name="observedFlowTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="163" applicability="data" status="current">
+    <description>
+      <paragraph>
+      The total number of Flows observed in the Observation Domain
+      since the Metering Process (re-)initialization for this
+      Observation Point.
+      </paragraph>
+    </description>
+    <units>Flows</units>
+  </field>
+
+  <field name="ignoredPacketTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="164" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of observed IP packets that the
+         Metering Process did not process since the
+         (re-)initialization of the Metering Process.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="ignoredOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="165" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of octets in observed IP packets
+         that the Metering Process did not process since the
+         (re-)initialization of the Metering Process.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="notSentFlowTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="166" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of Flow Records that were generated by the
+         Metering Process and but dropped by the Metering Process or
+         by the Exporting Process
+         instead of sending it to the Collecting Process.
+         There are several potential reasons for this including
+         resource shortage and special Flow export policies.
+      </paragraph>
+    </description>
+    <units>Flows</units>
+  </field>
+
+  <field name="notSentPacketTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="167" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of packets in Flow Records that were
+         generated by the Metering Process and but dropped
+         by the Metering Process or by the Exporting Process
+         instead of sending it to the Collecting Process.
+         There are several potential reasons for this including
+         resource shortage and special Flow export policies.
+      </paragraph>
+    </description>
+    <units>packets</units>
+  </field>
+
+  <field name="notSentOctetTotalCount" dataType="unsigned64"
+         dataTypeSemantics="totalCounter"
+         group="processCounter"
+         fieldId="168" applicability="data" status="current">
+    <description>
+      <paragraph>
+         The total number of octets in packets in Flow Records
+         that were generated by the Metering Process and but
+         dropped by the Metering Process or by the Exporting
+         Process instead of sending it to the Collecting Process.
+         There are several potential reasons for this including
+         resource shortage and special Flow export policies.
+      </paragraph>
+    </description>
+    <units>octets</units>
+  </field>
+
+  <field name="flowKeyIndicator" dataType="unsigned64"
+         dataTypeSemantics="flags"
+         group="processCounter"
+         fieldId="173" applicability="all" status="current">
+    <description>
+      <paragraph>
+      This set of bit fields is used for marking the Information
+      Elements of a Data Record that serve as Flow Key.  Each bit
+      represents an Information Element in the Data Record with
+      the n-th bit representing the n-th Information Element.
+      A set bit with value 1 indicates that the corresponding
+      Information element is a Flow Key of the reported Flow.
+      A value of 0 indicates that this is not the case.  If the
+      Data Record contains more than 64 Information Elements, the
+      corresponding Template SHOULD be designed such that all Flow
+      Keys are among the first 64 Information Elements, because the
+      flowKeyIndicator only contains 64 bits.  If the Data Record
+      contains less than 64 Information Elements, then the bits in
+      the flowKeyIndicator for which no corresponding Information
+      Element exists SHOULD have the value 0.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="lineCardId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="141" applicability="option" status="current">
+    <description>
+      <paragraph>
+        A locally unique identifier of a line card at an IPFIX
+        Device hosting an Observation Point.  Typically, this
+        Information Element is used for limiting the scope
+        of other Information Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="portId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="142" applicability="option" status="current">
+    <description>
+      <paragraph>
+        A locally unique identifier of a line port at an IPFIX
+        Device hosting an Observation Point.  Typically, this
+        Information Element is used for limiting the scope
+        of other Information Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="ingressInterface" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="10" applicability="all" status="current">
+    <description>
+      <paragraph>
+        The index of the IP interface (ifIndex) where packets of
+        this Flow are being received.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2863 for the definition of the ifIndex object.
+    </reference>
+  </field>
+
+  <field name="egressInterface" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="14" applicability="all" status="current">
+    <description>
+      <paragraph>
+        The index of the IP interface (ifIndex) where packets of
+        this Flow are being sent.
+      </paragraph>
+    </description>
+    <reference>
+      See RFC 2863 for the definition of the ifIndex object.
+    </reference>
+  </field>
+
+  <field name="meteringProcessId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="143" applicability="option" status="current">
+    <description>
+      <paragraph>
+        A locally unique identifier of a Metering Process
+        at an IPFIX Device.  Typically, this
+        Information Element is used for limiting the scope
+        of other Information Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="exportingProcessId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="144" applicability="option" status="current">
+    <description>
+      <paragraph>
+        A locally unique identifier of an Exporting Process
+        at an IPFIX Device.  Typically, this
+        Information Element is used for limiting the scope
+        of other Information Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="flowId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="148" applicability="option" status="current">
+    <description>
+      <paragraph>
+        An identifier of a Flow that is unique within an Observation
+        Domain. This Information Element can be used to distinguish
+        between different Flows if Flow Keys such as IP addresses and
+        port numbers are not reported or reported in separate
+        records.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="templateId" dataType="unsigned16"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="145" applicability="option" status="current">
+    <description>
+      <paragraph>
+        An identifier of a Template that is locally unique to an
+        Exporting Process.  Typically, this Information Element is
+        used for limiting the scope of other Information Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="sourceId" dataType="unsigned32"
+         group="scope"
+         dataTypeSemantics="identifier"
+         fieldId="149" applicability="option" status="current">
+    <description>
+      <paragraph>
+        An identifier of an Observation Domain that is locally
+        unique to an Exporting Process.  Typically, this Information
+        Element is used for limiting the scope of other Information
+        Elements.
+      </paragraph>
+    </description>
+  </field>
+
+  <field name="paddingOctets" dataType="octetArray"
+         group="padding"
+         fieldId="210" applicability="option" status="current">
+    <description>
+      <paragraph>
+        The value of this Information Element is always 0.
+      </paragraph>
+    </description>
+  </field>
+
+</fieldDefinitions>

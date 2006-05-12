@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Cisco Netflow Version 9 Custom IETF Fields
+-->
+
+<fieldDefinitions>
+
+  <field name="interfaceName" dataType="string"
+	 group="Cisco"
+	 dataTypeSemantics="identifier"
+	 fieldId="82" applicability="data" status="current">
+    <description>
+      <paragraph>
+	Shortened interface name e.g. "FE1/0"
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+	See Cisco NetFlow Version 9 Flow-Record Format.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="interfaceDescription" dataType="string"
+	 group="Cisco"
+	 dataTypeSemantics="identifier"
+	 fieldId="83" applicability="data" status="current">
+    <description>
+      <paragraph>
+	Full interface name e.g. "FastEthernet 1/0"
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+	See Cisco NetFlow Version 9 Flow-Record Format.
+      </paragraph>
+    </reference>
+  </field>
+
+  <field name="samplerName" dataType="string"
+	 group="Cisco"
+	 dataTypeSemantics="identifier"
+	 fieldId="84" applicability="data" status="current">
+    <description>
+      <paragraph>
+	Name of the flow sampler
+      </paragraph>
+    </description>
+    <reference>
+      <paragraph>
+	See Cisco NetFlow Version 9 Flow-Record Format.
+      </paragraph>
+    </reference>
+  </field>
+
+</fieldDefinitions>
