@@ -994,4 +994,5 @@ DNSMessage:: my_strdup(const char *str)
 }
 
 CLICK_ENDDECLS
+ELEMENT_REQUIRES(userlevel)
 ELEMENT_PROVIDES(DNSMessage)

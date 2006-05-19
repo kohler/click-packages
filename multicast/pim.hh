@@ -48,7 +48,7 @@ class PIM : public Element { public:
 
   int configure(Vector<String> &, ErrorHandler *);
 
-  void PIM::push(int port, Packet *);
+  void push(int port, Packet *);
 
 private:
   IPAddress interface;

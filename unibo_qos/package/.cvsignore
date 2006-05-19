@@ -1,4 +1,5 @@
-*.ko *.uo *.kd *.ud
-kelements.conf uelements.conf
-kpackage.cc upackage.cc
-elements.mk Makefile
+Makefile *.d *.kd *.ud *.ko *.uo
+kelements.conf kelements.mk kpackage.cc
+Kbuild .*.ko.cmd .*.o.cmd .tmp_versions kversion.c unibo_qos.mod.c
+uelements.conf uelements.mk upackage.cc
+elementmap-unibo_qos.xml

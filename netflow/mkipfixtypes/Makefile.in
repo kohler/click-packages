@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2006 Mazu Networks, Inc.
 #
-# $Id: Makefile.in,v 1.1 2006/05/12 16:43:43 eddietwo Exp $
+# $Id: Makefile.in,v 1.2 2006/05/19 22:40:09 eddietwo Exp $
 #
 
 SHELL = @SHELL@
@@ -28,10 +28,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	cd $(top_builddir) \
 	  && CONFIG_FILES=$(subdir)/$@ CONFIG_ELEMLISTS=no CONFIG_HEADERS= $(SHELL) ./config.status
 
-clean:
-distclean:
-uninstall:
-always:
+clean distclean uninstall always:
 	@:
 
 .PHONY: all all-local clean distclean install install-local uninstall always

@@ -1,5 +1,5 @@
 dnl -*- mode: shell-script -*-
-dnl 'configure.ac' file for the Click models package
+dnl 'configure.ac' file for the Click unibo_qos package
 dnl Process this file with autoconf to produce a configure script.
 dnl
 dnl Permission is hereby granted, free of charge, to any person obtaining a
@@ -16,16 +16,16 @@ dnl
 dnl the usual 'configure.ac' boilerplate
 dnl
 
-AC_INIT(click-models, 1.5.0)
+AC_INIT(click-unibo_qos, 1.5.0)
 AC_CONFIG_HEADER(config.h)
 AC_SUBST(ac_configure_args)
 
-CLICKPACKAGENAME=models
+CLICKPACKAGENAME=unibo_qos
 AC_SUBST(CLICKPACKAGENAME)
 
-AH_TOP([#ifndef CLICK_PKG_MODELS_CONFIG_H
-#define CLICK_PKG_MODELS_CONFIG_H 1])
-AH_BOTTOM([#endif /* CLICK_PKG_MODELS_CONFIG_H */])
+AH_TOP([#ifndef CLICK_PKG_UNIBO_QOS_CONFIG_H
+#define CLICK_PKG_UNIBO_QOS_CONFIG_H 1])
+AH_BOTTOM([#endif /* CLICK_PKG_UNIBO_QOS_CONFIG_H */])
 
 
 dnl
@@ -75,11 +75,11 @@ AC_ARG_ENABLE(userlevel, [  --enable-userlevel      enable user-level driver],
     [BUILD_USERLEVEL=$CLICK_HAVE_USERLEVEL_DRIVER])
 AC_ARG_ENABLE(linuxmodule, [  --enable-linuxmodule    enable Linux kernel driver],
     [BUILD_LINUXMODULE=`onezero $enableval`],
-    [BUILD_LINUXMODULE=0])
+    [BUILD_LINUXMODULE=$CLICK_HAVE_LINUXMODULE_DRIVER])
 AC_ARG_ENABLE(bsdmodule, [  --enable-bsdmodule      enable FreeBSD kernel driver
-                          [[Default driver is userlevel only.]]], 
+                          [[Default drivers are those Click supports.]]], 
     [BUILD_BSDMODULE=`onezero $enableval`],
-    [BUILD_BSDMODULE=0])
+    [BUILD_BSDMODULE=$CLICK_HAVE_BSDMODULE_DRIVER])
 
 AC_SUBST(BUILD_USERLEVEL)
 AC_SUBST(BUILD_LINUXMODULE)

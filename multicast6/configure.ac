@@ -1,5 +1,5 @@
 dnl -*- mode: shell-script -*-
-dnl 'configure.in' file for multicast package
+dnl 'configure.ac' file for the Click multicast6 package
 dnl Process this file with autoconf to produce a configure script.
 dnl
 dnl Permission is hereby granted, free of charge, to any person obtaining a
@@ -13,18 +13,19 @@ dnl notice is a summary of the Click LICENSE file; the license in that file is
 dnl legally binding.
 
 dnl
-dnl the usual 'configure.in' boilerplate
+dnl the usual 'configure.ac' boilerplate
 dnl
 
-AC_INIT(multicast6, 0.1)
+AC_INIT(click-multicast6, 1.5.0)
 AC_CONFIG_HEADER(config.h)
 AC_SUBST(ac_configure_args)
 
-CLICK_INIT('$(top_srcdir)')
+CLICKPACKAGENAME=multicast6
+AC_SUBST(CLICKPACKAGENAME)
 
-AH_TOP([#ifndef CLICK_]AC_PACKAGE_TARNAME[_CONFIG_H
-#define CLICK_]AC_PACKAGE_TARNAME[_CONFIG_H 1])
-AH_BOTTOM([#endif /* CLICK_]AC_PACKAGE_TARNAME[_CONFIG_H */])
+AH_TOP([#ifndef CLICK_PKG_MULTICAST6_CONFIG_H
+#define CLICK_PKG_MULTICAST6_CONFIG_H 1])
+AH_BOTTOM([#endif /* CLICK_PKG_MULTICAST6_CONFIG_H */])
 
 
 dnl
@@ -59,30 +60,6 @@ AC_SUBST(clickprefix)
 AC_SUBST(clickbindir)
 AC_SUBST(clicksbindir)
 AC_SUBST(clickdatadir)
-
-
-dnl
-dnl The rest of this file is based on Click 'configure.in'. You shouldn't
-dnl generally need to change it, although you may want to add to it.
-dnl
-
-AC_PATH_PROG(RANLIB, ranlib, :)
-AC_PATH_PROG(STRIP, strip, :)
-
-CLICK_PROG_INSTALL
-CLICK_PROG_AUTOCONF
-CLICK_PROG_GMAKE
-
-if test -z "$GMAKE"; then
-    AC_MSG_ERROR([
-==============================================
-
-I can't find GNU make. Either put 'gmake' on your PATH and
-rerun './configure', or set the GMAKE environment variable to
-GNU make's pathname.
-
-==============================================])
-fi
 
 
 dnl

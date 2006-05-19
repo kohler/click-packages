@@ -1,7 +1,0 @@
-/* Process this file with configure to produce config.h. -*- mode: c -*- */
-#ifndef CLICKMODULE_PPP_CONFIG_H
-#define CLICKMODULE_PPP_CONFIG_H
-
-/* `ppp' doesn't need any extra configuration. */
-
-#endif /* CLICKMODULE_PPP_CONFIG_H */

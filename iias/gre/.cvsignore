@@ -1,3 +1,5 @@
 Makefile *.d *.kd *.ud *.ko *.uo
-kelements.conf uelements.conf elements.mk
-kpackage.cc upackage.cc
+kelements.conf kelements.mk kpackage.cc
+Kbuild .*.ko.cmd .*.o.cmd .tmp_versions kversion.c gre.mod.c
+uelements.conf uelements.mk upackage.cc
+elementmap-gre.xml

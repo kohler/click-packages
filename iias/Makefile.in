@@ -1,41 +1,37 @@
 SHELL = @SHELL@
-@SUBMAKE@
 
-# PACKAGE = @PACKAGE@
-# VERSION = @VERSION@
+
+# THESE VARIABLES MAY CHANGE BETWEEN PACKAGES
+
+# Set 'package' to the name of your package.
+package := @CLICKPACKAGENAME@
+
+# Set these variables appropriately.
+top_builddir := .
+subdir := .
+
+# Require Click prefix settings.
+# Generally, you will provide a '--with-click=CLICKPREFIX' option, and set:
+include @clickdatadir@/config.mk
+include @clickdatadir@/pkg-config.mk
 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
-conf_auxdir = @conf_auxdir@
-
-top_builddir = .
-subdir = .
-AUTOCONF = @AUTOCONF@
-INSTALL = @INSTALL@
-INSTALL_DATA = @INSTALL@ -m 644
-INSTALL_DATA_IF_CHANGED = @INSTALL_IF_CHANGED@ -m 644
-mkinstalldirs = @top_srcdir@/mkinstalldirs
-
-prefix = @prefix@
-exec_prefix = @exec_prefix@
-includedir = @includedir@
-bindir = @bindir@
+AUTOCONF = $(CLICKAUTOCONF)
+ACLOCAL = :
 
 TARGETS = gre ppp
 
 all: Makefile $(TARGETS)
 
-$(TARGETS): Makefile
+gre ppp: Makefile
 	@cd $@ && $(MAKE) all
 
-elemlist install: Makefile
+elemlist install install-man: Makefile
 	@for d in $(TARGETS); do (cd $$d && $(MAKE) $@) || exit 1; done
 
-install-man:
-	@cd elements && $(MAKE) install-man
-
-$(srcdir)/configure: $(srcdir)/configure.in
-	cd $(srcdir) && $(AUTOCONF)
+$(srcdir)/configure: $(srcdir)/configure.ac
+	cd $(srcdir) && $(ACLOCAL) && $(AUTOCONF)
 config.status: $(srcdir)/configure
 	$(SHELL) $(srcdir)/configure @ac_configure_args@
 Makefile: config.status $(srcdir)/Makefile.in
@@ -47,8 +43,7 @@ clean:
 
 distclean:
 	@-for d in $(TARGETS); do (cd $$d && $(MAKE) distclean); done
-	-rm -f Makefile config.status config.cache config.log
-	-rm -f include/config.h
+	-rm -f Makefile config.status config.cache config.log config.h
 
 .PHONY: all $(TARGETS) elemlist clean distclean \
 	install install-doc install-man install-include

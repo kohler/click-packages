@@ -1,5 +1,4 @@
 SHELL = @SHELL@
-@SUBMAKE@
 
 
 # THESE VARIABLES MAY CHANGE BETWEEN PACKAGES
@@ -13,14 +12,14 @@ subdir := gre
 
 # Require Click prefix settings.
 # Generally, you will provide a '--with-click=CLICKPREFIX' option, and set:
-include @clickprefix@/share/click/config.mk
+include @clickdatadir@/config.mk
 
 # Set 'MAKE_UPACKAGE', 'MAKE_KPACKAGE', and 'MAKE_BPACKAGE' to '0' or '1' 
 # to determine whether to build userlevel, linuxmodule, and bsdmodule
 # packages, respectively.
-MAKE_UPACKAGE = @HAVE_USERLEVEL_TARGET@
-MAKE_KPACKAGE = @HAVE_LINUXMODULE_TARGET@
-MAKE_BPACKAGE = @HAVE_BSDMODULE_TARGET@
+MAKE_UPACKAGE = @BUILD_USERLEVEL@
+MAKE_KPACKAGE = @BUILD_LINUXMODULE@
+MAKE_BPACKAGE = @BUILD_BSDMODULE@
 
 # Set 'STRIP_UPACKAGE' to 'strip -g' to strip debugging symbols from the
 # userlevel package before installing.
@@ -32,7 +31,6 @@ INCLUDES = -I. -I$(top_builddir) -I$(srcdir) $(CLICKINCLUDES)
 
 # Set this variable to force 'click-elem2package' to include a header,
 # such as your package's '<config.h>', if necessary.
-ELEM2PACKAGE_INCLUDES =
 #ELEM2PACKAGE_INCLUDES = -i'<config.h>'
 
 # END OF VARIABLES THAT MAY CHANGE BETWEEN PACKAGES
@@ -50,11 +48,6 @@ bindir = @bindir@
 sbindir = @sbindir@
 libdir = @libdir@
 mandir = @mandir@
-
-INSTALL = @INSTALL@
-INSTALL_DATA = @INSTALL@ -m 644
-conf_auxdir = @conf_auxdir@
-mkinstalldirs = $(conf_auxdir)/mkinstalldirs
 endif
 
 include $(clickdatadir)/pkg-Makefile

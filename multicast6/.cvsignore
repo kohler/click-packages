@@ -1,5 +1,7 @@
 Makefile *.d *.kd *.ud *.ko *.uo
-kelements.conf uelements.conf elements.mk
-kpackage.cc upackage.cc
-config.h configure
+kelements.conf kelements.mk kpackage.cc
+Kbuild .*.ko.cmd .*.o.cmd .tmp_versions kversion.c multicast6.mod.c
+uelements.conf uelements.mk upackage.cc
+elementmap-multicast6.xml
+config.h configure config.log config.status
 autom4te*
