@@ -1,9 +1,9 @@
-CLICK MODULAR ROUTER PACKAGES 1.4.2
+CLICK MODULAR ROUTER PACKAGES 1.5.0
 ===================================
 
     This source release consists of several independent "packages" for
-the Click modular software router.  You will need to compile and run
-Click 1.4 before compiling these packages.
+the Click modular software router.  You will need to compile and install
+Click 1.5.0 before compiling these packages.
 
     These packages were written by independent developers and are
 distributed COMPLETELY WITHOUT WARRANTY.  In particular, the main Click
@@ -26,8 +26,6 @@ models
 
     Trace analysis elements, particularly for TCP flows, from Eddie Kohler
 and Jinyang Li.
-
-	http://www.pdos.lcs.mit.edu/click/
 
 iias/gre
 ........

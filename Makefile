@@ -5,13 +5,13 @@ SHELL = /bin/sh
 
 
 PACKAGE = click-packages
-VERSION = 1.5pre
+VERSION = 1.5.0
 
 srcdir = .
 
 
 CLICKDIR = $(HOME)/click
-SUBDIRS = ip6_natpt models iias
+SUBDIRS = dhcp iias ip6_natpt models multicast multicast6 netflow snmp unibo_qos
 
 
 distdir = $(PACKAGE)-$(VERSION)

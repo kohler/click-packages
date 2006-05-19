@@ -13,7 +13,7 @@ subdir := package
 
 # Require Click prefix settings.
 # Generally, you will provide a '--with-click=CLICKPREFIX' option, and set:
-include @clickprefix@/share/click/config.mk
+include @clickdatadir@/config.mk
 
 # Set 'MAKE_UPACKAGE', 'MAKE_KPACKAGE', and 'MAKE_BPACKAGE' to '0' or '1' 
 # to determine whether to build userlevel, linuxmodule, and bsdmodule
@@ -32,7 +32,6 @@ INCLUDES = -I. -I$(top_builddir) -I$(srcdir) $(CLICKINCLUDES)
 
 # Set this variable to force 'click-elem2package' to include a header,
 # such as your package's '<config.h>', if necessary.
-ELEM2PACKAGE_INCLUDES =
 #ELEM2PACKAGE_INCLUDES = -i'<config.h>'
 
 # END OF VARIABLES THAT MAY CHANGE BETWEEN PACKAGES

@@ -55,13 +55,10 @@ with a mix of numbers and identifiers. Each identifier represents a prefix of
 the OID being specified. For example, "C<internet.4.1>" means
 "C<1.3.6.1.4.1>": the "C<internet>" identifier corresponds to the prefix
 "C<1.3.6.1>". Identifiers can also be used in the middle of an OID
-representation. The OID text is parsed componentwise from left to right,
-building an accumulated OID. Each identifier component must correspond to an
-OID at least as long as the OID that had been parsed so far. Furthermore, if
-that accumulated OID is not empty, then the identifier's OID must agree with
-the accumulated OID where they overlap. If these conditions are met, then the
-accumulated OID is replaced by the identifier's OID, and parsing continues.
-For example, say the following definitions are in effect:
+representation. Each identifier's OID must be at least as long as the
+currently accumulated OID, and if the accumulated OID is not empty, then the
+identifier's OID must match the accumulated OID where they overlap.  For
+example, say the following definitions are in effect:
 
    iso        corresponds to   1
    internet   corresponds to   1.3.6.1 

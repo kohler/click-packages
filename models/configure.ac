@@ -1,5 +1,5 @@
 dnl -*- mode: shell-script -*-
-dnl 'configure.in' file for a sample package
+dnl 'configure.ac' file for the Click models package
 dnl Process this file with autoconf to produce a configure script.
 dnl
 dnl Permission is hereby granted, free of charge, to any person obtaining a
@@ -13,48 +13,52 @@ dnl notice is a summary of the Click LICENSE file; the license in that file is
 dnl legally binding.
 
 dnl
-dnl the usual 'configure.in' boilerplate
+dnl the usual 'configure.ac' boilerplate
 dnl
 
-AC_INIT(tcpscape)
+AC_INIT(click-models, 1.5.0)
 AC_CONFIG_HEADER(config.h)
 AC_SUBST(ac_configure_args)
 
-CLICK_INIT('$(top_srcdir)')
+CLICK_INIT('$(top_srcdir)', models)
+
+AH_TOP([#ifndef CLICK_PKG_]CLICK_PACKAGENAME[_CONFIG_H
+#define CLICK_PKG_]CLICK_PACKAGENAME[_CONFIG_H 1])
+AH_BOTTOM([#endif /* CLICK_PKG_]CLICK_PACKAGENAME[_CONFIG_H */])
 
 
 dnl
 dnl locate Click install directory
 dnl
 
-AC_ARG_WITH(click, [  --with-click[=DIR]      Click install path is DIR [$prefix]],
-  [clickprefix=$withval; if test -z "$withval" -o "$withval" = yes; then clickprefix=$prefix; fi],
-  clickprefix=NONE)
+AC_ARG_WITH(click, [  --with-click[[=DIR]]      Click install path is DIR [[PREFIX]]],
+    [clickprefix=$withval; if test -z "$withval" -o "$withval" = yes; then clickprefix=$prefix; fi],
+    clickprefix=NONE)
 
 dnl Preset $prefix and $exec_prefix.
 test "x$prefix" = xNONE && prefix=$ac_default_prefix
 test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
+test "x$clickprefix" != xNONE -a "x$prefix" = xNONE && prefix="$clickprefix"
+test "x$clickprefix" = xNONE && clickprefix="$prefix"
 
-if test "$clickprefix" = NONE; then
-  clickprefix=$prefix
-fi
+clickdatadir="${clickprefix}/share/click"
 
-clickbindir='${clickprefix}/bin'
-clicksbindir='${clickprefix}/sbin'
-
-AC_SUBST(clickprefix)
-AC_SUBST(clickbindir)
-AC_SUBST(clicksbindir)
-
-if test ! -r $clickprefix/include/click/pathvars.h ; then
+if test ! -r $clickdatadir/config.mk; then
     AC_MSG_ERROR([
 ==============================================
 
-'$clickprefix/include/click/pathvars.h' not found.
+'$clickdatadir/config.mk' not found.
 Are you sure '$clickprefix' is a Click install directory?
 
 ==============================================])
 fi
+
+. $clickdatadir/config.mk
+
+AC_SUBST(clickprefix)
+AC_SUBST(clickbindir)
+AC_SUBST(clicksbindir)
+AC_SUBST(clickdatadir)
 
 
 dnl
@@ -62,13 +66,6 @@ dnl The rest of this file is based on Click 'configure.in'. You shouldn't
 dnl generally need to change it, although you may want to add to it.
 dnl
 
-CLICK_PROG_CC
-AC_PROG_CPP
-CLICK_PROG_CXX
-AC_PROG_CXXCPP
-
-AC_PATH_PROG(AR, ar)
-AC_PATH_PROG(LD, ld)
 AC_PATH_PROG(RANLIB, ranlib, :)
 AC_PATH_PROG(STRIP, strip, :)
 
@@ -86,6 +83,30 @@ GNU make's pathname.
 
 ==============================================])
 fi
+
+
+dnl
+dnl build userlevel? Linux module? FreeBSD module?
+dnl
+
+yesno () {
+    ([[ "$1" = 1 ]] && echo yes) || echo no
+}
+
+AC_ARG_ENABLE(userlevel, [  --enable-userlevel      enable user-level driver],
+    [BUILD_USERLEVEL=`onezero $enableval`],
+    [BUILD_USERLEVEL=$CLICK_HAVE_USERLEVEL_DRIVER])
+AC_ARG_ENABLE(linuxmodule, [  --enable-linuxmodule    enable Linux kernel driver],
+    [BUILD_LINUXMODULE=`onezero $enableval`],
+    [BUILD_LINUXMODULE=0])
+AC_ARG_ENABLE(bsdmodule, [  --enable-bsdmodule      enable FreeBSD kernel driver
+                          [[Default driver is userlevel only.]]], 
+    [BUILD_BSDMODULE=`onezero $enableval`],
+    [BUILD_BSDMODULE=0])
+
+AC_SUBST(BUILD_USERLEVEL)
+AC_SUBST(BUILD_LINUXMODULE)
+AC_SUBST(BUILD_BSDMODULE)
 
 
 dnl
