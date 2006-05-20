@@ -14,7 +14,6 @@ unibo_qos
 ./dhcp:
 Makefile.in
 conf
-config.h.in
 configure
 configure.ac
 doc
@@ -76,7 +75,6 @@ leasetable.hh
 ./iias:
 Makefile.in
 conf
-config.h.in
 configure
 configure.ac
 gre
@@ -116,7 +114,6 @@ pptpserver.hh
 Makefile.in
 README.NATPT
 conf
-config.h.in
 configure
 configure.ac
 include
@@ -191,7 +188,6 @@ lossxml.sh
 
 ./multicast:
 Makefile.in
-config.h.in
 configure
 configure.ac
 debug.hh
@@ -215,7 +211,6 @@ protocoldefinitions.hh
 
 ./multicast6:
 Makefile.in
-config.h.in
 configure
 configure.ac
 debug.hh
@@ -223,7 +218,6 @@ fixip6src.cc
 fixip6src.hh
 icmp6checksum.cc
 icmp6checksum.hh
-install-sh
 ip6_liburn.click
 ip6fixpimsource.cc
 ip6fixpimsource.hh
@@ -243,7 +237,6 @@ mld.hh
 
 ./netflow:
 Makefile.in
-config.h.in
 configure
 configure.ac
 ipfixtypes.hh
@@ -270,7 +263,6 @@ schema.xml
 
 ./snmp:
 Makefile.in
-config.h.in
 configure
 configure.ac
 snmpbasics.cc
@@ -288,7 +280,6 @@ snmpvarinfo.hh
 
 ./unibo_qos:
 Makefile.in
-config.h.in
 configure
 configure.ac
 package

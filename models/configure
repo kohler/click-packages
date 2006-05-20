@@ -1296,8 +1296,8 @@ fi
 
 
 
-yesno () {
-    ([ "$1" = 1 ] && echo yes) || echo no
+onezero () {
+    { [ "$1" = yes ] && echo 1; } || echo 0
 }
 
 # Check whether --enable-userlevel or --disable-userlevel was given.

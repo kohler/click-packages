@@ -19,10 +19,7 @@ dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)
 	-rm -rf $(distdir)
 distdir:
-	for d in $(SUBDIRS); do \
-	  if [ -d $$d/m4 ]; then cp $(CLICKDIR)/m4/click.m4 $$d/m4; \
-	  else cp $(CLICKDIR)/m4/click.m4 $$d/acclick.m4; fi; \
-	  { cd $$d; autoconf; cd ..; }; done
+	for d in $(SUBDIRS); do { cd $$d; autoconf; cd ..; }; done
 	cp $(CLICKDIR)/LICENSE .
 	-rm -rf $(distdir)
 	mkdir $(distdir)

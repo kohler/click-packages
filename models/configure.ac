@@ -66,8 +66,8 @@ dnl
 dnl build userlevel? Linux module? FreeBSD module?
 dnl
 
-yesno () {
-    ([[ "$1" = 1 ]] && echo yes) || echo no
+onezero () {
+    { [[ "$1" = yes ]] && echo 1; } || echo 0
 }
 
 AC_ARG_ENABLE(userlevel, [  --enable-userlevel      enable user-level driver],

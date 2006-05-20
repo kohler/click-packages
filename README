@@ -14,12 +14,22 @@ Click mailing list <click@pdos.lcs.mit.edu>.
 CONTENTS
 --------
 
-ip6_natpt
-.........
+dhcp
+....
 
-    NAT port translation elements for IPv6 <-> IPv4 gateways, from Juan
-Luis Baptiste and Fabian Gonzalez.  Includes application-level gateway
-elements for DNS queries.
+    Elements for DHCP analysis, and for defining DHCP clients and servers,
+from Lih Chen and John Bicket.  Initially a masters project at UCLA.
+
+snmp
+....
+
+    Elements for SNMP support, donated by Mazu Networks.  Defines elements
+for matching Click handlers up with SNMP OIDs, and for generating traps.
+
+netflow
+.......
+
+    Elements for Cisco Netflow v7 and v9 support, donated by Mazu Networks.
 
 models
 ......
@@ -27,26 +37,35 @@ models
     Trace analysis elements, particularly for TCP flows, from Eddie Kohler
 and Jinyang Li.
 
-iias/gre
-........
+iias: gre and ppp
+.................
 
-    GRE header elements, from Mark Huang.
+    iias stands for Internet-In-A-Slice.  The gre and ppp packages, from
+    Mark Huang, define GRE header, PPP, and PPTP elements.  In ppp, the
+    PPTPServer element enables the user-level driver to act as a PPTP
+    concentrator.  Much of the code is derived from the PoPToP PPTP server
+    package, distributed under the GPL, and the PPPD PPP package,
+    distributed under the CMU BSD license.  The iias/conf directory
+    provides sample configuration files for the gre and ppp packages, that
+    enable an IP overlay network to be created on PlanetLab.
 
-iias/ppp
-........
-
-    PPP and PPTP elements, from Mark Huang. The PPTPServer element
-    enables the user-level driver to act as a PPTP concentrator. Much of
-    the code is derived from the PoPToP PPTP server package, distributed
-    under the GPL, and the PPPD PPP package, distributed under the CMU
-    BSD license.
-
-iias/conf
+ip6_natpt
 .........
 
-    Internet-In-A-Slice, from Mark Huang. Sample configuration files for
-    the gre and ppp packages, that enable an IP overlay network to be
-    created on PlanetLab.
+    NAT port translation elements for IPv6 <-> IPv4 gateways, from Juan
+Luis Baptiste and Fabian Gonzalez.  Includes application-level gateway
+elements for DNS queries.
+
+multicast, multicast6
+.....................
+
+    Elements for multicast support, including IGMP and Pim, from Martin
+Hoffman.  Preliminary.
+
+unibo_qos
+.........
+
+    QoS elements from the Universita` di Bologna, from Giorgio Calarco.
 
 COPYRIGHT AND LICENSE
 ---------------------

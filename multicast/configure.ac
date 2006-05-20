@@ -17,15 +17,10 @@ dnl the usual 'configure.ac' boilerplate
 dnl
 
 AC_INIT(click-multicast, 1.5.0)
-AC_CONFIG_HEADER(config.h)
 AC_SUBST(ac_configure_args)
 
 CLICKPACKAGENAME=multicast
 AC_SUBST(CLICKPACKAGENAME)
-
-AH_TOP([#ifndef CLICK_PKG_MULTICAST_CONFIG_H
-#define CLICK_PKG_MULTICAST_CONFIG_H 1])
-AH_BOTTOM([#endif /* CLICK_PKG_MULTICAST_CONFIG_H */])
 
 
 dnl
@@ -66,8 +61,8 @@ dnl
 dnl build userlevel? Linux module? FreeBSD module?
 dnl
 
-yesno () {
-    ([[ "$1" = 1 ]] && echo yes) || echo no
+onezero () {
+    { [[ "$1" = yes ]] && echo 1; } || echo 0
 }
 
 AC_ARG_ENABLE(userlevel, [  --enable-userlevel      enable user-level driver],
