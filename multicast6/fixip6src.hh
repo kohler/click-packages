@@ -9,8 +9,8 @@ CLICK_DECLS
 
 /*
  * =c
- * FixIPSrc(IPADDR)
- * =s IP
+ * FixIP6Src(IPADDR)
+ * =s IPv6
  * sets IP source field if requested by annotation
  * =d
  *

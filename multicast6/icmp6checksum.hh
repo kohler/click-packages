@@ -10,7 +10,7 @@ CLICK_DECLS
 /*
  * =c
  * ICMP6Checksum()
- * =s IP
+ * =s IPv6
  * computes ICMP6 messages checksum
  * =d
  *
