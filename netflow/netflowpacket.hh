@@ -420,6 +420,8 @@ NetflowPacket::netflow_packet(const Packet *p, NetflowTemplateCache *template_ca
       return new NetflowVersion9Packet(p, (V9_Header *)h, len, template_cache);
     break;
   case 10:
+    if (len >= sizeof(IPFIX_Header) && ntohs(((IPFIX_Header*)h)->length) < len)
+      len = ntohs(((IPFIX_Header*)h)->length);
     if (len >= sizeof(IPFIX_Header))
       return new IPFIXPacket(p, (IPFIX_Header *)h, len, template_cache);
     break;

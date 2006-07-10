@@ -90,13 +90,14 @@ NetflowTemplatePacket<Header, Template_Field>::NetflowTemplatePacket(const Packe
   V9_Flowset *flowset, *next_flowset;
 
   for (flowset = (V9_Flowset *)&_h[1];
-       len >= sizeof(*flowset) &&
-	 len >= ntohs(flowset->length);
-       len -= ntohs(flowset->length),
-	 flowset = next_flowset) {
+       len >= sizeof(*flowset) && len >= ntohs(flowset->length);
+       len -= ntohs(flowset->length), flowset = next_flowset) {
 
     uint16_t flowset_id = ntohs(flowset->id);
     unsigned flowset_length = ntohs(flowset->length);
+
+    if (flowset_length == 0)
+      return;
 
     next_flowset = (V9_Flowset *)((intptr_t)flowset + flowset_length);
 
