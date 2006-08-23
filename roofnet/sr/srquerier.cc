@@ -198,7 +198,7 @@ read_param(Element *e, void *thunk)
     case H_QUERIES: {
         StringAccum sa;
 	Timestamp now = Timestamp::now();
-	for (SRQuerier::DstTable::const_iterator iter = td->_queries.begin(); iter; iter++) {
+	for (SRQuerier::DstTable::const_iterator iter = td->_queries.begin(); iter.live(); iter++) {
 	  SRQuerier::DstInfo dst = iter.value();
 	  sa << dst._ip;
 	  sa << " query_count " << dst._count;

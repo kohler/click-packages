@@ -15,7 +15,7 @@ NetflowTemplateCache::remove(IPAddress srcaddr, uint32_t source_id, uint16_t tem
 {
   const Netflow_Template_Key key = { srcaddr, source_id, template_id };
 
-  for (Table::iterator iter = _t.begin(); iter; iter++) {
+  for (Table::iterator iter = _t.begin(); iter.live(); iter++) {
     if (key == iter.key()) {
       _t.remove(key);
       return true;
@@ -30,7 +30,7 @@ NetflowTemplateCache::remove(IPAddress srcaddr, uint32_t source_id)
 {
   bool removed = false;
 
-  for (Table::iterator iter = _t.begin(); iter; iter++) {
+  for (Table::iterator iter = _t.begin(); iter.live(); iter++) {
     const Netflow_Template_Key key = iter.key();
     if (key.srcaddr == srcaddr && key.source_id == source_id) {
       _t.remove(key);

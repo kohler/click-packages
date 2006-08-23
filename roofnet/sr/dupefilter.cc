@@ -117,7 +117,7 @@ DupeFilter::static_read_stats(Element *xf, void *)
 
   click_gettimeofday(&now);
 
-  for(PathTable::const_iterator i = e->_paths.begin(); i; i++) {
+  for(PathTable::const_iterator i = e->_paths.begin(); i.live(); i++) {
     PathInfo nfo = i.value();
     sa << "age " << now - nfo._last;
     sa << " packets " << nfo._packets;

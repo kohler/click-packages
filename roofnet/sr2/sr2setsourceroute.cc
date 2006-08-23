@@ -146,7 +146,7 @@ String
 SR2SetSourceRoute::print_routes()
 {
   StringAccum sa;
-  for (RouteTable::iterator iter = _routes.begin(); iter; iter++) {
+  for (RouteTable::iterator iter = _routes.begin(); iter.live(); iter++) {
     IPAddress dst = iter.key();
     Path p = iter.value();
     sa << dst << " : " << path_to_string(p) << "\n";

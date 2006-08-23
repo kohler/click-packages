@@ -176,7 +176,7 @@ String
 TXFeedbackStats::print_stats()
 {
   Vector<EtherAddress> v;
-  for (StatMap::const_iterator i = _stat_map.begin(); i; i++)
+  for (StatMap::const_iterator i = _stat_map.begin(); i.live(); i++)
     v.push_back(i.key());
 
   StringAccum sa;

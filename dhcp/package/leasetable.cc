@@ -96,7 +96,7 @@ DHCPLeaseTable::read_handler(Element *e, void *thunk)
 	switch ((uintptr_t) thunk) {
 	case H_LEASES: {
 		StringAccum sa;
-		for (LeaseIter iter = lt->_leases.begin(); iter; iter++) {
+		for (LeaseIter iter = lt->_leases.begin(); iter.live(); iter++) {
 			Lease l = iter.value();
 			sa << "lease " << l._ip << " {\n";
 			sa << "  starts " << l._start.sec() << ";\n";

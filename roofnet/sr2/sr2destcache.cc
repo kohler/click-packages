@@ -83,7 +83,7 @@ SR2DestCache::read_param(Element *e, void *vparam)
 	  struct timeval now;
 	  click_gettimeofday(&now);
 	  
-	  for(FTIter iter = d->_cache.begin(); iter; iter++) {
+	  for(FTIter iter = d->_cache.begin(); iter.live(); iter++) {
 		  CacheEntry c = iter.value();
 		  sa << c._client << " " << c._ap << " age " << Timestamp::now() - c._last << "\n";
 	  }

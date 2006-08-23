@@ -393,7 +393,7 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
       sa << "; flags " << print_hex(_r[i].flags());
 
     // Print a list of the fields
-    for (NetflowDataIterator iter = _r[i].begin(); iter; iter++) {
+    for (NetflowDataIterator iter = _r[i].begin(); iter.live(); iter++) {
       NetflowData data = iter.value();
       sa << "; " << ipfix_name(data.type()) << " " << data.str();
     }

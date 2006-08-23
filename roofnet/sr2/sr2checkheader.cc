@@ -128,7 +128,7 @@ String
 SR2CheckHeader::bad_nodes() {
 
   StringAccum sa;
-  for (BadTable::const_iterator i = _bad_table.begin(); i; i++) {
+  for (BadTable::const_iterator i = _bad_table.begin(); i.live(); i++) {
     uint8_t version = i.value();
     EtherAddress dst = i.key();
     sa << this << " eth " << dst.s().c_str() << " version " << (int) version << "\n";

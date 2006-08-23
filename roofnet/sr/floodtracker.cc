@@ -92,7 +92,7 @@ FloodTracker::print_gateway_stats()
 {
 	StringAccum sa;
 	Timestamp now = Timestamp::now();
-	for(IPIter iter = _gateways.begin(); iter; iter++) {
+	for(IPIter iter = _gateways.begin(); iter.live(); iter++) {
 		IPInfo nfo = iter.value();
 		sa << nfo._ip.s() << " ";
 		sa << "seen " << nfo._seen << " ";

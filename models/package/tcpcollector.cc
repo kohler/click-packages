@@ -844,7 +844,7 @@ TCPCollector::initialize(ErrorHandler *errh)
 void
 TCPCollector::cleanup(CleanupStage)
 {
-    for (ConnMap::iterator iter = _conn_map.begin(); iter; iter++)
+    for (ConnMap::iterator iter = _conn_map.begin(); iter.live(); iter++)
 	kill_conn(iter.value());
     _conn_map.clear();
     
@@ -909,7 +909,7 @@ TCPCollector::write_handler(const String &, Element *e, void *thunk, ErrorHandle
     TCPCollector *cf = static_cast<TCPCollector *>(e);
     switch ((intptr_t)thunk) {
       case H_CLEAR:
-	for (ConnMap::iterator i = cf->_conn_map.begin(); i; i++)
+	for (ConnMap::iterator i = cf->_conn_map.begin(); i.live(); i++)
 	    cf->kill_conn(i.value());
 	cf->_conn_map.clear();
 	return 0;

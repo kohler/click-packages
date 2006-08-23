@@ -228,7 +228,7 @@ Vector<int>
 FragmentResender::get_packets() {
   Vector<int> frags;
   
-  for (PIIter iter = _packets.begin(); iter; iter++) {
+  for (PIIter iter = _packets.begin(); iter.live(); iter++) {
     frags.push_back(iter.key());
   }
   bubble_sort(frags);

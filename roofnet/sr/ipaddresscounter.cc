@@ -88,7 +88,7 @@ IPAddressCounter::stats()
   struct timeval now;
   click_gettimeofday(&now);
 
-  for (IPIter iter = _table.begin(); iter; iter++) {
+  for (IPIter iter = _table.begin(); iter.live(); iter++) {
     IPAddressInfo n = iter.value();
     sa << n._ip.s().c_str();
     sa << " packets " << n._packets;

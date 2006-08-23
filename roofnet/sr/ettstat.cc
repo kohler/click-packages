@@ -665,7 +665,7 @@ ETTStat::read_bcast_stats(bool pretty)
 {
   Vector<IPAddress> ip_addrs;
   
-  for (ProbeMap::const_iterator i = _bcast_stats.begin(); i; i++) 
+  for (ProbeMap::const_iterator i = _bcast_stats.begin(); i.live(); i++) 
     ip_addrs.push_back(i.key());
 
   Timestamp now = Timestamp::now();
@@ -752,7 +752,7 @@ String
 ETTStat::bad_nodes() {
 
   StringAccum sa;
-  for (BadTable::const_iterator i = _bad_table.begin(); i; i++) {
+  for (BadTable::const_iterator i = _bad_table.begin(); i.live(); i++) {
     uint8_t version = i.value();
     EtherAddress dst = i.key();
     sa << this << " eth " << dst.s().c_str() << " version " << (int) version << "\n";

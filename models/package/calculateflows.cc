@@ -1182,7 +1182,7 @@ CalculateFlows::initialize(ErrorHandler *errh)
 void
 CalculateFlows::cleanup(CleanupStage)
 {
-    for (ConnMap::iterator iter = _conn_map.begin(); iter; iter++) {
+    for (ConnMap::iterator iter = _conn_map.begin(); iter.live(); iter++) {
 	ConnInfo *losstmp = const_cast<ConnInfo *>(iter.value());
 	losstmp->kill(this);
     }
@@ -1280,7 +1280,7 @@ CalculateFlows::write_handler(const String &s, Element *e, void *thunk, ErrorHan
     CalculateFlows *cf = static_cast<CalculateFlows *>(e);
     switch ((intptr_t)thunk) {
       case H_CLEAR:
-	for (ConnMap::iterator i = cf->_conn_map.begin(); i; i++)
+	for (ConnMap::iterator i = cf->_conn_map.begin(); i.live(); i++)
 	    i.value()->kill(cf);
 	cf->_conn_map.clear();
 	return 0;

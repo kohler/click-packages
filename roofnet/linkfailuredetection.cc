@@ -135,7 +135,7 @@ LinkFailureDetection::print_stats()
   click_gettimeofday(&now);
   
   StringAccum sa;
-  for (NIter iter = _neighbors.begin(); iter; iter++) {
+  for (NIter iter = _neighbors.begin(); iter.live(); iter++) {
     DstInfo n = iter.value();
     struct timeval age = now - n._last_received;
     sa << n._eth.s().c_str();

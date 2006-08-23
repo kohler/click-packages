@@ -209,7 +209,7 @@ NetflowExport::Flow::~Flow()
     // Data flowset length
     data_length = sizeof(NetflowPacket::V9_Flowset);
 
-    for (NetflowDataIterator iter = begin(); iter; iter++) {
+    for (NetflowDataIterator iter = begin(); iter.live(); iter++) {
       NetflowData data = iter.value();
       // Template field
       template_length += sizeof(NetflowPacket::V9_Template_Field);
@@ -316,7 +316,7 @@ NetflowExport::Flow::~Flow()
 
     // Template fields
     NetflowPacket::V9_Template_Field *field = (NetflowPacket::V9_Template_Field *)&templp[1];
-    for (NetflowDataIterator iter = begin(); iter; iter++, field++) {
+    for (NetflowDataIterator iter = begin(); iter.live(); iter++, field++) {
       NetflowData data = iter.value();
       field->type = htons(data.type());
       field->length = htons(data.length());
@@ -329,7 +329,7 @@ NetflowExport::Flow::~Flow()
 
     // Data fields
     unsigned char *data_field = (unsigned char *)&flowset[1];
-    for (NetflowDataIterator iter = begin(); iter; iter++) {
+    for (NetflowDataIterator iter = begin(); iter.live(); iter++) {
       NetflowData data = iter.value();
       // Assert that everything we added in the ctor was parsed
       assert(data.data() && data.parsed() &&

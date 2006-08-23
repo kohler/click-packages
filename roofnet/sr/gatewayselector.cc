@@ -235,7 +235,7 @@ GatewaySelector::best_gateway()
   int best_metric = 0;
   Timestamp now = Timestamp::now();
   
-  for(GWIter iter = _gateways.begin(); iter; iter++) {
+  for(GWIter iter = _gateways.begin(); iter.live(); iter++) {
     GWInfo nfo = iter.value();
     Timestamp expire = nfo._last_update + _gw_expire;
     Path p = _link_table->best_route(nfo._ip, false);
@@ -405,7 +405,7 @@ GatewaySelector::print_gateway_stats()
 {
     StringAccum sa;
     Timestamp now = Timestamp::now();
-    for(GWIter iter = _gateways.begin(); iter; iter++) {
+    for(GWIter iter = _gateways.begin(); iter.live(); iter++) {
       GWInfo nfo = iter.value();
       sa << nfo._ip.s().c_str() << " ";
       sa << "seen " << nfo._seen << " ";
@@ -432,7 +432,7 @@ GatewaySelector::read_param(Element *e, void *vparam)
     return f->print_gateway_stats();
   case 2: { //ignore
     StringAccum sa;
-    for (IPIter iter = f->_ignore.begin(); iter; iter++) {
+    for (IPIter iter = f->_ignore.begin(); iter.live(); iter++) {
       IPAddress ip = iter.key();
       sa << ip << "\n";
     }
@@ -441,7 +441,7 @@ GatewaySelector::read_param(Element *e, void *vparam)
 
   case 3: { //allow
     StringAccum sa;
-    for (IPIter iter = f->_allow.begin(); iter; iter++) {
+    for (IPIter iter = f->_allow.begin(); iter.live(); iter++) {
       IPAddress ip = iter.key();
       sa << ip << "\n";
     }

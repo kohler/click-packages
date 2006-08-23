@@ -109,7 +109,7 @@ String
 TXStat::print_tx_stats() 
 {
   StringAccum sa;
-  for (TXNIter iter = _neighbors.begin(); iter; iter++) {
+  for (TXNIter iter = _neighbors.begin(); iter.live(); iter++) {
     TXNeighborInfo nfo = iter.value();
     sa << nfo._eth.s() << "\n";
     sa << " packets sent :" << nfo._packets_sent << "\n";
