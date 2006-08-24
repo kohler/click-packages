@@ -152,7 +152,7 @@ class SNMPTrapSource : public Element, public Storage { public:
   void add_handlers();
 
   int generate_trap(int);
-  bool run_task();
+  bool run_task(Task *);
   
  private:
 
