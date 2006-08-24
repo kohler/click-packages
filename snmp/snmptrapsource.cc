@@ -277,7 +277,7 @@ SNMPTrapSource::generate_trap(int trap)
 }
 
 bool
-SNMPTrapSource::run_task()
+SNMPTrapSource::run_task(Task *)
 {
   // see NOTE above
   while (_head != _tail) {
