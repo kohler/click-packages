@@ -892,7 +892,7 @@ TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const P
 /*                             */
 /*******************************/
 
-enum { H_CLEAR, H_MAX_MEMUSAGE };
+enum { H_CLEAR, H_FLUSH, H_MAX_MEMUSAGE };
 
 #if TCPCOLLECTOR_MEMSTATS
 String
@@ -913,6 +913,12 @@ TCPCollector::write_handler(const String &, Element *e, void *thunk, ErrorHandle
 	    cf->kill_conn(i.value());
 	cf->_conn_map.clear();
 	return 0;
+#if TCPCOLLECTOR_XML
+      case H_FLUSH:
+	if (cf->_traceinfo_file)
+	    fflush(cf->_traceinfo_file);
+	return 0;
+#endif
       default:
 	return -1;
     }
@@ -922,6 +928,9 @@ void
 TCPCollector::add_handlers()
 {
     add_write_handler("clear", write_handler, (void *)H_CLEAR);
+#if TCPCOLLECTOR_XML
+    add_write_handler("flush", write_handler, (void *)H_FLUSH);
+#endif
 #if TCPCOLLECTOR_MEMSTATS
     add_read_handler("max_memusage", read_handler, (void *)H_MAX_MEMUSAGE);
 #endif

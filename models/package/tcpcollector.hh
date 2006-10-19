@@ -123,6 +123,15 @@ After it runs, F<tcpinfo.xml> might look like this:
    </flow>
    </trace>
 
+=h clear write-only
+
+Erase TCPCollector's internal state.  All current connections are erased (and
+output to the XML traceinfo file buffer, if appropriate).
+
+=h flush write-only
+
+Flush TCPCollector's XML traceinfo file buffer.
+   
 =a
 
 AggregateIPFlows, MultiQ */
@@ -195,7 +204,7 @@ class TCPCollector : public Element, public AggregateListener { public:
 
 #if TCPCOLLECTOR_XML
     String _traceinfo_filename;
-    FILE*_traceinfo_file;
+    FILE *_traceinfo_file;
 
     // XML hooks
     Vector<String> _trace_xmlattr_name;
