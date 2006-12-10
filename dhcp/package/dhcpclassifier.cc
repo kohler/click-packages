@@ -1,9 +1,5 @@
 // ALWAYS INCLUDE <click/config.h> FIRST
 #include <click/config.h>
-// include your own config.h if appropriate
-#ifdef HAVE_CONFIG_H
-# include <config.h>
-#endif
 
 #include "dhcp_common.hh"
 #include "dhcpclassifier.hh"

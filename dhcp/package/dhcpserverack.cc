@@ -16,9 +16,6 @@
  */
 
 #include <click/config.h>
-#ifdef HAVE_CONFIG_H
-# include <config.h>
-#endif
 
 #include <click/error.hh>
 #include <click/confparse.hh>

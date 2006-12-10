@@ -1,8 +1,4 @@
 #include <click/config.h>
-// include your own config.h if appropriate
-#ifdef HAVE_CONFIG_H
-# include <config.h>
-#endif
 
 #include <click/error.hh>
 #include <click/confparse.hh>
