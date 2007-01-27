@@ -11,9 +11,13 @@ srcdir = .
 
 
 CLICKDIR = $(HOME)/click
-SUBDIRS = dhcp iias ip6_natpt models multicast multicast6 netflow snmp unibo_qos
+SUBDIRS = dhcp iias ip6_natpt models multicast multicast6 netflow nids \
+	snmp unibo_qos
 
 distdir = $(PACKAGE)-$(VERSION)
+
+all install clean distclean:
+	for d in $(SUBDIRS); do { cd $$d; $(MAKE) $@; cd ..; }; done
 
 dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)
@@ -38,9 +42,6 @@ distdir:
 	      || echo "Could not copy $$d/$$f!" 1>&2; \
 	  done; fi; \
 	done
-
-clean distclean:
-	for d in $(SUBDIRS); do { cd $$d; $(MAKE) $@; cd ..; }; done
 
 
 .PHONY: all always elemlist elemlists \
