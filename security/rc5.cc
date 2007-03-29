@@ -41,7 +41,7 @@ uint16_t *rc5_keygen(uint64_t key){
     lArray[1] = key >> 16;
     lArray[2] = key >> 32;
     lArray[3] = key >> 48;
-    keyArray = (uint16_t *) malloc(sizeof(uint16_t) * 2 * (RC5_ROUNDS + 1));
+    keyArray = new uint16_t[2 * (RC5_ROUNDS + 1)];
     keyArray[0] = 0xb7e5;
     for(i = 1; i < (2 * (RC5_ROUNDS + 1)); ++i){
 	keyArray[i] = (keyArray[i-1] + 0x9e37);

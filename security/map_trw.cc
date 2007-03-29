@@ -700,8 +700,7 @@ MapTRW::configure(Vector<String> &conf, ErrorHandler *errh){
     } 
 
     map_size = 1 << (32 - _my_mask.mask_to_prefix_len());
-    arp_map = (struct map_record *) 
-	malloc(sizeof(struct map_record) * map_size);
+    arp_map = new struct map_record[map_size];
 
     {
 	StringAccum sa;
@@ -758,8 +757,7 @@ MapTRW::configure(Vector<String> &conf, ErrorHandler *errh){
 
     click_chatter("Allocating space for %i entry IP table: %i bytes\n",
 		  ip_table_size, sizeof(struct ip_record) * ip_table_size);
-    ip_table = (struct ip_record *) 
-	malloc(sizeof(struct ip_record) * ip_table_size);
+    ip_table = new struct ip_record[ip_table_size];
     for(int i = 0; i < (int) ip_table_size; ++i){
 	ip_table[i].count = -128;
     }
@@ -767,8 +765,7 @@ MapTRW::configure(Vector<String> &conf, ErrorHandler *errh){
     click_chatter("Allocating space for %i entry connection table: %i bytes\n",
 		  con_table_size,
 		  sizeof(struct con_record) * con_table_size);
-    con_table = (struct con_record *)
-	malloc(sizeof(struct con_record) * con_table_size);
+    con_table = new struct con_record[con_table_size];
     for(int i = 0; i < (int) con_table_size; ++i){
 	con_table[i].status = 0;
 	// Don't need to set the timestamp, as status gets properly
