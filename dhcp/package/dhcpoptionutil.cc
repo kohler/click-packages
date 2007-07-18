@@ -20,10 +20,6 @@ getOption(unsigned char *options, int option_val, int *option_size)
   return NULL;
 }
 
-inline void insertMagicCooke(unsigned char **options)
-{
-}
-
 String getNextArg(const String &s)
 {
   char buf[256];
