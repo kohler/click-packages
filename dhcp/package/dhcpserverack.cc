@@ -62,28 +62,18 @@ DHCPServerACKorNAK::push(int, Packet *p)
 		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
 				 sizeof(click_udp) + sizeof(click_ip));
 	Packet *q = 0;
-	unsigned char *buf;
-	int size;
 	IPAddress ciaddr = IPAddress(req_msg->ciaddr);
 	EtherAddress eth(req_msg->chaddr);
 	IPAddress requested_ip = IPAddress(0);
 	Lease *lease = _leases->rev_lookup(eth);
 	IPAddress server = IPAddress(0);
-	buf = DHCPOptionUtil::getOption(req_msg->options, 
-					DHO_DHCP_SERVER_IDENTIFIER, &size);
-	if (buf != NULL) {
-		uint32_t server_id;
-		memcpy(&server_id, buf, size);
-		server = IPAddress(server_id);
-	}
+	const uint8_t *o = DHCPOptionUtil::fetch(p, DHO_DHCP_SERVER_IDENTIFIER, 4);
+	if (o)
+	    server = IPAddress(o);
 	
-	buf = DHCPOptionUtil::getOption( req_msg->options, 
-					 DHO_DHCP_REQUESTED_ADDRESS, &size );
-	if (buf != NULL) {
-		uint32_t requested_ip;
-		memcpy( &requested_ip, buf, size );
-		requested_ip = IPAddress(requested_ip);
-	}
+	o = DHCPOptionUtil::fetch(p, DHO_DHCP_REQUESTED_ADDRESS, 4);
+	if (o)
+	    requested_ip = IPAddress(o);
 
 	if (!ciaddr && !requested_ip) {
 		/* this is outside of the spec, but dhclient seems to

@@ -59,16 +59,12 @@ DHCPServerOffer::push(int, Packet *p)
 	dhcpMessage *discover_msg 
 		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
 				 sizeof(click_udp) + sizeof(click_ip));
-	int optionFieldSize;
 	EtherAddress eth(discover_msg->chaddr);
 	IPAddress client_request_ip;
 	Lease *l = 0;
-	unsigned char *buf = 
-		DHCPOptionUtil::getOption(discover_msg->options, 
-					  DHO_DHCP_REQUESTED_ADDRESS, 
-					  &optionFieldSize);
-	if (buf) {
-		client_request_ip = IPAddress(buf);
+	const uint8_t *opt = DHCPOptionUtil::fetch(p, DHO_DHCP_REQUESTED_ADDRESS, 4);
+	if (opt) {
+		client_request_ip = IPAddress(opt);
 		l = _leases->new_lease(eth, client_request_ip);
 	}
 	if (!l) {

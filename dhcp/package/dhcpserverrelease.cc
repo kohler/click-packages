@@ -42,14 +42,10 @@ DHCPServerRelease::push(int, Packet *p)
 	dhcpMessage *release_msg 
 		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
 				 sizeof(click_udp) + sizeof(click_ip));
-	unsigned char *buf;
-	int optionFieldSize;
 	EtherAddress eth(release_msg->chaddr);
 	
-	buf = DHCPOptionUtil::getOption(release_msg->options, 
-					DHO_DHCP_SERVER_IDENTIFIER, 
-					&optionFieldSize);
-	IPAddress incoming_server_id(buf);
+	const uint8_t *opt = DHCPOptionUtil::fetch(p, DHO_DHCP_SERVER_IDENTIFIER, 4);
+	IPAddress incoming_server_id(opt);
 	IPAddress server_id = _leases->_ip;
 	if (incoming_server_id != server_id) {
 		click_chatter("[R] I am not the Server");
