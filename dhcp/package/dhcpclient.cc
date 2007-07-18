@@ -411,8 +411,8 @@ DHCPClient::make_request_with_ciaddr()
   memcpy(request_msg->chaddr,
 	 _ethAddr.data(),
 	 16);
-  memcpy(request_msg->options, DHCP_OPTIONS_COOKIE, 4);
-  option_ptr = request_msg->options + 4;
+  request_msg->magic = DHCP_MAGIC;
+  option_ptr = request_msg->options;
   *option_ptr++ = DHO_DHCP_MESSAGE_TYPE;
   *option_ptr++ = 1;
   *option_ptr++ = DHCP_REQUEST;
@@ -452,8 +452,8 @@ DHCPClient::make_request(Packet *p)
 	 16);
 
   //option field
-  memcpy(request_msg->options, DHCP_OPTIONS_COOKIE, 4);
-  option_ptr = request_msg->options + 4;
+  request_msg->magic = DHCP_MAGIC;
+  option_ptr = request_msg->options;
   *option_ptr++ = DHO_DHCP_MESSAGE_TYPE;
   *option_ptr++ = 1;
   *option_ptr++ = DHCP_REQUEST;
@@ -579,8 +579,8 @@ DHCPClient::make_release()
          16);
   
   // option field
-  memcpy(release_msg->options, DHCP_OPTIONS_COOKIE, 4);
-  option_ptr = release_msg->options + 4;
+  release_msg->magic = DHCP_MAGIC;
+  option_ptr = release_msg->options;
   *option_ptr++ = DHO_DHCP_MESSAGE_TYPE; //type
   *option_ptr++ = 1;
   *option_ptr++ = DHCP_RELEASE;
@@ -606,8 +606,6 @@ DHCPClient::make_discovery()
 {
   dhcpMessage *discover_msg;
   uint8_t *option_ptr;
-  //char magic_cookie[4];
-  //memcpy(magic_cookie, DHCP_OPTIONS_COOKIE, 4);
   
   //click_ether *e;
   WritablePacket *q = Packet::make(sizeof(dhcpMessage));
@@ -633,8 +631,8 @@ DHCPClient::make_discovery()
          16);
   
   // option field
-  memcpy(discover_msg->options, DHCP_OPTIONS_COOKIE, 4);
-  option_ptr = discover_msg->options + 4;
+  discover_msg->magic = DHCP_MAGIC;
+  option_ptr = discover_msg->options;
   *option_ptr++ = DHO_DHCP_MESSAGE_TYPE; //type
   *option_ptr++ = 1;
   *option_ptr++ = DHCP_DISCOVER;

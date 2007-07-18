@@ -12,18 +12,16 @@
 #define ETH_10MB_LEN	6
 
 /* DHCP Client State*/
-typedef enum _client_state
-{
-  DHCP_CLIENT_INIT_STATE = 1,
-  DHCP_CLIENT_SELECTING_STATE,
-  DHCP_CLIENT_REQUESTING_STATE,
-  DHCP_CLIENT_INIT_REBOOT,
-  DHCP_CLIENT_REBOOTING,
-  DHCP_CLIENT_BOUND,
-  DHCP_CLIENT_RENEWING,
-  DHCP_CLIENT_REBINDING
-
-}DHCP_CLIENT_STATE;
+typedef enum {
+    DHCP_CLIENT_INIT_STATE = 1,
+    DHCP_CLIENT_SELECTING_STATE,
+    DHCP_CLIENT_REQUESTING_STATE,
+    DHCP_CLIENT_INIT_REBOOT,
+    DHCP_CLIENT_REBOOTING,
+    DHCP_CLIENT_BOUND,
+    DHCP_CLIENT_RENEWING,
+    DHCP_CLIENT_REBINDING
+} dhcp_client_state_t;
 
 /* Possible values for flags field... */
 #define BOOTP_BROADCAST 32768L
@@ -42,9 +40,7 @@ typedef enum _client_state
 
 /* Magic cookie validating dhcp options field (and bootp vendor
    extensions field). */
-#define DHCP_OPTIONS_COOKIE	"\143\202\123\143"
-
-#define BOOTMAGIC { 99, 130, 83, 99 }/* rfc1048 magic cookie */
+#define DHCP_MAGIC		(htonl(0x63825363))
 
 /* DHCP Option codes: */
 #define DHO_PAD				0
@@ -128,7 +124,6 @@ typedef enum _client_state
 #define dhcp_hour 3600
 #define hdcp_minute 60
 
-#define DHCP_MAGIC 0x63538263
 typedef struct dhcpMessage
 {
   uint8_t  op;	         /* message type */
@@ -145,7 +140,7 @@ typedef struct dhcpMessage
   uint8_t  chaddr[16];	 /* client's hardware address */
   uint8_t  sname[64];    /* server host name, null terminated string */
   uint8_t  file[128];	 /* boot file name, null terminated string */
-  uint32_t magic;        /* magic cookie */
+  uint32_t magic;        /* magic cookie, if any options */
   uint8_t  options[312]; /* message options */
 } __attribute__((packed)) dhcpMessage;
 

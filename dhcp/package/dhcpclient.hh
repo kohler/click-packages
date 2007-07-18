@@ -19,7 +19,7 @@ CLICK_DECLS
  * =d 
  * DHCPClient has at least 3 outgoing ports. Port 0 is designated for
  * all broadcast packets. Port 1 is designated for all unicast
- * packets. Pork 2 is designated for the DHCP_OFFER packets received
+ * packets. Port 2 is designated for the DHCP_OFFER packets received
  * by the client.
  * 
  * There are 2 read handlers and 1 write handler.
@@ -131,7 +131,7 @@ private:
 
     int32_t _curr_backoff;
   
-  DHCP_CLIENT_STATE _state; 
+  dhcp_client_state_t _state; 
   uint32_t _curr_xid; 
   
   // lease info 
