@@ -1,6 +1,72 @@
+#include <click/config.h>
+#include <click/glue.hh>
+#include <click/packet.hh>
+#include <clicknet/udp.h>
 #include "dhcpoptionutil.hh"
 
 namespace DHCPOptionUtil {
+
+const uint8_t *fetch_next(Packet *p, int want_option, int &overload,
+			  const uint8_t *o)
+{
+    const dhcpMessage *dm = reinterpret_cast<const dhcpMessage *>(p->transport_header() + sizeof(click_udp));
+    const uint8_t *oend;
+
+    // find currently relevant options area
+    if (!o) {
+	if (p->transport_length() < sizeof(dhcpMessage) - DHCP_OPTIONS_SIZE
+	    || dm->magic != DHCP_MAGIC)
+	    return 0;
+	o = dm->options;
+	oend = p->end_data();
+	overload = 0;
+    } else {
+	if (o < dm->sname + sizeof(dm->sname))
+	    oend = dm->sname + sizeof(dm->sname);
+	else if (o < dm->file + sizeof(dm->file))
+	    oend = dm->file + sizeof(dm->file);
+	else
+	    oend = p->end_data();
+	o += 2 + o[1];
+    }
+
+  retry:
+    while (o + 1 < oend)
+	if (*o == DHO_PAD)
+	    ++o;
+	else if (*o == DHO_END || o + 2 + o[1] > oend)
+	    break;
+	else if (*o == want_option)
+	    return o;
+	else if (*o == DHO_DHCP_OPTION_OVERLOAD && overload == 0
+		 && o[1] == 1 && o[2] <= 3) {
+	    overload = o[2];
+	    o += 3;
+	} else
+	    o += 2 + o[1];
+
+    if (overload == 1 || overload == 3) {
+	overload = (overload == 3 ? 2 : 4);
+	o = dm->file;
+	oend = dm->file + sizeof(dm->file);
+	goto retry;
+    } else if (overload == 2) {
+	overload = 4;
+	o = dm->sname;
+	oend = dm->sname + sizeof(dm->sname);
+	goto retry;
+    }
+
+    return 0;
+}
+    
+const uint8_t *fetch(Packet *p, int want_option, int expected_length)
+{
+    int overload;
+    const uint8_t *o = fetch_next(p, want_option, overload);
+    return (o && o[1] == expected_length ? o + 2 : 0);
+}
+
 
 unsigned char* 
 getOption(unsigned char *options, int option_val, int *option_size)
@@ -132,3 +198,5 @@ push_dhcp_udp_header(Packet *p_in, IPAddress src) {
 }
 
 }
+
+ELEMENT_PROVIDES(DHCPOptionUtil)

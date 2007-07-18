@@ -63,3 +63,4 @@ DHCPServerRelease::push(int, Packet *p)
 }
 
 EXPORT_ELEMENT(DHCPServerRelease)
+ELEMENT_REQUIRES(DHCPOptionUtil)

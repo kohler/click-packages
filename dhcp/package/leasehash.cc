@@ -25,7 +25,6 @@
 #include <click/vector.cc>
 #include <click/straccum.hh>
 #include <click/crc32.h>
-#include "dhcpoptionutil.hh"
 #include "leasehash.hh"
 CLICK_DECLS
 

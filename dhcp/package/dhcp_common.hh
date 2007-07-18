@@ -5,12 +5,6 @@
 #define DHCP_BOOTREQUEST	1
 #define DHCP_BOOTREPLY		2
 
-/* htype */
-#define ETH_10MB		1
-
-/* hlen */
-#define ETH_10MB_LEN	6
-
 /* DHCP Client State*/
 typedef enum {
     DHCP_CLIENT_INIT_STATE = 1,
@@ -24,7 +18,7 @@ typedef enum {
 } dhcp_client_state_t;
 
 /* Possible values for flags field... */
-#define BOOTP_BROADCAST 32768L
+#define BOOTP_BROADCAST		32768L
 
 /* DHCP message type */
 #define	DHCP_DISCOVER		1
@@ -119,29 +113,24 @@ typedef enum {
 #define DHO_AUTHENTICATE		210
 #define DHO_END				255
 
-// time value (in terms of seconds)
-#define dhcp_day 86400
-#define dhcp_hour 3600
-#define hdcp_minute 60
-
-typedef struct dhcpMessage
-{
-  uint8_t  op;	         /* message type */
-  uint8_t  htype;        /* hardware address type */
-  uint8_t  hlen;         /* hardware address length */
-  uint8_t  hops;         /* should be zero in client's message */
-  uint32_t xid;	         /* transaction id */
-  uint16_t secs;         /* elapsed time in sec. from trying to boot */
-  uint16_t flags;
-  uint32_t ciaddr;       /* (previously allocated) client IP address */
-  uint32_t yiaddr;       /* 'your' client IP address */
-  uint32_t siaddr;       /* should be zero in client's messages */
-  uint32_t giaddr;       /* should be zero in client's messages */
-  uint8_t  chaddr[16];	 /* client's hardware address */
-  uint8_t  sname[64];    /* server host name, null terminated string */
-  uint8_t  file[128];	 /* boot file name, null terminated string */
-  uint32_t magic;        /* magic cookie, if any options */
-  uint8_t  options[312]; /* message options */
+#define DHCP_OPTIONS_SIZE		308
+typedef struct dhcpMessage {
+    uint8_t  op;	   /* message type */
+    uint8_t  htype;        /* hardware address type */
+    uint8_t  hlen;         /* hardware address length */
+    uint8_t  hops;         /* should be zero in client's message */
+    uint32_t xid;	   /* transaction id */
+    uint16_t secs;         /* elapsed time in sec. from trying to boot */
+    uint16_t flags;
+    uint32_t ciaddr;       /* (previously allocated) client IP address */
+    uint32_t yiaddr;       /* 'your' client IP address */
+    uint32_t siaddr;       /* should be zero in client's messages */
+    uint32_t giaddr;       /* should be zero in client's messages */
+    uint8_t  chaddr[16];   /* client's hardware address */
+    uint8_t  sname[64];    /* server host name, null terminated string */
+    uint8_t  file[128];	   /* boot file name, null terminated string */
+    uint32_t magic;        /* magic cookie, if any options */
+    uint8_t  options[DHCP_OPTIONS_SIZE]; /* message options */
 } __attribute__((packed)) dhcpMessage;
 
 #endif

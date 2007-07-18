@@ -73,7 +73,5 @@ DHCPClassifier::push(int, Packet *p)
 }
 
 #include <click/bighashmap.cc>
-#include "dhcpoptionutil.cc"
-
 EXPORT_ELEMENT(DHCPClassifier)
-  
+ELEMENT_REQUIRES(DHCPOptionUtil)  

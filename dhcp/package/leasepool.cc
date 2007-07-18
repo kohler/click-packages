@@ -24,7 +24,6 @@
 #include <click/bighashmap.cc>
 #include <click/vector.cc>
 #include <click/straccum.hh>
-#include "dhcpoptionutil.hh"
 #include "leasepool.hh"
 CLICK_DECLS
 

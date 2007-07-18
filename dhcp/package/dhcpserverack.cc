@@ -155,8 +155,8 @@ DHCPServerACKorNAK::make_ack_packet(Packet *p, Lease *lease)
   uint8_t *options_ptr;
 
   dhcp_ack->op = DHCP_BOOTREPLY;
-  dhcp_ack->htype = ETH_10MB;
-  dhcp_ack->hlen = ETH_10MB_LEN;
+  dhcp_ack->htype = ARPHRD_ETHER;
+  dhcp_ack->hlen = 6;
   dhcp_ack->hops = 0;
   dhcp_ack->xid = req_msg->xid; 
   dhcp_ack->secs = 0;
@@ -201,8 +201,8 @@ DHCPServerACKorNAK::make_nak_packet(Packet *p, Lease *)
   uint8_t *options_ptr;
   
   dhcp_nak->op = DHCP_BOOTREPLY;
-  dhcp_nak->htype = ETH_10MB;
-  dhcp_nak->hlen = ETH_10MB_LEN;
+  dhcp_nak->htype = ARPHRD_ETHER;
+  dhcp_nak->hlen = 6;
   dhcp_nak->hops = 0;
   dhcp_nak->xid = req_msg->xid;
   dhcp_nak->secs = 0;
@@ -231,4 +231,5 @@ DHCPServerACKorNAK::make_nak_packet(Packet *p, Lease *)
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(DHCPServerACKorNAK)
-  
+ELEMENT_REQUIRES(DHCPOptionUtil)
+

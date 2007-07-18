@@ -99,8 +99,8 @@ DHCPServerOffer::make_offer_packet(dhcpMessage *discover_dm, Lease *l)
   uint8_t *option_ptr;
 
   dhcp_offer->op = DHCP_BOOTREPLY;
-  dhcp_offer->htype = ETH_10MB;
-  dhcp_offer->hlen = ETH_10MB_LEN;
+  dhcp_offer->htype = ARPHRD_ETHER;
+  dhcp_offer->hlen = 6;
   dhcp_offer->hops = 0;
   dhcp_offer->xid = discover_dm->xid; 
   dhcp_offer->secs = 0;
@@ -140,3 +140,4 @@ DHCPServerOffer::add_handlers()
 }
 
 EXPORT_ELEMENT(DHCPServerOffer)
+ELEMENT_REQUIRES(DHCPOptionUtil)

@@ -1,54 +1,42 @@
 require(dhcp)
 
-client::DHCPClient(52:54:00:E5:33:17);
-//udp_encap::UDPIPEncap( 192.168.10.10 , 68, 255.255.255.255, 67 );
-udp_encap::UDPIPEncap( 0.0.0.0 , 68, 255.255.255.255, 67 );
+AddressInfo(myeth 00:13:02:99:76:12);
+//52:54:00:e5:33:17);
 
-eth_encap::EtherEncap( 0x0800, 52:54:00:E5:33:17 , ff:ff:ff:ff:ff:ff);
+in :: FromDevice(eth0, PROMISC true)
+	-> inc :: Classifier(12/0806 20/0001, // ARP queries
+			     12/0806 20/0002, // ARP replies
+			     12/0800, -);
 
-from_dev :: FromDevice(eth0)
-	->Strip(14)
-	->Align(4, 0) 
-	->ip_check::CheckIPHeader(CHECKSUM true, DETAILS true)
-	->ipclass :: IPClassifier(icmp, udp, tcp, -)
+inc[0] -> Discard;
+inc[3] -> Discard;
 
-ipclass[0]->Print(<icmp>)->Discard;
-ipclass[2]->Print(<tcp>)->Discard;
-ipclass[3]->Print(<???>)->Discard;
+inc[2] -> Strip(14)
+	-> CheckIPHeader
+	-> IPPrint("in ")
+	-> ipc :: IPClassifier(udp && dst port bootpc, icmp echo-reply)
+	-> client :: DHCPClient(myeth, LEASE_CALL release.run)
+	-> udpbcast :: UDPIPEncap(0.0.0.0, bootpc, 255.255.255.255, bootps)
+	-> eencap :: EtherEncap(0x0800, myeth, ff:ff:ff:ff:ff:ff)
+	-> IPPrint(out)
+	-> q :: Queue
+	-> ToDevice(eth0);
 
-ipclass[1]
-	->udp_check::CheckUDPHeader(DETAILS true)
-	->CheckDHCPMsg(reply)
-       	->[0]client;
+client[1] -> udpucast :: UDPIPEncap(0.0.0.0, bootpc, 255.255.255.255, bootps)
+	-> eencap;
 
-ip_check[1]->Print("Bad IP")->Discard;
-//udp_check[1]->Print("Bad UDP")->Discard;
+ipc[1]	-> ping :: ICMPPingSource(0.0.0.0, 0.0.0.0, ACTIVE false)
+	-> IPPrint(png)
+	-> arpq :: ARPQuerier(0.0.0.0, myeth)
+	-> q;
+inc[1] -> [1] arpq;
 
-// client[0] broadcast
-// client[1] unicast
-
-client[0] -> Print(<dhcpMsg>)
-          -> udp_encap
-	  -> eth_encap
-	  -> q :: Queue(1000)
-	  -> to_dev :: ToDevice(eth0)
-
-queue::DHCPOfferMsgQueue(client.client_ip_read) -> [1]client; //pull 
-
-client[1] -> udp_encap1::UDPIPEncap( 0.0.0.0 , 68, 192.168.10.9, 67 )
-	  -> DHCPUnicastEncap(client.client_ip_read, client.server_ip_read)
-	  -> eth_encap
-	  -> q ; 
-
-client[2] -> queue;
-client[3] -> Discard;
-
-
-//DriverManager(
-//	wait_time 1s,
-//	write client.client_write 192.168.0.2 192.168.0.1 1110180078 1170180090,
-//	wait_time 2s,
-	//save  client.lease_read client.lease,
-//	wait_time 20s,
-//	write client.release_write blah,
-//	loop);
+release :: Script(TYPE PASSIVE,
+	print $args,
+	write ping.active $1,
+	goto end $(not $1),
+	write udpucast.src $2,
+	write udpucast.dst $3,
+	write ping.src $2,
+	write ping.dst $3,
+	write arpq.ipaddr $2);
