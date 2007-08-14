@@ -59,7 +59,7 @@ const uint8_t *fetch_next(Packet *p, int want_option, int &overload,
 
     return 0;
 }
-    
+
 const uint8_t *fetch(Packet *p, int want_option, int expected_length)
 {
     int overload;
