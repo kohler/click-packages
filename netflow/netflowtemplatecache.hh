@@ -44,6 +44,7 @@ struct Netflow_Template_Key {
   IPAddress srcaddr;		// Source IP address of the NetflowPacket
   uint32_t source_id;		// Source ID from the V9_Header
   uint16_t template_id;		// Template ID from the V9_Template header
+  size_t hashcode() const;
 };
 
 class NetflowTemplateCache : public Element  { 
@@ -78,10 +79,10 @@ operator==(const Netflow_Template_Key &a, const Netflow_Template_Key &b)
     && a.template_id == b.template_id;
 }
 
-inline unsigned
-hashcode(const Netflow_Template_Key &a)
+inline size_t
+Netflow_Template_Key::hashcode() const
 {
-  return a.template_id;
+  return template_id;
 }
 
 CLICK_ENDDECLS

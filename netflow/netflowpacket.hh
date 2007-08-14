@@ -271,6 +271,7 @@ NetflowVersionPacket<Header, Record>::NetflowVersionPacket(const Packet *p, Head
 struct Netflow_Field_Key {
   uint32_t enterprise;
   uint16_t type;
+  size_t hashcode() const;
 };
 
 inline bool
@@ -279,10 +280,10 @@ operator==(const Netflow_Field_Key &a, const Netflow_Field_Key &b)
   return a.enterprise == b.enterprise && a.type == b.type;
 }
 
-inline unsigned
-hashcode(Netflow_Field_Key a)
+inline size_t
+Netflow_Field_Key::hashcode() const
 {
-  return a.type;
+  return type;
 }
 
 typedef HashMap<Netflow_Field_Key, NetflowData>::const_iterator NetflowDataIterator;

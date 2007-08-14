@@ -21,21 +21,22 @@ CLICK_DECLS
 
 class EtherPair {
  public: 
-	EtherAddress _src;
-	EtherAddress _dst;
-	EtherPair () { }
-	EtherPair(EtherAddress src, EtherAddress dst) {
-		_src = src;
-		_dst = dst;
-	}
-	inline bool operator==(EtherPair other) {
-		return _src == other._src && _dst == other._dst;
-	}
+    EtherAddress _src;
+    EtherAddress _dst;
+    EtherPair() { }
+    EtherPair(EtherAddress src, EtherAddress dst) {
+	_src = src;
+	_dst = dst;
+    }
+    inline bool operator==(EtherPair other) {
+	return _src == other._src && _dst == other._dst;
+    }
+    inline size_t hashcode() const;
 };
 
 
-inline unsigned hashcode(EtherPair p) {
-	return hashcode(p._src) + hashcode(p._dst);
+inline size_t EtherPair::hashcode() const {
+    return ::hashcode(_src) + ::hashcode(_dst);
 }
 
 class WifiCounter : public Element { public:
