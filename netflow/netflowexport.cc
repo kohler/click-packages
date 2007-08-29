@@ -18,7 +18,7 @@
 CLICK_DECLS
 
 NetflowExport::NetflowExport()
-  : _flow_sequence(0)
+  : _flow_sequence(0), _timer(this)
 {
 }
 
@@ -34,6 +34,7 @@ NetflowExport::configure(Vector<String> &conf, ErrorHandler *errh)
   _source_id = random() % 65536;
   _template_id = 1025;
   _debug = false;
+  _interval = 0;
 
   if (cp_va_parse(conf, this, errh,
 		  cpElement, "aggregate flow notifier", &e,
@@ -42,6 +43,7 @@ NetflowExport::configure(Vector<String> &conf, ErrorHandler *errh)
 		  "SOURCE_ID", cpUnsigned, "source identifier", &_source_id,
 		  "TEMPLATE_ID", cpUnsignedShort, "initial template identifier", &_template_id,
 		  "DEBUG", cpBool, "debug", &_debug,
+		  "INTERVAL", cpSecondsAsMilli, "interval", &_interval,
 		  cpEnd) < 0)
     return -1;
 
@@ -74,12 +76,16 @@ NetflowExport::initialize(ErrorHandler *)
   // Keep track of exporter uptime
   _start = Timestamp::now();
   _agg_notifier->add_listener(this);
+  if (_interval) {
+    _timer.initialize(this);
+    _timer.schedule_after_msec(_interval);
+  }
   return 0;
 }
 
 NetflowExport::Flow::Flow(const Packet *p, NetflowExport *exporter, unsigned flow_sequence)
   : NetflowDataRecord(),
-    _exporter(exporter), _flow_sequence(flow_sequence),
+    _flow_sequence(flow_sequence),
     _agg(AGGREGATE_ANNO(p)), _start(Timestamp::now()),
     _packets(1), _bytes(p->network_length())
 {
@@ -126,13 +132,13 @@ NetflowExport::Flow::Flow(const Packet *p, NetflowExport *exporter, unsigned flo
 
 // Good for V1, V5, and V7
 template <class Header, class Record> void
-NetflowExport::Flow::fill_record(Record *r, Timestamp &now)
+NetflowExport::Flow::fill_record(NetflowExport *exporter, Record *r, Timestamp &now)
 {
   memset(r, 0, sizeof(*r));
   r->dpkts = htonl((uint32_t)_packets);
   r->doctets = htonl((uint32_t)_bytes);
-  r->first = htonl(_start.sec() - _exporter->start());
-  r->last = htonl(now.sec() - _exporter->start());
+  r->first = htonl(_start.sec() - exporter->start());
+  r->last = htonl(now.sec() - exporter->start());
 
   struct {
     uint16_t type;
@@ -159,12 +165,12 @@ NetflowExport::Flow::fill_record(Record *r, Timestamp &now)
   }
 }
 
-NetflowExport::Flow::~Flow()
+void NetflowExport::Flow::send(NetflowExport *exporter)
 {
   Timestamp now = Timestamp::now(); 
   unsigned length = 0, template_length = 0, data_length = 0;
 
-  switch (_exporter->version()) {
+  switch (exporter->version()) {
 
   case 1:
     length += sizeof(NetflowPacket::V1_Header) + sizeof(NetflowPacket::V1_Record);
@@ -181,13 +187,13 @@ NetflowExport::Flow::~Flow()
   case 9:
   case 10:
     // Convert to uptime for V9
-    uint32_t start = htonl(_exporter->version() == 9 ?
-			   (_start.sec() - _exporter->start()) :
+    uint32_t start = htonl(exporter->version() == 9 ?
+			   (_start.sec() - exporter->start()) :
 			   _start.sec());
-    uint32_t end = htonl(_exporter->version() == 9 ?
-			 (now.sec() - _exporter->start()) :
+    uint32_t end = htonl(exporter->version() == 9 ?
+			 (now.sec() - exporter->start()) :
 			 now.sec());
-    if (_exporter->version() == 9) {
+    if (exporter->version() == 9) {
       length += sizeof(NetflowPacket::V9_Header);
       insert(NetflowData(0, IPFIX_flowStartSysUpTime, &start, 4));
       insert(NetflowData(0, IPFIX_flowEndSysUpTime, &end, 4));
@@ -230,19 +236,19 @@ NetflowExport::Flow::~Flow()
   unsigned headroom = Packet::DEFAULT_HEADROOM + sizeof(click_ip) + sizeof(click_udp);
   WritablePacket *np = Packet::make(headroom, 0, length, 0);
 
-  switch (_exporter->version()) {
+  switch (exporter->version()) {
 
   case 1: {
     NetflowPacket::V1_Header *h = (NetflowPacket::V1_Header *)np->data();
     memset(h, 0, sizeof(*h));
-    h->version = htons(_exporter->version());
+    h->version = htons(exporter->version());
     h->count = htons(1); // TODO: Batch flows
     h->uptime = htonl(now.sec() - _start.sec());
     h->unix_secs = htonl(now.sec());
     h->unix_nsecs = htonl(now.nsec());
 
     NetflowPacket::V1_Record *r = (NetflowPacket::V1_Record *)&h[1];
-    fill_record<NetflowPacket::V1_Header, NetflowPacket::V1_Record>(r, now);
+    fill_record<NetflowPacket::V1_Header, NetflowPacket::V1_Record>(exporter, r, now);
 
     break;
   }
@@ -250,17 +256,17 @@ NetflowExport::Flow::~Flow()
   case 5: {
     NetflowPacket::V5_Header *h = (NetflowPacket::V5_Header *)np->data();
     memset(h, 0, sizeof(*h));
-    h->version = htons(_exporter->version());
+    h->version = htons(exporter->version());
     h->count = htons(1); // TODO: Batch flows
     h->uptime = htonl(now.sec() - _start.sec());
     h->unix_secs = htonl(now.sec());
     h->unix_nsecs = htonl(now.nsec());
     h->flow_sequence = htonl(_flow_sequence);
-    h->engine_type = (uint8_t)((_exporter->source_id() >> 8) & 0xff);
-    h->engine_id = (uint8_t)(_exporter->source_id() & 0xff);
+    h->engine_type = (uint8_t)((exporter->source_id() >> 8) & 0xff);
+    h->engine_id = (uint8_t)(exporter->source_id() & 0xff);
 
     NetflowPacket::V5_Record *r = (NetflowPacket::V5_Record *)&h[1];
-    fill_record<NetflowPacket::V5_Header, NetflowPacket::V5_Record>(r, now);
+    fill_record<NetflowPacket::V5_Header, NetflowPacket::V5_Record>(exporter, r, now);
 
     break;
   }
@@ -268,7 +274,7 @@ NetflowExport::Flow::~Flow()
   case 7: {
     NetflowPacket::V7_Header *h = (NetflowPacket::V7_Header *)np->data();
     memset(h, 0, sizeof(*h));
-    h->version = htons(_exporter->version());
+    h->version = htons(exporter->version());
     h->count = htons(1); // TODO: Batch flows
     h->uptime = htonl(now.sec() - _start.sec());
     h->unix_secs = htonl(now.sec());
@@ -276,33 +282,33 @@ NetflowExport::Flow::~Flow()
     h->flow_sequence = htonl(_flow_sequence);
 
     NetflowPacket::V7_Record *r = (NetflowPacket::V7_Record *)&h[1];
-    fill_record<NetflowPacket::V7_Header, NetflowPacket::V7_Record>(r, now);
+    fill_record<NetflowPacket::V7_Header, NetflowPacket::V7_Record>(exporter, r, now);
 
     break;
   }
 
   case 9:
-  case 10:
+  case 10: {
     NetflowPacket::V9_Flowset *flowset;
 
-    if (_exporter->version() == 9) {
+    if (exporter->version() == 9) {
       NetflowPacket::V9_Header *h = (NetflowPacket::V9_Header *)np->data();
-      h->version = htons(_exporter->version());
+      h->version = htons(exporter->version());
       h->count = htons(2); // TODO: Batch flows
-      h->uptime = htonl(now.sec() - _exporter->start());
+      h->uptime = htonl(now.sec() - exporter->start());
       h->unix_secs = htonl(now.sec());
       h->flow_sequence = htonl(_flow_sequence);
-      h->source_id = htonl(_exporter->source_id());
+      h->source_id = htonl(exporter->source_id());
       // Template flowset header
       flowset = (NetflowPacket::V9_Flowset *)&h[1];
       flowset->id = htons(0);
     } else {
       NetflowPacket::IPFIX_Header *h = (NetflowPacket::IPFIX_Header *)np->data();
-      h->version = htons(_exporter->version());
+      h->version = htons(exporter->version());
       h->length = htonl(np->length());
       h->unix_secs = htonl(now.sec());
       h->flow_sequence = htonl(_flow_sequence);
-      h->source_id = htonl(_exporter->source_id());
+      h->source_id = htonl(exporter->source_id());
       // Template flowset header
       flowset = (NetflowPacket::V9_Flowset *)&h[1];
       flowset->id = htons(2);
@@ -311,7 +317,7 @@ NetflowExport::Flow::~Flow()
 
     // Template header
     NetflowPacket::V9_Template *templp = (NetflowPacket::V9_Template *)&flowset[1];
-    templp->id = htons(_exporter->template_id() + _agg);
+    templp->id = htons(exporter->template_id() + _agg);
     templp->count = htons(size());
 
     // Template fields
@@ -324,7 +330,7 @@ NetflowExport::Flow::~Flow()
 
     // Data flowset header
     flowset = (NetflowPacket::V9_Flowset *)((intptr_t)flowset + template_length);
-    flowset->id = htons(_exporter->template_id() + _agg);
+    flowset->id = htons(exporter->template_id() + _agg);
     flowset->length = htons(data_length);
 
     // Data fields
@@ -340,8 +346,10 @@ NetflowExport::Flow::~Flow()
 
     break;
   }
+  }
 
-  _exporter->output(0).push(np);
+  exporter->output(0).push(np);
+  _packets = _bytes = 0;
 }
 
 void
@@ -360,6 +368,7 @@ NetflowExport::aggregate_notify(uint32_t agg, AggregateEvent event, const Packet
     Flow *flow = _flows.find(agg);
     if (flow) {
       _flows.remove(agg);
+      flow->send(this);
       delete flow;
     }
     break;
@@ -376,7 +385,18 @@ NetflowExport::simple_action(Packet *p)
   p->kill();
   return 0;
 }
-  
+
+void
+NetflowExport::run_timer(Timer *)
+{
+  for (HashMap<uint32_t, Flow *>::iterator i = _flows.begin();
+       i != _flows.end();
+       ++i)
+    if (i.value())
+      i.value()->send(this);
+  _timer.reschedule_after_msec(_interval);
+}
+
 #include <click/hashmap.cc>
 template class HashMap<uint32_t, NetflowExport::Flow *>;
 

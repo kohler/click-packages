@@ -28,7 +28,8 @@ UDP to generate exportable packets.
 
 NOTIFIER is the name of an AggregateNotifier element, like
 AggregateIPFlows. NetflowExport uses the information provided by this
-element to generate flow records.
+element to generate flow records.  Note that flow records are only generated
+when the flows themselves expire, which can take some time.
 
 Keyword arguments are:
 
@@ -47,6 +48,12 @@ number between 0 and 65535.
 
 (V9 and IPFIX only). Integer. Initial template identifier. Must be
 greater than 255. Default is 1025.
+
+=item INTERVAL
+
+Number of seconds (millisecond precision).  If given, then generate flow
+records every INTERVAL seconds, in addition to when flows are destroyed.
+Default is 0 (do not generate interim flow records).
 
 =item DEBUG
 
@@ -67,6 +74,7 @@ public:
   
   const char *class_name() const	{ return "NetflowExport"; }
   const char *port_count() const	{ return PORTS_1_1; }
+  const char *flow_code() const		{ return "x/y"; }
   const char *processing() const	{ return PUSH; }
 
   int configure(Vector<String> &, ErrorHandler *);
@@ -74,6 +82,7 @@ public:
 
   void aggregate_notify(uint32_t, AggregateEvent, const Packet *);
   Packet *simple_action(Packet *p);
+  void run_timer(Timer *);
 
   uint16_t version() const { return _version; }
   uint32_t source_id() const { return _source_id; }
@@ -85,12 +94,13 @@ private:
   class Flow : public NetflowDataRecord {
   public:
     Flow(const Packet *p, NetflowExport *exporter, unsigned flow_sequence);
-    ~Flow();
+    ~Flow() {
+    }
 
-    template <class Header, class Record> void fill_record(Record *r, Timestamp &now);
+    template <class Header, class Record> void fill_record(NetflowExport *exporter, Record *r, Timestamp &now);
     void handle_packet(const Packet *p) { _packets++; _bytes += p->network_length(); }
+    void send(NetflowExport *exporter);
 
-    NetflowExport *_exporter;
     unsigned _flow_sequence;
     uint32_t _agg;
 
@@ -118,6 +128,9 @@ private:
   Timestamp _start;
   HashMap<uint32_t, Flow *> _flows;
   unsigned _flow_sequence;
+
+  Timer _timer;
+  unsigned _interval;
 };
 
 CLICK_ENDDECLS
