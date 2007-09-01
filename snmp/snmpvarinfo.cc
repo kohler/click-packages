@@ -47,7 +47,7 @@ SNMPVariableInfo::set_variable_handler(int var, const String &hname, ErrorHandle
   Element *he;
   const Handler *h;
 
-  if (!cp_handler(hname, HandlerCall::CHECK_READ, &he, &h, this, errh))
+  if (!cp_handler(hname, Handler::OP_READ, &he, &h, this, errh))
     return -1;
 
   if (_handler_elements[var]

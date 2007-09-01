@@ -22,7 +22,7 @@
 #include <click/glue.hh>
 #include <click/straccum.hh>
 #include <click/ip6address.hh>
-#include "ip6mc_etherencap.hh"
+#include "ip6mcastetherencap.hh"
 // CLICK_DECLS
 
 IP6mc_EtherEncap::IP6mc_EtherEncap()

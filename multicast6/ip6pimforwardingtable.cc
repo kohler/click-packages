@@ -23,6 +23,7 @@
 #include <click/router.hh>
 #include <click/error.hh>
 #include <click/ip6address.hh>
+#include <click/confparse.hh>
 #include "debug.hh"
 
 

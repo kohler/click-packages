@@ -25,6 +25,7 @@
 #include <click/packet_anno.hh>
 #include <clicknet/ip6.h>
 #include <click/ip6address.hh>
+#include <click/confparse.hh>
 #include "debug.hh"
 
 MLD::MLD(): _timer(this)

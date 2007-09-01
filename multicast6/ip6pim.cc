@@ -24,6 +24,7 @@
 #include <click/error.hh>
 #include <click/packet_anno.hh>
 #include <click/ip6address.hh>
+#include <click/confparse.hh>
 #include "debug.hh"
 
 IP6PIM::IP6PIM()

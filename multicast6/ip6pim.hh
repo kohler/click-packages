@@ -49,7 +49,7 @@ class IP6PIM : public Element { public:
   int configure(Vector<String> &, ErrorHandler *);
 
 
-  void IP6PIM::push(int port, Packet *);
+  void push(int port, Packet *);
   IP6Address extract_rp(IP6Address);
 
 

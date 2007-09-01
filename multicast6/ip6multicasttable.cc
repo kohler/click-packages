@@ -20,6 +20,7 @@
 #include <click/router.hh>
 #include <click/elemfilter.hh>
 #include <click/error.hh>
+#include <click/confparse.hh>
 #include "ip6multicasttable.hh"
 
 IP6MulticastTable::IP6MulticastTable()
