@@ -19,6 +19,7 @@
 #include <click/config.h>
 #include <click/router.hh>
 #include <click/elemfilter.hh>
+#include <click/confparse.hh>
 #include "protocoldefinitions.hh"
 #include "igmp.hh"
 #include "ipmulticasttable.hh"

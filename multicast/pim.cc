@@ -22,6 +22,7 @@
 #include "pim.hh"
 #include <click/error.hh>
 #include <click/packet_anno.hh>
+#include <click/confparse.hh>
 #include <clicknet/ip.h>
 #include "debug.hh"
 

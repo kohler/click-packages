@@ -22,6 +22,7 @@
 #include <click/elemfilter.hh>
 #include <click/router.hh>
 #include <click/error.hh>
+#include <click/confparse.hh>
 #include "debug.hh"
 
 PIMForwardingTable::PIMForwardingTable()

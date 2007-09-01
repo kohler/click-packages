@@ -20,6 +20,7 @@
 #include <click/glue.hh>
 #include <click/error.hh>
 #include <click/router.hh>
+#include <click/confparse.hh>
 
 
 CLICK_DECLS
