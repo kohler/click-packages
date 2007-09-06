@@ -36,7 +36,7 @@ class EtherPair {
 
 
 inline size_t EtherPair::hashcode() const {
-    return ::hashcode(_src) + ::hashcode(_dst);
+    return CLICK_NAME(hashcode)(_src) + CLICK_NAME(hashcode)(_dst);
 }
 
 class WifiCounter : public Element { public:
