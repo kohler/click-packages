@@ -45,7 +45,7 @@ LeasePool::cast(const char *n)
 }
 
 Lease *
-LeasePool::new_lease_any(EtherAddress eth) 
+LeasePool::new_lease_any(const EtherAddress &eth) 
 {
 	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
@@ -62,7 +62,7 @@ LeasePool::new_lease_any(EtherAddress eth)
 }
 
 Lease *
-LeasePool::new_lease(EtherAddress eth, IPAddress ip) 
+LeasePool::new_lease(const EtherAddress &eth, IPAddress ip) 
 {
 	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
@@ -88,7 +88,7 @@ LeasePool::insert(Lease l) {
 }
 
 void
-LeasePool::remove(EtherAddress eth) {
+LeasePool::remove(const EtherAddress &eth) {
 	if (Lease *l = rev_lookup(eth)) {
 		_free.insert(l->_ip, l->_ip);
 		_free_list.push_back(l->_ip);
@@ -99,17 +99,16 @@ LeasePool::remove(EtherAddress eth) {
 int
 LeasePool::configure( Vector<String> &conf, ErrorHandler *errh )
 {
-	if (cp_va_parse(conf, this, errh,
-			cpEtherAddress, "eth addr", &_eth, 
-			cpIPAddress, "server ip address", &_ip,
-			cpIPAddress, "subnet ip mask", &_subnet,
-			cpKeywords, 
-			"START", cpIPAddress, "start", &_start,
-			"END", cpIPAddress, "end", &_end,
-			cpEnd) < 0) {
+	if (cp_va_kparse(conf, this, errh,
+			 "ETH", cpkP+cpkM, cpEtherAddress, &_eth, 
+			 "IP", cpkP+cpkM, cpIPAddress, &_ip,
+			 "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
+			 "START", 0, cpIPAddress, &_start,
+			 "END", 0, cpIPAddress, &_end,
+			 cpEnd) < 0) {
 		return -1;
 	}
-	for (u_int32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
+	for (uint32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
 		IPAddress ip = IPAddress(htonl(x));
 		click_chatter("%s: inserting ip %s\n", __func__, ip.s().c_str());
 		_free.insert(ip, ip);

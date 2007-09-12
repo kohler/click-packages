@@ -1111,24 +1111,21 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
     bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false, window_probe = false, packets = false, reordered = false;
-    if (cp_va_parse(conf, this, errh,
-		    cpOptional,
-		    cpFilename, "output connection info file", &_traceinfo_filename,
-		    cpKeywords,
-		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
-		    "SOURCE", cpElement, "packet source element", &_packet_source,
-                    "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
-		    "SUMMARYDUMP", cpElement,  "ToIPSummaryDump element for loss annotations", &tipsd_element,
-		    "FLOWDUMPS", cpElement,  "ToIPFlowDumps element for loss annotations", &tipfd_element,
-		    "ACKLATENCY", cpBool, "output ack latency XML?", &acklatency,
-		    "ACKCAUSALITY", cpBool, "output ack causality XML?", &ackcausality,
-		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
-		    "WINDOWPROBE", cpBool, "output window probes XML?", &window_probe,
-		    "UNDELIVERED", cpBool, "output undelivered packets XML?", &undelivered,
-		    "REORDERED", cpBool, "output reordered packets XML?", &reordered,
-		    "PACKET", cpBool, "output packet XML?", &packets,
-		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
+		     "SOURCE", 0, cpElement, &_packet_source,
+		     "NOTIFIER", 0, cpElement, &af_element,
+		     "SUMMARYDUMP", 0, cpElement, &tipsd_element,
+		     "FLOWDUMPS", 0, cpElement, &tipfd_element,
+		     "ACKLATENCY", 0, cpBool, &acklatency,
+		     "ACKCAUSALITY", 0, cpBool, &ackcausality,
+		     "FULLRCVWINDOW", 0, cpBool, &full_rcv_window,
+		     "WINDOWPROBE", 0, cpBool, &window_probe,
+		     "UNDELIVERED", 0, cpBool, &undelivered,
+		     "REORDERED", 0, cpBool, &reordered,
+		     "PACKET", 0, cpBool, &packets,
+		     "IP_ID", 0, cpBool, &ip_id,
+		     cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;
@@ -1287,10 +1284,10 @@ CalculateFlows::write_handler(const String &s, Element *e, void *thunk, ErrorHan
       case H_SAVE: {
 	  String what, filename;
 	  uint32_t aggregate;
-	  if (cp_va_space_parse(s, cf, errh,
-				cpWord, "data type", &what,
-				cpUnsigned, "aggregate number", &aggregate,
-				cpFilename, "save file", &filename, cpEnd) < 0)
+	  if (cp_va_space_kparse(s, cf, errh,
+				 "TYPE", cpkP+cpkM, cpWord, &what,
+				 "AGGREGATE", cpkP+cpkM, cpUnsigned, &aggregate,
+				 "FILENAME", cpkP+cpkM, cpFilename, &filename, cpEnd) < 0)
 	      return -1;
 	  if (what == "undelivered_packetno")
 	      return cf->save(SAVE_UNDELIVERED_PACKETNO, aggregate, 0, filename, errh);

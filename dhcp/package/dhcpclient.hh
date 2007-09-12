@@ -11,7 +11,7 @@ class HandlerCall;
 /*
 =c
 
-DHCPClient(etheraddress [, I<keywords>])
+DHCPClient(ETH [, I<keywords>])
 
 =s DHCP
 
@@ -27,7 +27,7 @@ Keyword arguments are:
 
 =over 8
 
-=item IPADDR
+=item IP
 
 The client's current IP address, if any.
 

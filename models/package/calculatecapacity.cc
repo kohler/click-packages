@@ -602,14 +602,11 @@ int
 CalculateCapacity::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0;
-    if (cp_va_parse(conf, this, errh,
-		    cpOptional,
-		    cpFilename, "output connection info file", &_traceinfo_filename,
-		    cpKeywords,
-		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
-		    "SOURCE", cpElement, "packet source element", &_packet_source,
-                    "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
+		     "SOURCE", 0, cpElement, &_packet_source,
+		     "NOTIFIER", 0, cpElement, &af_element,
+		     cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;

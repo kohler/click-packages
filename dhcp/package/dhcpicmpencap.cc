@@ -26,9 +26,9 @@ DHCP_ICMP_Encap::~DHCP_ICMP_Encap()
 int
 DHCP_ICMP_Encap::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if( cp_va_parse( conf, this, errh,
-		   cpReadHandlerCall, "src ip read", &_src_ip_h,
-		   cpReadHandlerCall, "dst ip read", &_dst_ip_h,
+  if( cp_va_kparse(conf, this, errh,
+		   "SRC_CALL", cpkP+cpkM, cpReadHandlerCall, &_src_ip_h,
+		   "DST_CALL", cpkP+cpkM, cpReadHandlerCall, &_dst_ip_h,
 		   cpEnd ) < 0 )
   {
     return -1;

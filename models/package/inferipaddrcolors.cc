@@ -39,11 +39,10 @@ InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
     bool active = true;
     String seed_filename;
     
-    if (cp_va_parse(conf, this, errh,
-		    cpKeywords,
-		    "ACTIVE", cpBool, "active on startup?", &active,
-		    "SEED", cpFilename, "seed color file", &seed_filename,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "ACTIVE", 0, cpBool, &active,
+		     "SEED", 0, cpFilename, &seed_filename,
+		     cpEnd) < 0)
 	return -1;
     
     _active = active;

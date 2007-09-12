@@ -6,7 +6,7 @@
 
 /*
  * =c
- * DHCPServerACKorNAK( DHCPServerLeases )
+ * DHCPServerACKorNAK(LEASES)
  *
  * =s DHCP
  * 

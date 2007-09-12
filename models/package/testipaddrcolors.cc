@@ -37,11 +37,10 @@ int
 TestIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     bool verbose = false;
-    if (cp_va_parse(conf, this, errh,
-		    cpFilename, "colors filename", &_filename,
-		    cpKeywords,
-		    "VERBOSE", cpBool, "be verbose?", &verbose,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "FILENAME", cpkP+cpkM, cpFilename, &_filename,
+		     "VERBOSE", 0, cpBool, &verbose,
+		     cpEnd) < 0)
 	return -1;
     _verbose = verbose;
     return 0;

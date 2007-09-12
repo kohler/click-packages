@@ -13,7 +13,7 @@
 #include "leasetable.hh"
 /*
  * =c
- * DHCPLeaseHash( ServerIPAddress, SubnetMask )
+ * DHCPLeaseHash(ETH, MASK)
  *
  * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of

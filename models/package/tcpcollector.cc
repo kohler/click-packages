@@ -771,23 +771,20 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 #if TCPCOLLECTOR_XML
     bool full_rcv_window = false, window_probe = false, packets = false, interarrival = false;
 #endif
-    if (cp_va_parse(conf, this, errh,
+    if (cp_va_kparse(conf, this, errh,
 #if TCPCOLLECTOR_XML
-		    cpOptional,
-		    cpFilename, "output connection info file", &_traceinfo_filename,
+		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
 #endif
-		    cpKeywords,
-                    "NOTIFIER", cpElement,  "AggregateIPFlows element pointer (notifier)", &af_element,
-		    "SOURCE", cpElement, "packet source element", &_packet_source,
-		    "IP_ID", cpBool, "use IP ID to distinguish duplicates?", &ip_id,
+		     "NOTIFIER", 0, cpElement, &af_element,
+		     "SOURCE", 0, cpElement, &_packet_source,
+		     "IP_ID", 0, cpBool, &ip_id,
 #if TCPCOLLECTOR_XML
-		    "TRACEINFO", cpFilename, "output connection info file", &_traceinfo_filename,
-		    "FULLRCVWINDOW", cpBool, "output receive window fillers XML?", &full_rcv_window,
-		    "WINDOWPROBE", cpBool, "output window probes XML?", &window_probe,
-		    "INTERARRIVAL", cpBool, "output interarrival XML?", &interarrival,
-		    "PACKET", cpBool, "output packet XML?", &packets,
+		     "FULLRCVWINDOW", 0, cpBool, &full_rcv_window,
+		     "WINDOWPROBE", 0, cpBool, &window_probe,
+		     "INTERARRIVAL", 0, cpBool, &interarrival,
+		     "PACKET", 0, cpBool, &packets,
 #endif
-		    cpEnd) < 0)
+		     cpEnd) < 0)
         return -1;
     
     AggregateIPFlows *af = 0;

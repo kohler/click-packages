@@ -48,12 +48,12 @@ DHCPClient::initialize(ErrorHandler *errh)
 int 
 DHCPClient::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    return cp_va_parse(conf, this, errh,
-		       cpEthernetAddress, "HW addr", &_ethAddr,
-		       cpKeywords,
-		       "IPADDR", cpIPAddress, "current IP address", &_my_ip,
-		       "LEASE_CALL", cpWriteHandlerCall, "", &_lease_call,
-		       cpEnd);
+    return cp_va_kparse(conf, this, errh,
+			"ETH", cpkP+cpkM, cpEthernetAddress, &_ethAddr,
+			"IP", 0, cpIPAddress, &_my_ip,
+			"IPADDR", 0, cpIPAddress, &_my_ip, // deprecated
+			"LEASE_CALL", 0, cpWriteHandlerCall, &_lease_call,
+			cpEnd);
 }
 
 void DHCPClient::cleanup(CleanupStage)
@@ -493,17 +493,17 @@ int DHCPClient::write_handler(const String &data_in, Element *e, void *thunk, Er
 	  if (!cp_bool(arg, &lease_active))
 	      return errh->error("syntax error in lease format");
 	  else if (!lease_active
-		   && cp_va_space_parse(data, dc, errh, cpOptional,
-					cpIPAddress, "my IP", &my_ip,
-					cpEnd) < 0)
+		   && cp_va_space_kparse(data, dc, errh,
+					 "IP", cpkP, cpIPAddress, &my_ip,
+					 cpEnd) < 0)
 	      return -1;
 	  else if (lease_active
-		   && cp_va_space_parse(data, dc, errh,
-					cpIPAddress, "my IP", &my_ip,
-					cpIPAddress, "server IP", &server_ip,
-					cpSeconds, "start time", &start_lease,
-					cpSeconds, "end time", &end_lease,
-					cpEnd) < 0)
+		   && cp_va_space_kparse(data, dc, errh,
+					 "IP", cpkP+cpkM, cpIPAddress, &my_ip,
+					 "SERVERIP", cpkP+cpkM, cpIPAddress, &server_ip,
+					 "START", cpkP+cpkM, cpSeconds, &start_lease,
+					 "END", cpkP+cpkM, cpSeconds, &end_lease,
+					 cpEnd) < 0)
 	      return -1;
 	  if (!lease_active) {
 	      dc->_lease_duration = 0;

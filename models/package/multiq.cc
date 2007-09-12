@@ -331,12 +331,11 @@ MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *e = 0;
     bool raw_timestamp = false;
-    if (cp_va_parse(conf, this, errh,
-		    cpKeywords,
-		    "TCPCOLLECTOR", cpElement, "TCPCollector", &e,
-		    "RAW_TIMESTAMP", cpBool, "use raw timestamps?", &raw_timestamp,
-		    "MIN_SCALE", cpDouble, "minimum scale", &MIN_SCALE,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "TCPCOLLECTOR", 0, cpElement, &e,
+		     "RAW_TIMESTAMP", 0, cpBool, &raw_timestamp,
+		     "MIN_SCALE", 0, cpDouble, &MIN_SCALE,
+		     cpEnd) < 0)
 	return -1;
     if (e) {
 	TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");

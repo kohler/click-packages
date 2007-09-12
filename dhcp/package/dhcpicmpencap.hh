@@ -7,7 +7,7 @@ class HandlerCall;
 
 /*
  * =c 
- * DHCPICMPEncap(...)
+ * DHCPICMPEncap(SRC_CALL, DST_CALL)
  * =s DHCP
  * change IP addresses of ICMP packet
  */

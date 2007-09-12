@@ -31,7 +31,6 @@ public:
   const char *class_name() const	{ return "CheckDHCPMsg"; }
   const char *port_count() const	{ return "1/1-2"; }
   const char *processing() const	{ return AGNOSTIC; }
-  int configure(Vector<String> &conf, ErrorHandler *errh);
   
   Packet *simple_action(Packet *);
 };

@@ -219,9 +219,7 @@ snmp_oid_parsefunc(cp_value *v, const String &arg,
 		   ErrorHandler *errh, const char *argdesc,
 		   Element *context)
 {
-  StringAccum sa;
-  sa << argdesc << " (" << v->description << "): ";
-  PrefixErrorHandler p_errh(errh, sa.take_string());
+  PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
   SNMPOid scrap;
   cp_snmp_oid(arg, context, &scrap, &p_errh);
 }
@@ -254,9 +252,7 @@ snmp_variable_parsefunc(cp_value *v, const String &arg,
 			ErrorHandler *errh, const char *argdesc,
 			Element *context)
 {
-  StringAccum sa;
-  sa << argdesc << " (" << v->description << "): ";
-  PrefixErrorHandler p_errh(errh, sa.take_string());
+  PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
   cp_snmp_variable(arg, context, &v->v.i, &p_errh);
 }
 

@@ -13,7 +13,7 @@
 #include "leasetable.hh"
 /*
  * =c
- * DHCPLeasePool( ServerIPAddress, SubnetMask )
+ * DHCPLeasePool(ETH, IP, MASK, I<keywords> )
  *
  * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of
@@ -57,9 +57,9 @@ public:
 
   String get_allocated_leases_string() const;
 
-  void remove(EtherAddress eth);
-  Lease *new_lease(EtherAddress, IPAddress);
-  Lease *new_lease_any(EtherAddress);
+  void remove(const EtherAddress &eth);
+  Lease *new_lease(const EtherAddress &, IPAddress);
+  Lease *new_lease_any(const EtherAddress &);
   IPAddress get_server_ip();
   bool insert(Lease);
 private:

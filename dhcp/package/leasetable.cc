@@ -37,11 +37,11 @@ DHCPLeaseTable::~DHCPLeaseTable()
 int
 DHCPLeaseTable::configure( Vector<String> &conf, ErrorHandler *errh )
 {
-  if (cp_va_parse(conf, this, errh,
-		  cpEtherAddress, "eth addr", &_eth, 
-		  cpIPAddress, "server IP address", &_ip,
-		  cpIPAddress, "subnet ip mask", &_subnet,
-		  cpEnd) < 0 ) {
+  if (cp_va_kparse(conf, this, errh,
+		   "ETH", cpkP+cpkM, cpEtherAddress, &_eth, 
+		   "IP", cpkP+cpkM, cpIPAddress, &_ip,
+		   "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
+		   cpEnd) < 0 ) {
 	  return -1;
   }
   return 0;

@@ -7,7 +7,7 @@
 
 /*
  * =c 
- * DHCPServerRelease(...)
+ * DHCPServerRelease(LEASES)
  * =s DHCP
  * handles DHCP release address messages
  */

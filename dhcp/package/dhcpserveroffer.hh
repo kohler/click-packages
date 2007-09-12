@@ -8,7 +8,7 @@
 
 /*
  * =c
- * DHCPServerOffer( DHCPServerLeases )
+ * DHCPServerOffer(LEASES)
  *
  * =s DHCP
  *

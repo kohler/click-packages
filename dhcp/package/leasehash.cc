@@ -81,10 +81,10 @@ LeaseHash::new_lease(EtherAddress eth, IPAddress)
 int
 LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 {
-	if (cp_va_parse(conf, this, errh,
-			cpEtherAddress, "eth addr", &_eth, 
-			cpIPAddress, "subnet ip mask", &_subnet,
-			cpEnd) < 0) {
+	if (cp_va_kparse(conf, this, errh,
+			 "ETH", cpkP+cpkM, cpEtherAddress, &_eth, 
+			 "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
+			 cpEnd) < 0) {
 		return -1;
 	}
 	_ip = hash(_eth);

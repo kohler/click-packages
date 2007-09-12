@@ -36,17 +36,6 @@ CheckDHCPMsg::~CheckDHCPMsg()
 {
 }
 
-int
-CheckDHCPMsg::configure(Vector<String> &conf, ErrorHandler *errh)
-{
-	String tmp;
-	if (cp_va_parse(conf, this, errh,
-			cpEnd) < 0) {
-		return -1;
-	}
-	return 0;
-}
-
 Packet*
 CheckDHCPMsg::simple_action(Packet *p)
 {

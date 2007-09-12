@@ -34,11 +34,10 @@ int
 IPAddrColorPaint::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     _careful = false;
-    if (cp_va_parse(conf, this, errh,
-		    cpFilename, "colors filename", &_filename,
-		    cpKeywords,
-		    "CAREFUL", cpBool, "be careful?", &_careful,
-		    cpEnd) < 0)
+    if (cp_va_kparse(conf, this, errh,
+		     "FILENAME", cpkP+cpkM, cpFilename, &_filename,
+		     "CAREFUL", 0, cpBool, &_careful,
+		     cpEnd) < 0)
 	return -1;
     return 0;
 }
