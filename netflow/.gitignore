@@ -22,3 +22,4 @@ configure
 config.log
 config.status
 autom4te*
+stampa
