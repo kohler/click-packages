@@ -240,7 +240,7 @@ _nidle = 0; _idle_dict = { }
 
 def idle_add(f, *args):
     global _nidle
-    what = gtk.idle_add(idle_run, _nidle)
+    what = gobject.idle_add(idle_run, _nidle)
     _idle_dict[_nidle] = (f, args, what)
     _nidle += 1
     return _nidle - 1
@@ -249,7 +249,7 @@ def idle_run(num):
     f, args, what = _idle_dict[num]
     f2 = f(*args)
     if f2 is None:
-        gtk.idle_remove(what)
+        gobject.source_remove(what)
         del _idle_dict[num]
         return False
     else:
@@ -297,7 +297,7 @@ class Packet(object):
         self.last_seq = seqadj(self.last_seq, seq_adj)
         if self.ack != 0: self.ack = seqadj(self.ack, ack_adj)
     def __cmp__(self, other):
-        return self.time.__cmp__(other.time)
+        return cmp(self.time, other.time)
     def __str__(self):
         result = "[" + str(self.time) + " "
         if self.pure_ack():
@@ -1735,7 +1735,7 @@ class PlotCanvas_ScreenDrawable:
 
     def draw_rectangle(self, gc, x, y, w, h):
         if w > 0 and h > 0:
-            self.drawable.draw_rectangle(gc, gtk.FALSE, int(x), int(y), int(w), int(h))
+            self.drawable.draw_rectangle(gc, False, int(x), int(y), int(w), int(h))
 
     def anchor_offset(self, anchor):
         return self.ANCHOR_OFFSET[anchor][0:2]
@@ -3322,20 +3322,68 @@ class PlotFlowWindow:
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH)
         self.toolbar_tools = { }
-        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, None, "Ident", "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", "", stock_image(gtk.STOCK_YES), self.cmd_toolbar_tool, 0)
-        self.toolbar_tools[PlotCanvas.TOOL_HAND] = toolbar.append_element(gtk.TOOLBAR_CHILD_RADIOBUTTON, t, "Move", "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", "", stock_image(gtk.STOCK_YES), self.cmd_toolbar_tool, 0)
-        toolbar.append_space()
-        toolbar.append_item("In", "Zoom in slightly", "", stock_image(gtk.STOCK_ZOOM_IN), self.cmd_zoom_in, 0)
-        toolbar.append_item("Out", "Zoom out slightly", "", stock_image(gtk.STOCK_ZOOM_OUT), self.cmd_zoom_out, 0)
-        toolbar.append_item("All", "Show whole connection", "", stock_image(gtk.STOCK_ZOOM_FIT), self.cmd_zoom_fit, 0)
-        toolbar.append_space()
-        self.prev_flow_button = toolbar.append_item("Prev", "Switch to previous flow", "", stock_image(gtk.STOCK_GO_BACK), self.cmd_prev_flow, 0)
-        self.next_flow_button = toolbar.append_item("Next", "Switch to next flow", "", stock_image(gtk.STOCK_GO_FORWARD), self.cmd_next_flow, 0)
-        toolbar.append_item("Swap", "Show the other flow of this connection", "", file_image("double_arrow_small.png"), self.cmd_swap_dir, 0)
-        toolbar.append_space()
-        toolbar.append_item("Print", "Print using default settings", "", stock_image(gtk.STOCK_PRINT), self.cmd_print, 0)
+
+        ttip = gtk.Tooltips()
+
+        t = gtk.RadioToolButton(None, None)
+        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t
+        t.set_icon_widget(stock_image(gtk.STOCK_YES))
+        t.set_label("Ident")
+        t.set_tooltip(ttip, "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", None)
+        t.connect("clicked", self.cmd_toolbar_tool, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.RadioToolButton(self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY], None)
+        self.toolbar_tools[PlotCanvas.TOOL_HAND] = t
+        t.set_icon_widget(stock_image(gtk.STOCK_YES))
+        t.set_label("Move")
+        t.set_tooltip(ttip, "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", None)
+        t.connect("clicked", self.cmd_toolbar_tool, 0)
+        toolbar.insert(t, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_IN), "In")
+        t.set_tooltip(ttip, "Zoom in slightly", None)
+        t.connect("clicked", self.cmd_zoom_in, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_OUT), "Out")
+        t.set_tooltip(ttip, "Zoom out slightly", None)
+        t.connect("clicked", self.cmd_zoom_out, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_FIT), "All")
+        t.set_tooltip(ttip, "Show whole connection", None)
+        t.connect("clicked", self.cmd_zoom_fit, 0)
+        toolbar.insert(t, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_GO_BACK), "Prev")
+        self.prev_flow_button = t
+        t.set_tooltip(ttip, "Switch to previous flow", None)
+        t.connect("clicked", self.cmd_prev_flow, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_GO_FORWARD), "Next")
+        self.next_flow_button = t
+        t.set_tooltip(ttip, "Switch to next flow", None)
+        t.connect("clicked", self.cmd_next_flow, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(file_image("double_arrow_small.png"), "Swap")
+        t.set_tooltip(ttip, "Show the other flow of this connection", None)
+        t.connect("clicked", self.cmd_swap_dir, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(gtk.STOCK_PRINT)
+        t.connect("clicked", self.cmd_print, 0)
+        t.set_tooltip(ttip, "Print using default settings", None)
+        toolbar.insert(t, -1)
+        
         vbox.pack_start(toolbar, 0, 0)
-        toolbar.show()
+        toolbar.show_all()
 
     def _init_flowtree(self):
         scrolled_window = gtk.ScrolledWindow()
@@ -3343,7 +3391,7 @@ class PlotFlowWindow:
 
         self.flowtree_model = FlowSetTreeModelByLosses(self.flowset)
         treeview = gtk.TreeView(self.flowtree_model)
-        treeview.set_headers_visible(gtk.FALSE)
+        treeview.set_headers_visible(False)
         cell1 = gtk.CellRendererText()
         # the text in the column comes from column 0
         column = gtk.TreeViewColumn("tuples", cell1, text=0)

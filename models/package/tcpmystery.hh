@@ -81,8 +81,8 @@ to the trace info file in "C<E<lt>undeliveredE<gt>>" tags.  Default is false.
       -> IPClassifier(tcp)
       -> af :: AggregateIPFlows
       -> tcol :: TCPCollector(-, SOURCE f, NOTIFIER af)
+      -> TCPMystery(tcol, SEMIRTT true)
       -> Discard;
-   TCPMystery(tcol, SEMIRTT true)
 
 =a
 
