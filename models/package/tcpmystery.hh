@@ -71,7 +71,7 @@ trace info file in "C<E<lt>ackcausationE<gt>>" tags.  Default is false.
 =item UNDELIVERED
 
 Boolean.  If true, then write information about any undelivered data packets
-to the trace info file in "C<E<lt>undelivered<gt>>" tags.  Default is false.
+to the trace info file in "C<E<lt>undeliveredE<gt>>" tags.  Default is false.
 
 =back
 
