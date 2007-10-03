@@ -44,7 +44,7 @@ for the IP header's source field, and for a field in the trap proper.
 
 =item SPORT
 
-Unsigned short. Specifies the UDP source port for generated traps.
+UDP port. Specifies the UDP source port for generated traps.
 
 =item DST
 
@@ -53,7 +53,7 @@ in the IP header, if IP is true.
 
 =item DPORT
 
-Unsigned short. Specifies the UDP destination port for generated traps.
+UDP port. Specifies the UDP destination port for generated traps.
 Default is 162 (snmp-trap).
 
 =item COMMUNITY

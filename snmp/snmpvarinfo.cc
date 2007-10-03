@@ -54,7 +54,7 @@ SNMPVariableInfo::set_variable_handler(int var, const String &hname, ErrorHandle
       && (_handler_elements[var] != he || _handlers[var] != h)) {
     SNMPOid oid;
     _tree.extract_oid(_nodes[var], &oid);
-    return errh->error("SNMP object ID `%s' redefined", cp_unparse_snmp_oid(oid).c_str());
+    return errh->error("SNMP object ID '%s' redefined", cp_unparse_snmp_oid(oid).c_str());
   }
 
   _handler_elements[var] = he;
@@ -68,20 +68,19 @@ SNMPVariableInfo::add_info(const String &arg, const String &, ErrorHandler *errh
   SNMPOid oid;
   String format_name, read_handler;
 
-  if (cp_va_space_parse(arg, this, errh,
-			cpSNMPOid, "object ID", &oid,
-			cpString, "data format", &format_name,
-			cpOptional,
-			cpArgument, "read handler name", &read_handler,
-			cpEnd) < 0)
+  if (cp_va_space_kparse(arg, this, errh,
+			 "OID", cpkP+cpkM, cpSNMPOid, &oid,
+			 "TYPE", cpkP+cpkM, cpString, &format_name,
+			 "HANDLER", cpkP, cpArgument, &read_handler,
+			 cpEnd) < 0)
     return -1;
 
   SNMPTag tag = snmp_parse_tag(format_name);
   if (tag < 0)
-    return errh->error("bad data format `%s'", format_name.c_str());
+    return errh->error("bad data format '%s'", format_name.c_str());
 
   if (!read_handler && tag != SNMP_TAG_NULL)
-    return errh->error("must supply a handler for data format `%s'", format_name.c_str());
+    return errh->error("must supply a handler for data format '%s'", format_name.c_str());
 
   // find OID
   SNMPOidTree::Node *np = _tree.force_node(oid);
@@ -91,7 +90,7 @@ SNMPVariableInfo::add_info(const String &arg, const String &, ErrorHandler *errh
   int first = _tree.node_data(np);
   if (first >= 0) {
     if (_tags[first] != tag)
-      return errh->error("SNMP object ID `%s' variable redefined", cp_unparse_snmp_oid(oid).c_str());
+      return errh->error("SNMP object ID '%s' variable redefined", cp_unparse_snmp_oid(oid).c_str());
     return (full ? set_variable_handler(first, read_handler, errh) : 0);
   }
 

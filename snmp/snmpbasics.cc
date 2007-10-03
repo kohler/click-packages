@@ -173,7 +173,7 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
     if (all_alnum && isalpha(data[first]))
       identifier = arg.substring(first, pos - first);
     else if (!cp_snmp_identifier(arg.substring(first, pos - first), &identifier)) {
-      errh->error("`%s' has bad SNMP identifier syntax", arg.substring(first, pos - first).c_str());
+      errh->error("'%s' has bad SNMP identifier syntax", arg.substring(first, pos - first).c_str());
       return false;
     }
 
@@ -184,18 +184,18 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
     else if (SNMPOidInfo::well_known_oids->query(identifier, snmp_oid_context_prefix, &identifier_value))
       /* OK */;
     else {
-      errh->error("unknown object ID `%s'", identifier.c_str());
+      errh->error("unknown object ID '%s'", identifier.c_str());
       return false;
     }
 
     // compare identifier value against existing values
     if (identifier_value.size() < result.size()) {
-      errh->error("SNMP object ID `%s' (%s) too short for context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
+      errh->error("SNMP object ID '%s' (%s) too short for context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
       return false;
     }
     for (int i = 0; i < result.size(); i++)
       if (identifier_value[i] != result[i]) {
-	errh->error("SNMP object ID `%s' (%s) conflicts with context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
+	errh->error("SNMP object ID '%s' (%s) conflicts with context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
 	return false;
       }
 
@@ -240,7 +240,7 @@ cp_snmp_variable(const String &arg, Element *context, int *result, ErrorHandler 
     return false;
   int var = SNMPVariableInfo::query(oid, context);
   if (var < 0) {
-    errh->error("SNMP object ID `%s' is not a variable", cp_unparse_snmp_oid(oid).c_str());
+    errh->error("SNMP object ID '%s' is not a variable", cp_unparse_snmp_oid(oid).c_str());
     return false;
   }
   *result = var;

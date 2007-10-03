@@ -72,15 +72,15 @@ configuration fragment:
   ... -> c :: Counter -> ...
   SNMPVariableInfo(1.3.6.1.2.1.6.44 Counter32 c.count);
 
-The SNMP OID `1.3.6.1.2.1.6.44' has type Counter32, and its value corresponds
-to the C<c.count> handler. When another element requests `1.3.6.1.2.1.6.44.0's
-value, SNMPVariableInfo will call C<c.count>, parse its value, and return the
-corresponding unsigned integer.
+The SNMP OID "1.3.6.1.2.1.6.44" has type Counter32, and its value corresponds
+to the C<c.count> handler. When another element requests the value of
+"1.3.6.1.2.1.6.44.0", SNMPVariableInfo will call C<c.count>, parse its value,
+and return the corresponding unsigned integer.
 
 Note, in this example, that the other element requested
-`1.3.6.1.2.1.6.44B<.0>'. The final `.0' indicates that `1.3.6.1.2.1.6.44' is a
-scalar variable: Counter32 is a scalar type. This `.0' is required; searching
-for `1.3.6.1.2.1.6.44' will not work.
+"1.3.6.1.2.1.6.44B<.0>". The final ".0" indicates that "1.3.6.1.2.1.6.44" is a
+scalar variable: Counter32 is a scalar type. This ".0" is required; searching
+for "1.3.6.1.2.1.6.44" will not work.
 
 SNMP variable definitions are global. They are not scoped by compound
 elements, for example.

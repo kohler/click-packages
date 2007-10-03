@@ -59,7 +59,7 @@ SNMPTrapSource::add_trap(const String &str, ErrorHandler *errh)
   String name;
   cp_spacevec(str, words);
   if (words.size() < 1 || !cp_word(words[0], &name))
-    return errh->error("should be `NAME [SPECIFIC] [VARIABLES...]'");
+    return errh->error("should be 'NAME [SPECIFIC] [VARIABLES...]'");
 
   int first_var = 1;
   int trap_type;
@@ -92,7 +92,7 @@ SNMPTrapSource::add_trap(const String &str, ErrorHandler *errh)
   _trap_types.push_back(trap_type);
   for (int j = first_var; j < words.size(); j++)
     if (!cp_snmp_variable(words[j], this, &snmp_var, errh))
-      errh->error("`%s' is not an SNMP variable", words[j].c_str());
+      errh->error("'%s' is not an SNMP variable", words[j].c_str());
     else
       _snmp_vars.push_back(snmp_var);
 
@@ -111,19 +111,18 @@ SNMPTrapSource::configure(Vector<String> &conf, ErrorHandler *errh)
   _ip_ttl = 255;
   _active = true;
   
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords,
-		  "UDP", cpBool, "encapsulate in IP packet?", &_udp_encap,
-		  "TTL", cpByte, "IP time-to-live", &_ip_ttl,
-		  "SRC", cpIPAddress, "source address", &_src,
-		  "SPORT", cpUnsignedShort, "source port", &_sport,
-		  "DST", cpIPAddress, "destination address", &_dst,
-		  "DPORT", cpUnsignedShort, "destination port", &_dport,
-		  "COMMUNITY", cpString, "community string", &_community,
-		  "ENTERPRISE", cpSNMPOid, "enterprise SNMP OID", &_enterprise,
-		  "TRAP", cpArguments, "trap specifications", &traps,
-		  "ACTIVE", cpBool, "active?", &_active,
-		  0) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "UDP", 0, cpBool, &_udp_encap,
+		   "TTL", 0, cpByte, &_ip_ttl,
+		   "SRC", 0, cpIPAddress, &_src,
+		   "SPORT", 0, cpUDPPort, &_sport,
+		   "DST", 0, cpIPAddress, &_dst,
+		   "DPORT", 0, cpUDPPort, &_dport,
+		   "COMMUNITY", 0, cpString, &_community,
+		   "ENTERPRISE", cpkM, cpSNMPOid, &_enterprise,
+		   "TRAP", 0, cpArguments, &traps,
+		   "ACTIVE", 0, cpBool, &_active,
+		   cpEnd) < 0)
     return -1;
 
   if (_udp_encap && (!_src || !_dst))

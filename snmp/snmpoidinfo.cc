@@ -66,10 +66,10 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
   String new_identifier;
   SNMPOid oid;
 
-  if (cp_va_space_parse(arg, this, errh,
-			cpSNMPIdentifier, "identifier", &new_identifier,
-			cpSNMPOid, "object ID", &oid,
-			cpEnd) < 0)
+  if (cp_va_space_kparse(arg, this, errh,
+			 "NAME", cpkP+cpkM, cpSNMPIdentifier, &new_identifier,
+			 "OID", cpkP+cpkM, cpSNMPOid, &oid,
+			 cpEnd) < 0)
     return -1;
 
   // check against well-known values
@@ -79,7 +79,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
       SNMPOid old_oid;
       well_known_oids->extract_tree_oid(well_known_map, &old_oid);
       if (old_oid != oid)
-	return errh->error("new definition of SNMP object ID `%s' (%s)\n  conflicts with well-known definition (%s)", new_identifier.c_str(), cp_unparse_snmp_oid(oid).c_str(), cp_unparse_snmp_oid(old_oid).c_str());
+	return errh->error("new definition of SNMP object ID '%s' (%s)\n  conflicts with well-known definition (%s)", new_identifier.c_str(), cp_unparse_snmp_oid(oid).c_str(), cp_unparse_snmp_oid(old_oid).c_str());
       else
 	return 0;
     }
@@ -94,7 +94,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
 	SNMPOid old_oid;
 	extract_tree_oid(prev_map, &old_oid);
 	if (old_oid != oid)
-	  return errh->error("new definition of SNMP object ID `%s' (%s)\n  conflicts with old definition (%s)", new_identifier.c_str(), cp_unparse_snmp_oid(oid).c_str(), cp_unparse_snmp_oid(old_oid).c_str());
+	  return errh->error("new definition of SNMP object ID '%s' (%s)\n  conflicts with old definition (%s)", new_identifier.c_str(), cp_unparse_snmp_oid(oid).c_str(), cp_unparse_snmp_oid(old_oid).c_str());
       }
       if (_next[prev_map] < 0)
 	break;
