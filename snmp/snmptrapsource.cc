@@ -378,11 +378,11 @@ SNMPTrapSource::add_handlers()
   add_read_handler("dport", read_handler, (void *)H_dport);
   add_write_handler("dport", write_handler, (void *)H_dport);
   add_read_handler("traps", read_handler, (void *)H_traps);
-  add_write_handler("active", write_handler, (void *)H_active);
+  add_write_handler("active", write_handler, (void *)H_active, Handler::CHECKBOX);
   add_read_handler("active", read_handler, (void *)H_active);
 
   for (int i = 0; i < _names.size(); i++)
-    add_write_handler("send_" + _names[i], trap_write_handler, (void *)i);
+      add_write_handler("send_" + _names[i], trap_write_handler, (void *)i, Handler::BUTTON);
 }
 
 ELEMENT_REQUIRES(SNMPBasics SNMPBER SNMPVariableInfo)
