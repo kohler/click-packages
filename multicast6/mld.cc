@@ -68,7 +68,7 @@ int MLD::initialize(ErrorHandler *errh)
 {
   // debug_msg("MLD: mld initil");
   _timer.initialize(this);
-  _timer.schedule_after_ms(QUERY_INTERVAL);
+  _timer.schedule_after_msec(QUERY_INTERVAL);
   // at startup the router assumes he is the only MLDv2 router in its subnet
   querierstate=true;
 
@@ -518,11 +518,11 @@ MLD::run_timer(Timer *)
   //  MCastTable->printgroups(true);
   if(querierstate) {
     //	generalquery();
-	_timer.reschedule_after_ms(QUERY_INTERVAL);
+	_timer.reschedule_after_msec(QUERY_INTERVAL);
   }
   else {
 	// see RFC 3810 for the correct time value... 
-	_timer.reschedule_after_ms( (QUERY_INTERVAL*2) + (QUERY_RESPONSE_INTERVAL/2) );
+	_timer.reschedule_after_msec( (QUERY_INTERVAL*2) + (QUERY_RESPONSE_INTERVAL/2) );
   }
 }
 

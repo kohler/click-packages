@@ -89,9 +89,9 @@ int
 TCPAddressTranslator::initialize(ErrorHandler *)
 {
   _tcp_gc_timer.initialize(this);
-  _tcp_gc_timer.schedule_after_s(_tcp_gc_interval);
+  _tcp_gc_timer.schedule_after_sec(_tcp_gc_interval);
   _tcp_done_gc_timer.initialize(this);
-  _tcp_done_gc_timer.schedule_after_s(_tcp_done_gc_interval);
+  _tcp_done_gc_timer.schedule_after_sec(_tcp_done_gc_interval);
   _nmapping_failures = 0;
   return 0;
 }
@@ -464,7 +464,7 @@ TCPAddressTranslator::tcp_gc_hook(Timer *timer, void *thunk)
   TCPAddressTranslator *rw = (TCPAddressTranslator *)thunk;
   rw->clean_map6(rw->_tcp_map, click_jiffies() -
 rw->_tcp_timeout_jiffies);
-  timer->reschedule_after_s(rw->_tcp_gc_interval);
+  timer->reschedule_after_sec(rw->_tcp_gc_interval);
 }
 
 void
@@ -474,7 +474,7 @@ TCPAddressTranslator::tcp_done_gc_hook(Timer *timer, void *thunk)
   rw->clean_map6_free_tracked(rw->_tcp_map, rw->_tcp_done,
 rw->_tcp_done_tail,click_jiffies() -
 rw->_tcp_done_timeout_jiffies);
-  timer->reschedule_after_s(rw->_tcp_done_gc_interval);
+  timer->reschedule_after_sec(rw->_tcp_done_gc_interval);
 }
 
 void
@@ -482,7 +482,7 @@ TCPAddressTranslator::clean_map6(Map6 &table, uint32_t last_jif)
 {
     Mapping6 *to_free = 0;
 
-		for (Map6::iterator iter = table.begin(); iter; iter++)
+    for (Map6::iterator iter = table.begin(); iter.live(); iter++)
 	if (Mapping6 *m = iter.value()) {
 	    if (m->is_primary() && !m->used_since(last_jif) &&
 !m->free_tracked()) {
@@ -538,7 +538,7 @@ TCPAddressTranslator::clear_map6(Map6 &table)
 {
     Mapping6 *to_free = 0;
 
-    for (Map6::iterator iter = table.begin(); iter; iter++) {
+    for (Map6::iterator iter = table.begin(); iter.live(); iter++) {
 	Mapping6 *m = iter.value();
 	if (m->is_primary()) {
 	    m->set_free_next(to_free);

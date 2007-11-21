@@ -8,7 +8,7 @@
 /*
 =c
 
-NetflowPrint([TAG, KEYWORDS])
+NetflowPrint([LABEL, KEYWORDS])
 
 =s Mazu Logging
 

@@ -1,7 +1,6 @@
 #ifndef IP6PIMFORWARDINGTABLE_HH
 #define IP6PIMFORWARDINGTABLE_HH
 CLICK_DECLS
-#include <vector.h>
 #include <click/element.hh>
 #include <click/ip6address.hh>
 
@@ -57,10 +56,10 @@ class IP6PIMForwardingTable : public Element {
   struct piminterface {
     IP6Address interface;                           // interface 
 	IP6Address neighbor;                           // neighbor interface
-	vector<groupsource> groupsources; 
+	Vector<groupsource> groupsources; 
   };
 
-  vector<piminterface> piminterfaces;
+  Vector<piminterface> piminterfaces;
   click_in6_addr get_upstreamneighbor(IP6Address);
   bool addinterface(IP6Address, IP6Address);
   bool addgroup(IP6Address, IP6Address, IP6Address, IP6Address);

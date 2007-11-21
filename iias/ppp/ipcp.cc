@@ -32,12 +32,11 @@ CLICK_DECLS
 int
 IPCP::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if (cp_va_parse(conf, this, errh,
-                  cpIPAddress, "local IP address", &_localip,
-                  cpIPAddress, "remote IP address", &_remoteip,
-                  cpKeywords,
-		  "VERBOSE", cpBool, "verbose", &_verbose,
-                  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "LOCAL", cpkP+cpkM, cpIPAddress, &_localip,
+		   "REMOTE", cpkP+cpkM, cpIPAddress, &_remoteip,
+		   "VERBOSE", 0, cpBool, &_verbose,
+		   cpEnd) < 0)
     return -1;
 
   return 0;

@@ -201,7 +201,7 @@ void IP6PIM::push(int port, Packet *p)
 										   }
 			  }
 			  else PIMSpt->generatejoinprune( IP6Address(grouprecord->addr),
-						     IP6Address(htonl(IP6Address(sender->addr))), 
+						     IP6Address(sender->addr), 
 						     false);
 			}
 			pregrouplen += sizeof(*grouprecord);

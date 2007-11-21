@@ -44,13 +44,12 @@ GREEncap::configure(Vector<String> &conf, ErrorHandler *errh)
   bool checksum = false, seq = false;
   uint32_t *options = _greh.options;
 
-  if (cp_va_parse(conf, this, errh,
-                  cpShort, "protocol", &protocol,
-                  cpKeywords,
-		  "CHECKSUM", cpBool, "checksum", &checksum,
-		  "KEY", cpUnsigned, "key", &key,
-		  "SEQUENCE", cpBool, "sequence", &seq,
-                  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "PROTOCOL", cpkP+cpkM, cpShort, &protocol,
+		   "CHECKSUM", 0, cpBool, &checksum,
+		   "KEY", 0, cpUnsigned, &key,
+		   "SEQUENCE", 0, cpBool, &seq,
+		   cpEnd) < 0)
     return -1;
 
   memset(&_greh, 0, sizeof(_greh));

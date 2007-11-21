@@ -16,7 +16,7 @@ CLICK_DECLS
 
 /*
  * =c
- * MapTRW(IP/MASK, ETHADDR, I<keywords>)
+ * MapTRW(PREFIX, ETH, I<keywords>)
  * =s Packet processing for security
  * This is a packet processor for approximate TRW
  * =d
@@ -43,7 +43,7 @@ CLICK_DECLS
  * Address, this is used to determine whether an IP is local to this LAN
  * or remote (no ARPing needed).
  *
- * ETHADDR is a mac to use for active mapping (not implemented)
+ * ETH is a mac to use for active mapping (not implemented)
  *
  * =a 
  */

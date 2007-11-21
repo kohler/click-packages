@@ -654,44 +654,31 @@ MapTRW::configure(Vector<String> &conf, ErrorHandler *errh){
     rc5_seed = 0xCAFEBABE;
     click_chatter("Parsing Arguments\n");
 
-    if( cp_va_parse(conf, this, errh,
-		    cpIPPrefix, "IP address", &_my_ip, &_my_mask,
-		    cpEthernetAddress, "Ethernet address", &_my_en,
+    if(cp_va_kparse(conf, this, errh,
+		    "PREFIX", cpkP+cpkM, cpIPPrefix, &_my_ip, &_my_mask,
+		    "ETH", cpkP+cpkM, cpEthernetAddress, &_my_en,
 
 		    cpKeywords,
 
-		    "TOMATO_CHATTER", cpBool,
-		    "Whether to chatter Tomato", &tomato_chatter,
+		    "TOMATO_CHATTER", 0, cpBool, &tomato_chatter,
 
-		    "IP_TABLE_SIZE", cpUnsigned,
-		    "Number of entries in IP Table", &ip_table_size
-		    ,
-		    "IP_TABLE_ASSOC", cpUnsigned,
-		    "Associativity of IP Cache", &ip_table_assoc,
+		    "IP_TABLE_SIZE", 0, cpUnsigned, &ip_table_size,
+		    "IP_TABLE_ASSOC", 0, cpUnsigned, &ip_table_assoc,
 		    
-		    "IP_TABLE_MAX_COUNT", cpInteger,
-		    "Maximum count for IP table entries", &ip_table_max_count,
+		    "IP_TABLE_MAX_COUNT", 0, cpInteger, &ip_table_max_count,
 		    
-		    "IP_TABLE_MIN_COUNT", cpInteger,
-		    "Minimum count for IP table entries", &ip_table_min_count,
+		    "IP_TABLE_MIN_COUNT", 0, cpInteger, &ip_table_min_count,
 
-		    "IP_TABLE_BLOCK_COUNT", cpInteger,
-		    "Block IPs when count exceeds X", &ip_table_block_count,
+		    "IP_TABLE_BLOCK_COUNT", 0, cpInteger, &ip_table_block_count,
 		    
-		    "IP_TABLE_DECR_AGE", cpUnsigned,
-		    "Decrement positive entries every X minutes", 
-		    &ip_table_decr_age,
+		    "IP_TABLE_DECR_AGE", 0, cpUnsigned, &ip_table_decr_age,
 
-		    "IP_TABLE_INCR_AGE", cpUnsigned,
-		    "Increment negative entries every X minutes", 
-		    &ip_table_incr_age,
+		    "IP_TABLE_INCR_AGE", 0, cpUnsigned, &ip_table_incr_age,
 		    
-		    "CON_TABLE_SIZE", cpUnsigned,
-		    "Size of the connection table", &con_table_size,
+		    "CON_TABLE_SIZE", 0, cpUnsigned, &con_table_size,
 		    
-		    "CON_TABLE_AGE", cpUnsigned,
-		    "Connections are removed after X minutes of idleness",
-		    &con_table_maxage, cpEnd
+		    "CON_TABLE_AGE", 0, cpUnsigned, &con_table_maxage,
+		    cpEnd
 		    ) < 0
 	
        ){

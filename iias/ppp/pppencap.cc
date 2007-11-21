@@ -33,13 +33,11 @@ PPPEncap::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   uint16_t protocol;
 
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-                  cpShort, "protocol", &protocol,
-                  cpKeywords,
-		  "ADDRESS", cpByte, "address", &_ppp.address,
-		  "CONTROL", cpByte, "control", &_ppp.control,
-                  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "PROTOCOL", cpkP, cpShort, &protocol,
+		   "ADDRESS", 0, cpByte, &_ppp.address,
+		   "CONTROL", 0, cpByte, &_ppp.control,
+		   cpEnd) < 0)
     return -1;
 
   _ppp.protocol = htons(protocol);

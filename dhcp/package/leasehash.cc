@@ -82,7 +82,7 @@ int
 LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 {
 	if (cp_va_kparse(conf, this, errh,
-			 "ETH", cpkP+cpkM, cpEtherAddress, &_eth, 
+			 "ETH", cpkP+cpkM, cpEthernetAddress, &_eth, 
 			 "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
 			 cpEnd) < 0) {
 		return -1;

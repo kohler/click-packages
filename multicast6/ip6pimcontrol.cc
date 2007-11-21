@@ -39,7 +39,7 @@ IP6PIMControl::~IP6PIMControl()
 int IP6PIMControl::initialize(ErrorHandler *errh)
 {
   _timer.initialize(this);
-  _timer.schedule_after_ms(1000);
+  _timer.schedule_after_msec(1000);
   source_connected=false;
   return 0;
 }
@@ -214,7 +214,7 @@ IP6PIMControl::run_timer(Timer *)
   //  generatejoin(IP6Address("232.2.2.2"), IP6Address("192.168.20.2"));
   
   generate_hello();
-  _timer.reschedule_after_ms(3000);
+  _timer.reschedule_after_msec(3000);
 }
 
 

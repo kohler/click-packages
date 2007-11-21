@@ -35,17 +35,15 @@ NetflowPrint::configure(Vector<String> &conf, ErrorHandler *errh)
   _records = false;
   _tag = "";
 
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-		  cpString, "tag", &_tag,
-		  cpKeywords,
-		  "RECORDS", cpBool, "print records", &_records,
-		  "VERBOSE", cpBool, "be verbose", &_verbose,
-		  "CACHE", cpElement, "template cache", &e,
+  if (cp_va_kparse(conf, this, errh,
+		   "LABEL", cpkP, cpString, &_tag,
+		   "RECORDS", 0, cpBool, &_records,
+		   "VERBOSE", 0, cpBool, &_verbose,
+		   "CACHE", 0, cpElement, &e,
 #if CLICK_USERLEVEL
-		  "OUTFILE", cpFilename, "output filename", &_outfilename,
+		   "OUTFILE", 0, cpFilename, &_outfilename,
 #endif
-		  cpEnd) < 0)
+		   cpEnd) < 0)
     return -1;
 
   if (e && !(_template_cache = (NetflowTemplateCache *)e->cast("NetflowTemplateCache")))

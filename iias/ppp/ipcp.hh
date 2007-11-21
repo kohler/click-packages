@@ -21,7 +21,7 @@
 /*
 =c
 
-IPCP([I<KEYWORDS>])
+IPCP(LOCAL, REMOTE, [I<KEYWORDS>])
 
 =s PPP
 

@@ -2,7 +2,6 @@
 #define IP6MULTICASTTABLE_HH
 
 #include "ip6pimcontrol.hh"
-#include <vector.h>
 #include <click/element.hh>
 #include <clicknet/ip6.h>
 #include <click/ip6address.hh>
@@ -64,23 +63,23 @@ class IP6MulticastTable : public Element {
   struct receiver {
 	click_in6_addr receiver;
 	MODE mode;
-	vector<click_in6_addr> sources; // for SSM = Source Specific Multicast the senders IPs are needed
+	Vector<click_in6_addr> sources; // for SSM = Source Specific Multicast the senders IPs are needed
   };
 
   //  receiver *new_receiver;
 
   struct MulticastGroup {
 	click_in6_addr group; // group address
-	vector<receiver> receivers; // a group can be joined by one or more receivers
+	Vector<receiver> receivers; // a group can be joined by one or more receivers
   };
 
   MulticastGroup *gp;
 
-  vector<MulticastGroup> multicastgroups;
+  Vector<MulticastGroup> multicastgroups;
 
   int configure(Vector<String> &, ErrorHandler *);
   void printIP6(IP6Address);
-  bool printreceiver(vector<MulticastGroup>::iterator);
+  bool printreceiver(Vector<MulticastGroup>::iterator);
   bool addgroup(IP6Address);
   bool joingroup(IP6Address, IP6Address);
   unsigned char get_receiver_mode(IP6Address, IP6Address);

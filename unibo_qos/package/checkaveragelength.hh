@@ -5,7 +5,7 @@
 
 /*
  * =c
- * CheckAverageLength(MIN)
+ * CheckAverageLength(MINLENGTH)
  * =s classification
  * splits a flow of packets depending on their average length.
  * =processing
@@ -13,7 +13,7 @@
  *
  * =d
  * CheckAverageLength splits packets depending on the average length of the last ELM packets received.
- * Only if packets' average lenght is less than the value of min, they get out from output port 1
+ * Only if packets' average lenght is less than the value of MINLENGTH, they get out from output port 1
  * (thus they could pertain to a real-time flow), from port 0 otherwise.
  *
  * (ELM = 15 packets).

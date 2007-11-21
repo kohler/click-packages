@@ -72,7 +72,7 @@ bool IP6MulticastTable::addgroup(IP6Address group)
 {
   MulticastGroup newgroup;
   newgroup.group = group;
-  vector<MulticastGroup>::iterator i;
+  Vector<MulticastGroup>::iterator i;
   // check if entry already exists
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i) { 
 	if(IP6Address((*i).group)==IP6Address(group)) return false;
@@ -92,7 +92,7 @@ bool IP6MulticastTable::joingroup(IP6Address recv, IP6Address group)
   receiver new_receiver;           // create new receiver struct
   new_receiver.receiver=recv;      // initialize this new struct with receivers IP address
 
-  vector<MulticastGroup>::iterator i;
+  Vector<MulticastGroup>::iterator i;
 
    for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i) {
 
@@ -100,7 +100,7 @@ bool IP6MulticastTable::joingroup(IP6Address recv, IP6Address group)
 
 	  // search for duplicate entries
 	  
-	  vector<receiver>::iterator a;
+	  Vector<receiver>::iterator a;
 	  for(a=(*i).receivers.begin(); a!=(*i).receivers.end(); ++a) {
 		if( IP6Address((*a).receiver)==IP6Address(recv) ) { 
 		  //		  debug_msg("Duplicate request to add");
@@ -132,7 +132,7 @@ bool IP6MulticastTable::joingroup(IP6Address recv, IP6Address group)
 bool IP6MulticastTable::leavegroup(IP6Address recv, IP6Address group)
 {
 
-  vector<MulticastGroup>::iterator i;
+  Vector<MulticastGroup>::iterator i;
 
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i) {
 
@@ -140,7 +140,7 @@ bool IP6MulticastTable::leavegroup(IP6Address recv, IP6Address group)
 	if(IP6Address((*i).group)==IP6Address(group)) {
 	  // debug_msg("leavegroup found group");
 
-	  vector<receiver>::iterator a;
+	  Vector<receiver>::iterator a;
 
 	  for(a=(*i).receivers.begin(); a!=(*i).receivers.end(); ++a) {
 		if( IP6Address((*a).receiver)==IP6Address(recv) ) {
@@ -170,12 +170,12 @@ bool IP6MulticastTable::leavegroup(IP6Address recv, IP6Address group)
  *                displays receivers in a group and their sources (if existing)            *
  *                                                                                         *
  *******************************************************************************************/
-bool IP6MulticastTable::printreceiver(vector<MulticastGroup>::iterator i)
+bool IP6MulticastTable::printreceiver(Vector<MulticastGroup>::iterator i)
 {
-  vector<receiver>::iterator re;
+  Vector<receiver>::iterator re;
   for(re=(*i).receivers.begin(); re!=(*i).receivers.end(); ++re) {
 
-	vector<click_in6_addr>::iterator a;
+	Vector<click_in6_addr>::iterator a;
 	debug_msg("  receiver:");
 	printIP6(IP6Address((*re).receiver));
 	for(a=(*re).sources.begin(); a!=(*re).sources.end(); ++a) {
@@ -195,7 +195,7 @@ bool IP6MulticastTable::printreceiver(vector<MulticastGroup>::iterator i)
  *******************************************************************************************/
 bool IP6MulticastTable::printgroups(bool printreceivers)
 {
-  vector<MulticastGroup>::iterator i;
+  Vector<MulticastGroup>::iterator i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i) {
 	debug_msg("Printing groups: IP group address:");
 	printIP6(IP6Address((*i).group));
@@ -218,13 +218,13 @@ void IP6MulticastTable::push(int port, Packet *p_in)
 {
   bool submitted_packet=false;
   click_in6_addr group=click_in6_addr(p_in->dst_ip6_anno());
-  vector<MulticastGroup>::iterator  i;
+  Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
 	  if(((*i).receivers.size() != 0) && IP6Address(group)==IP6Address((*i).group)) 
 
 		{
-		  vector<receiver>::iterator a;
+		  Vector<receiver>::iterator a;
 		  for(a=(*i).receivers.begin(); a!=(*i).receivers.end(); ++a)
 			{
 			  submitted_packet=true;
@@ -249,16 +249,16 @@ void IP6MulticastTable::push(int port, Packet *p_in)
 bool IP6MulticastTable::addsource(IP6Address recv, IP6Address group, IP6Address sa)
 {
   //  debug_msg("addsource");
-  vector<MulticastGroup>::iterator  i;
+  Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
 	  if(IP6Address(group)==IP6Address((*i).group)) 
 		{
-		  vector<receiver>::iterator re;
+		  Vector<receiver>::iterator re;
 		  for(re=(*i).receivers.begin(); re!=(*i).receivers.end(); ++re)
 			{
 			  if(IP6Address((*re).receiver)==IP6Address(recv)) {
-				vector<click_in6_addr>::iterator a;
+				Vector<click_in6_addr>::iterator a;
 				for(a=(*re).sources.begin(); a!=(*re).sources.end(); a++) {
 				  //  if(IP6Address((*a))==IP6Address(sa)) {// PIM-Embedded RP test
 					//					debug_msg("addsource: Duplicate request to add source");
@@ -287,16 +287,16 @@ bool IP6MulticastTable::addsource(IP6Address recv, IP6Address group, IP6Address 
  *******************************************************************************************/
 bool IP6MulticastTable::delsource(IP6Address recv, IP6Address group, IP6Address sa)
 {
-  vector<MulticastGroup>::iterator  i;
+  Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
 	  if(IP6Address(group)==IP6Address((*i).group)) 
 		{
-		  vector<receiver>::iterator re;
+		  Vector<receiver>::iterator re;
 		  for(re=(*i).receivers.begin(); re!=(*i).receivers.end(); ++re)
 			{
 			  if(IP6Address((*re).receiver)==IP6Address(recv)) {
-				vector<click_in6_addr>::iterator a;
+				Vector<click_in6_addr>::iterator a;
 				for(a=(*re).sources.begin(); a!=(*re).sources.end(); ++a) {
 				  if(IP6Address((*a))==IP6Address(sa)) {
 					(*re).sources.erase(a);
@@ -318,12 +318,12 @@ bool IP6MulticastTable::delsource(IP6Address recv, IP6Address group, IP6Address 
 unsigned char
 IP6MulticastTable::get_receiver_mode(IP6Address recv, IP6Address group)
 {
-  vector<MulticastGroup>::iterator  i;
+  Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
 	  if(IP6Address(group)==IP6Address((*i).group)) 
 		{
-		  vector<receiver>::iterator a;
+		  Vector<receiver>::iterator a;
 		  for(a=(*i).receivers.begin(); a!=(*i).receivers.end(); ++a)
 			{
 			  if(IP6Address((*a).receiver)==IP6Address(recv))  return (*a).mode;
@@ -337,13 +337,13 @@ IP6MulticastTable::get_receiver_mode(IP6Address recv, IP6Address group)
 bool
 IP6MulticastTable::set_receiver_mode(IP6Address recv, IP6Address group, MODE mode)
 {
-  vector<MulticastGroup>::iterator  i;
+  Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
 	  if(IP6Address(group)==IP6Address((*i).group)) 
 		{
 		  //		  debug_msg("found group");
-		  vector<receiver>::iterator a;
+		  Vector<receiver>::iterator a;
 		  for(a=(*i).receivers.begin(); a!=(*i).receivers.end(); ++a)
 			{
 			  if(IP6Address((*a).receiver)==IP6Address(recv))  {
@@ -360,14 +360,14 @@ IP6MulticastTable::set_receiver_mode(IP6Address recv, IP6Address group, MODE mod
 // check whether MLD listeners are attached or not
 bool IP6MulticastTable::getMLDreceivers(IP6Address source, IP6Address group)
 {
-  vector<MulticastGroup>::iterator i;
+  Vector<MulticastGroup>::iterator i;
 
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i) {
     if(IP6Address((*i).group)==IP6Address(group)) {
       debug_msg("IP6Multicasttable: getMLDreceivers found group");
-      vector<receiver>::iterator re;
+      Vector<receiver>::iterator re;
       for(re=(*i).receivers.begin(); re!=(*i).receivers.end(); ++re) {
-	vector<click_in6_addr>::iterator a;
+	Vector<click_in6_addr>::iterator a;
 	for(a=(*re).sources.begin(); a!=(*re).sources.end(); ++a) {
 	  //	  if( IP6Address(*a)==IP6Address(source) ) // non SSM test
 	    return false; 

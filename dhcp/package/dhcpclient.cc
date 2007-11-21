@@ -52,7 +52,7 @@ DHCPClient::configure(Vector<String> &conf, ErrorHandler *errh)
 			"ETH", cpkP+cpkM, cpEthernetAddress, &_ethAddr,
 			"IP", 0, cpIPAddress, &_my_ip,
 			"IPADDR", 0, cpIPAddress, &_my_ip, // deprecated
-			"LEASE_CALL", 0, cpWriteHandlerCall, &_lease_call,
+			"LEASE_CALL", 0, cpHandlerCallPtrWrite, &_lease_call,
 			cpEnd);
 }
 

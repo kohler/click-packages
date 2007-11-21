@@ -65,7 +65,7 @@ IP6PIMForwardingTable::configure(Vector<String> &conf, ErrorHandler *errh)
 	  }
 	}
   }
-  /*  vector<pimtable>::iterator i;
+  /*  Vector<pimtable>::iterator i;
   for(i=pim_interfaces.begin(); i!=pim_interfaces.end(); i++){
     debug_msg("IP6PIMForwardingTable ipaddress %x", (*i).interface.data());
 	} */
@@ -87,17 +87,17 @@ bool IP6PIMForwardingTable::addgroup(IP6Address interface,
   debug_msg("IP6PIMForwardingTable PIM addgroup");
 
   groupsource gs;
-  gs.neighbor=IP6Address(ntohl(upstreamneighbor));
+  gs.neighbor=upstreamneighbor;
   gs.group=group;
-  gs.source=IP6Address(ntohl(source));
+  gs.source=source;
 
   // go through all pim interfaces...
-  vector<piminterface>::iterator i;
+  Vector<piminterface>::iterator i;
   for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i) { 
 	if( IP6Address((*i).interface) == IP6Address(interface) )
 	  {
 		// and check for double entries...
-		vector<groupsource>::iterator g;
+		Vector<groupsource>::iterator g;
 		for(g=(*i).groupsources.begin(); g!=(*i).groupsources.end(); ++g) {
 		  if( (*g).group==IP6Address(gs.group) ) return false;
 		}
@@ -116,13 +116,13 @@ bool IP6PIMForwardingTable::delgroup(IP6Address interface, IP6Address group, IP6
   debug_msg("IP6PIMForwardingTable PIM delgroup");
 
   // go through all pim interfaces...
-  vector<piminterface>::iterator i;
+  Vector<piminterface>::iterator i;
   for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i) { 
 	if( IP6Address((*i).interface) == IP6Address(interface) )
 	  {
 		debug_msg("IP6PIMForwardingTable delgroup found interface");
 		// and check for group entries...
-		vector<groupsource>::iterator g;
+		Vector<groupsource>::iterator g;
 		for(g=(*i).groupsources.begin(); g!=(*i).groupsources.end(); ++g) {
 		  //debug_msg("IP6PIMForwardingTable delgroup at source %x", IP6Address(source));
 		  //	debug_msg("IP6PIMForwardingTable delgroup at group %x", IP6Address(group));
@@ -142,7 +142,7 @@ bool IP6PIMForwardingTable::delgroup(IP6Address interface, IP6Address group, IP6
 
 bool IP6PIMForwardingTable::addinterface(IP6Address interface, IP6Address neighbor)
 {
-  vector<piminterface>::iterator i;
+  Vector<piminterface>::iterator i;
   for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i) {
 	if(IP6Address((*i).interface)==IP6Address(interface)) return false;
   }
@@ -162,10 +162,10 @@ bool IP6PIMForwardingTable::delgroup(IP6Address group)
 
 bool IP6PIMForwardingTable::printgroups()
 {
-  vector<piminterface>::iterator i;
+  Vector<piminterface>::iterator i;
   for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i) { 
 	  {
-		vector<groupsource>::iterator g;
+		Vector<groupsource>::iterator g;
 		for(g=(*i).groupsources.begin(); g!=(*i).groupsources.end(); ++g) {
 		  //		  debug_msg("IP6PIMForwardingTable PIM: g-%x s-%x n-%x", (*g).group.addr(), (*g).source.addr(), (*g).neighbor.addr());
 		}
@@ -188,13 +188,13 @@ void IP6PIMForwardingTable::push(int port, Packet *p_in)
   ip=(click_ip6 *)p_in->data();
   IP6Address source=IP6Address(ip->ip6_src);
   if(piminterfaces.size()!=0) {
-	vector<piminterface>::iterator  i;
+	Vector<piminterface>::iterator  i;
 	for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i)
 	  {
 
 		if((*i).groupsources.size() != 0)
 		  {
-			vector<groupsource>::iterator  g;
+			Vector<groupsource>::iterator  g;
 			for(g=(*i).groupsources.begin(); g!=(*i).groupsources.end(); ++g) {
 
 			  if( // (*g).source==source && not for embedded RP and MLDv1...
@@ -221,7 +221,7 @@ void IP6PIMForwardingTable::push(int port, Packet *p_in)
 click_in6_addr IP6PIMForwardingTable::get_upstreamneighbor(IP6Address interface)
 {
   if(piminterfaces.size()!=0) {
-	vector<piminterface>::iterator  i;
+	Vector<piminterface>::iterator  i;
 	for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i)
 	  {
 	    if((*i).interface==interface) 
@@ -236,10 +236,10 @@ click_in6_addr IP6PIMForwardingTable::get_upstreamneighbor(IP6Address interface)
 // returns false if no PIM receivers are known
 bool IP6PIMForwardingTable::getPIMreceivers(IP6Address source, IP6Address group)
 {
-  vector<piminterface>::iterator i;
+  Vector<piminterface>::iterator i;
   for(i=piminterfaces.begin(); i!=piminterfaces.end(); ++i) { 
 	{
-	  vector<groupsource>::iterator g;
+	  Vector<groupsource>::iterator g;
 	  for(g=(*i).groupsources.begin(); g!=(*i).groupsources.end(); ++g) {
 	    //		debug_msg("PIMForwardingTable getPIMreceivers: source %x group %x", source.addr(), group.addr());
 

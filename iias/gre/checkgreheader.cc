@@ -53,13 +53,13 @@ CheckGREHeader::configure(Vector<String> &conf, ErrorHandler *errh)
   _offset = 0;
   bool details = false;
 
-  if (cp_va_parse_remove_keywords(conf, 0, this, errh,
-		"OFFSET", cpUnsigned, "GRE header offset", &_offset,
-		"VERBOSE", cpBool, "be verbose?", &_verbose,
-		"DETAILS", cpBool, "keep detailed counts?", &details,
-		"CHECKSUM", cpBool, "check checksum?", &_checksum,
-		"KEY", cpUnsigned, "check key?", &_key,
-		"SEQUENCE", cpBool, "check sequence?", &_checkseq,
+  if (cp_va_kparse_remove_keywords(conf, this, errh,
+		"OFFSET", 0, cpUnsigned, &_offset,
+		"VERBOSE", 0, cpBool, &_verbose,
+		"DETAILS", 0, cpBool, &details,
+		"CHECKSUM", 0, cpBool, &_checksum,
+		"KEY", 0, cpUnsigned, &_key,
+		"SEQUENCE", 0, cpBool, &_checkseq,
 		cpEnd) < 0)
     return -1;
 

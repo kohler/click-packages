@@ -36,15 +36,14 @@ NetflowExport::configure(Vector<String> &conf, ErrorHandler *errh)
   _debug = false;
   _interval = 0;
 
-  if (cp_va_parse(conf, this, errh,
-		  cpElement, "aggregate flow notifier", &e,
-		  cpKeywords,
-		  "VERSION", cpUnsignedShort, "Netflow version", &_version,
-		  "SOURCE_ID", cpUnsigned, "source identifier", &_source_id,
-		  "TEMPLATE_ID", cpUnsignedShort, "initial template identifier", &_template_id,
-		  "DEBUG", cpBool, "debug", &_debug,
-		  "INTERVAL", cpSecondsAsMilli, "interval", &_interval,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "NOTIFIER", cpkP+cpkM, cpElement, &e,
+		   "VERSION", 0, cpUnsignedShort, &_version,
+		   "SOURCE_ID", 0, cpUnsigned, &_source_id,
+		   "TEMPLATE_ID", 0, cpUnsignedShort, &_template_id,
+		   "DEBUG", 0, cpBool, &_debug,
+		   "INTERVAL", 0, cpSecondsAsMilli, &_interval,
+		   cpEnd) < 0)
     return -1;
 
   if (e && !(_agg_notifier = (AggregateNotifier *)e->cast("AggregateNotifier")))
