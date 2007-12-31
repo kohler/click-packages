@@ -254,23 +254,59 @@ NetflowVersion9Packet::last(int i) const {
   return unix_secs() + (int)(_r[i].last() - uptime()) / 1000;
 }
 
+template<> Timestamp 
+NetflowVersion9Packet::first_ts(int i) const {
+  return Timestamp(unix_secs() + (int)(_r[i].first() - uptime()) / 1000,
+                   unix_nsecs());
+}
+
+template<> Timestamp 
+NetflowVersion9Packet::last_ts(int i) const {
+  return Timestamp(unix_secs() + (int)(_r[i].last() - uptime()) / 1000,
+            unix_nsecs());
+}
+
 // IPFIX header has no uptime field. Uptime of the device can be
 // obtained from the sysUpTime field in an option flowset, but option
 // records are not currently parsed.
-template<> unsigned long
-IPFIXPacket::uptime() const
+template <>
+unsigned long
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header,
+		      NetflowPacket::IPFIX_Template_Field>::uptime() const
 {
   return 0;
 }
 
-template<> unsigned long
-IPFIXPacket::first(int i) const {
+template <>
+unsigned long
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header,
+		      NetflowPacket::IPFIX_Template_Field>::first(int i) const {
   return _r[i].value<unsigned long>(0, IPFIX_flowStartSeconds);
 }
 
-template<> unsigned long
-IPFIXPacket::last(int i) const {
+template <>
+unsigned long
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header,
+		      NetflowPacket::IPFIX_Template_Field>::last(int i) const {
   return _r[i].value<unsigned long>(0, IPFIX_flowEndSeconds);
+}
+
+template <>
+Timestamp
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header,
+                      NetflowPacket::IPFIX_Template_Field>::first_ts(int i) const
+{
+  return Timestamp(_r[i].value<unsigned long>(0, IPFIX_flowStartSeconds),
+                   unix_nsecs());
+}
+
+template <>
+Timestamp
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header,
+                      NetflowPacket::IPFIX_Template_Field>::last_ts(int i) const
+{
+  return Timestamp(_r[i].value<unsigned long>(0, IPFIX_flowEndSeconds),
+                   unix_nsecs());
 }
 
 template<class Header, class Template_Field> String

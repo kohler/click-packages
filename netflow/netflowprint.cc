@@ -34,6 +34,7 @@ NetflowPrint::configure(Vector<String> &conf, ErrorHandler *errh)
   _verbose = false;
   _records = false;
   _tag = "";
+  _template_cache = 0;
 
   if (cp_va_kparse(conf, this, errh,
 		   "LABEL", cpkP, cpString, &_tag,

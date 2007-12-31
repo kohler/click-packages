@@ -17,6 +17,7 @@
 #include <click/etheraddress.hh>
 #include <click/ipaddress.hh>
 #include <click/ip6address.hh>
+#include <click/timestamp.hh>
 #include <clicknet/ip.h>
 #include <clicknet/ip6.h>
 #include <clicknet/udp.h>
@@ -142,7 +143,7 @@ public:
     uint16_t dst_as;		/* AS of dest address (origin or peer) */
     uint8_t src_mask;		/* Source address prefix mask bits */
     uint8_t dst_mask;		/* Dest address prefix mask bits */
-    uint16_t pad;
+    uint16_t pad1;
     uint32_t router_sc;         /* Router which is shortcut by switch */
   };
 
@@ -186,14 +187,23 @@ public:
   virtual unsigned short output(int) const = 0;
   virtual unsigned long dpkts(int) const = 0;
   virtual unsigned long doctets(int) const = 0;
+  virtual bool has_egress_counts(int) const = 0;
+  virtual unsigned long egress_dpkts(int) const = 0;
+  virtual unsigned long egress_doctets(int) const = 0;
   virtual unsigned long first(int) const = 0;
   virtual unsigned long last(int) const = 0;
+  virtual Timestamp first_ts(int) const = 0;
+  virtual Timestamp last_ts(int) const = 0;
   virtual unsigned short sport(int i) const = 0;
   virtual unsigned short dport(int i) const = 0;
   virtual unsigned char prot(int i) const = 0;
   virtual unsigned char tos(int i) const = 0;
+  virtual bool has_egress_tos(int i) const = 0;
+  virtual unsigned char egress_tos(int i) const = 0;
   virtual unsigned char flags(int i) const = 0;
+  virtual unsigned char pad1(int i) const = 0;
 
+  virtual String printable_version() const { return String(version()); }
   virtual String unparse(bool verbose) const;
   virtual String unparse_record(int i, String tag, bool verbose) const;
 
@@ -223,13 +233,21 @@ public:
   virtual unsigned short output(int i) const { return ntohs(_r[i].output); }
   virtual unsigned long dpkts(int i) const { return ntohl(_r[i].dpkts); }
   virtual unsigned long doctets(int i) const { return ntohl(_r[i].doctets); }
+  virtual bool has_egress_counts(int) const { return false; }
+  virtual unsigned long egress_dpkts(int i) const { return ntohl(_r[i].dpkts); }
+  virtual unsigned long egress_doctets(int i) const { return ntohl(_r[i].doctets); }
   virtual unsigned long first(int) const;
   virtual unsigned long last(int) const;
+  virtual Timestamp first_ts(int) const;
+  virtual Timestamp last_ts(int) const;
   virtual unsigned short sport(int i) const { return ntohs(_r[i].sport); }
   virtual unsigned short dport(int i) const { return ntohs(_r[i].dport); }
   virtual unsigned char prot(int i) const { return _r[i].prot; }
   virtual unsigned char tos(int i) const { return _r[i].tos; }
+  virtual bool has_egress_tos(int) const { return false; }
+  virtual unsigned char egress_tos(int i) const { return _r[i].tos; }
   virtual unsigned char flags(int i) const { return _r[i].flags; }
+  virtual unsigned char pad1(int i) const { return _r[i].pad1; }
 
 private:
 
@@ -254,6 +272,20 @@ template<class Header, class Record> inline unsigned long
 NetflowVersionPacket<Header, Record>::last(int i) const
 {
   return unix_secs() + (int)(ntohl(_r[i].last) - uptime()) / 1000;
+}
+
+template<class Header, class Record> inline Timestamp 
+NetflowVersionPacket<Header, Record>::first_ts(int i) const
+{
+  return Timestamp(unix_secs() + (int)(ntohl(_r[i].first) - uptime()) / 1000,
+                   unix_nsecs());
+}
+
+template<class Header, class Record> inline Timestamp 
+NetflowVersionPacket<Header, Record>::last_ts(int i) const
+{
+  return Timestamp(unix_secs() + (int)(ntohl(_r[i].last) - uptime()) / 1000,
+            unix_nsecs());
 }
 
 template<class Header, class Record> inline
@@ -316,13 +348,17 @@ public:
   unsigned short output() const { return value<unsigned short>(0, IPFIX_egressInterface); }
   unsigned long dpkts() const { return value<unsigned long>(0, IPFIX_packetDeltaCount); }
   unsigned long doctets() const { return value<unsigned long>(0, IPFIX_octetDeltaCount); }
+  unsigned long egress_dpkts() const { return value<unsigned long>(0, IPFIX_postPacketDeltaCount); }
+  unsigned long egress_doctets() const { return value<unsigned long>(0, IPFIX_postOctetDeltaCount); }
   unsigned long first() const { return value<unsigned long>(0, IPFIX_flowStartSysUpTime); }
   unsigned long last() const { return value<unsigned long>(0, IPFIX_flowEndSysUpTime); }
   unsigned short sport() const { return value<unsigned short>(0, IPFIX_sourceTransportPort); }
   unsigned short dport() const { return value<unsigned short>(0, IPFIX_destinationTransportPort); }
   unsigned char prot() const { return value<unsigned char>(0, IPFIX_protocolIdentifier); }
   unsigned char tos() const { return value<unsigned char>(0, IPFIX_classOfServiceIPv4); }
+  unsigned char egress_tos() const { return value<unsigned char>(0, IPFIX_postClassOfServiceIPv4); }
   unsigned char flags() const { return value<unsigned char>(0, IPFIX_tcpControlBits); }
+  unsigned char pad1() const { return value<unsigned char>(0, IPFIX_paddingOctets); }
 
   IPAddress ipaddress(uint32_t enterprise, uint16_t type) const {
     NetflowData *data = findp(enterprise, type);
@@ -337,6 +373,17 @@ public:
   template<class T> T value(uint32_t enterprise, uint16_t type) const {
     NetflowData *data = findp(enterprise, type);
     return (data && data->parsed()) ? data->value<T>() : (T)0;
+  }
+  bool has_egress_counts() const
+  {
+    NetflowData *bytes = findp(0, IPFIX_postOctetDeltaCount);
+    NetflowData *pckts = findp(0, IPFIX_postPacketDeltaCount);
+    return ((bytes && bytes->parsed()) || (pckts && pckts->parsed()));
+  }
+  bool has_egress_tos() const
+  {
+    NetflowData *etos = findp(0, IPFIX_postClassOfServiceIPv4);
+    return (etos && etos->parsed());
   }
 };
 
@@ -362,17 +409,25 @@ public:
   virtual unsigned short output(int i) const { return _r[i].output(); }
   virtual unsigned long dpkts(int i) const { return _r[i].dpkts(); }
   virtual unsigned long doctets(int i) const { return _r[i].doctets(); }
+  virtual bool has_egress_counts(int i) const { return _r[i].has_egress_counts(); }
+  virtual unsigned long egress_dpkts(int i) const { return _r[i].egress_dpkts(); }
+  virtual unsigned long egress_doctets(int i) const { return _r[i].egress_doctets(); }
   virtual unsigned long first(int i) const;
   virtual unsigned long last(int i) const;
+  virtual Timestamp first_ts(int) const;
+  virtual Timestamp last_ts(int) const;
   virtual unsigned short sport(int i) const { return _r[i].sport(); }
   virtual unsigned short dport(int i) const { return _r[i].dport(); }
   virtual unsigned char prot(int i) const { return _r[i].prot(); }
   virtual unsigned char tos(int i) const { return _r[i].tos(); }
+  virtual bool has_egress_tos(int i) const { return _r[i].has_egress_tos(); }
+  virtual unsigned char egress_tos(int i) const { return _r[i].egress_tos(); }
   virtual unsigned char flags(int i) const { return _r[i].flags(); }
+  virtual unsigned char pad1(int i) const { return _r[i].pad1(); }
 
   virtual String unparse_record(int i, String tag, bool verbose) const;
 
-private:
+protected:
   Header *_h;
   Vector<NetflowDataRecord> _r;
   NetflowTemplateCache *_template_cache;
@@ -380,7 +435,21 @@ private:
 
 typedef NetflowTemplatePacket<NetflowPacket::V9_Header, NetflowPacket::V9_Template_Field> NetflowVersion9Packet;
 
-typedef NetflowTemplatePacket<NetflowPacket::IPFIX_Header, NetflowPacket::IPFIX_Template_Field> IPFIXPacket;
+class IPFIXPacket : public
+NetflowTemplatePacket<NetflowPacket::IPFIX_Header, NetflowPacket::IPFIX_Template_Field>
+{
+public:
+  IPFIXPacket(const Packet *p,
+	      NetflowPacket::IPFIX_Header *h,
+	      unsigned len,
+	      NetflowTemplateCache *template_cache)
+    : NetflowTemplatePacket<NetflowPacket::IPFIX_Header, NetflowPacket::IPFIX_Template_Field>
+  (p, h, len, template_cache)
+  {
+  }
+
+  virtual String printable_version() const { return "IPFIX"; }
+};
 
 inline NetflowPacket *
 NetflowPacket::netflow_packet(const Packet *p, NetflowTemplateCache *template_cache)
@@ -425,6 +494,11 @@ NetflowPacket::netflow_packet(const Packet *p, NetflowTemplateCache *template_ca
       len = ntohs(((IPFIX_Header*)h)->length);
     if (len >= sizeof(IPFIX_Header))
       return new IPFIXPacket(p, (IPFIX_Header *)h, len, template_cache);
+    break;
+  case 0xbeef:
+    // Riverbed Steelhead V5 records (has pad1 set to flow type) 
+    if (len >= sizeof(V5_Header))
+      return new NetflowVersionPacket<V5_Header, V5_Record>(p, (V5_Header *)h, len);
     break;
   }
 
