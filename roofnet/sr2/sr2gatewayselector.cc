@@ -154,9 +154,9 @@ SR2GatewaySelector::update_link(IPAddress from, IPAddress to, uint32_t seq,
   if (_link_table && !_link_table->update_link(from, to, seq, 0, metric)) {
     click_chatter("%{element} couldn't update link %s > %d > %s\n",
 		  this,
-		  from.s().c_str(),
+		  from.unparse().c_str(),
 		  metric,
-		  to.s().c_str());
+		  to.unparse().c_str());
     return false;
   }
   return true;
@@ -187,7 +187,7 @@ SR2GatewaySelector::forward_ad(Seen *s)
 		  click_chatter("%{element} :: %s :: invalid route from src %s\n",
 				this,
 				__func__,
-				src.s().c_str());
+				src.unparse().c_str());
 	  }
     return;
   }
@@ -277,7 +277,7 @@ SR2GatewaySelector::push(int port, Packet *p_in)
   struct sr2packet *pk = (struct sr2packet *) (eh+1);
   if(eh->ether_type != htons(_et)) {
     click_chatter("SR2GatewaySelector %s: bad ether_type %04x",
-		  _ip.s().c_str(),
+		  _ip.unparse().c_str(),
 		  ntohs(eh->ether_type));
     p_in->kill();
     return;
@@ -320,16 +320,16 @@ SR2GatewaySelector::push(int port, Packet *p_in)
     if (fwd_m && !update_link(a,b,seq,fwd_m)) {
       click_chatter("%{element} couldn't update fwd_m %s > %d > %s\n",
 		    this,
-		    a.s().c_str(),
+		    a.unparse().c_str(),
 		    fwd_m,
-		    b.s().c_str());
+		    b.unparse().c_str());
     }
     if (rev_m && !update_link(b,a,seq,rev_m)) {
       click_chatter("%{element} couldn't update rev_m %s > %d > %s\n",
 		    this,
-		    b.s().c_str(),
+		    b.unparse().c_str(),
 		    rev_m,
-		    a.s().c_str());
+		    a.unparse().c_str());
     }
 
   
@@ -405,7 +405,7 @@ SR2GatewaySelector::print_gateway_stats()
     Timestamp now = Timestamp::now();
     for(GWIter iter = _gateways.begin(); iter.live(); iter++) {
       GWInfo nfo = iter.value();
-      sa << nfo._ip.s().c_str() << " ";
+      sa << nfo._ip.unparse().c_str() << " ";
       sa << "seen " << nfo._seen << " ";
       sa << "first_update " << now - nfo._first_update << " ";
       sa << "last_update " << now - nfo._last_update << " ";

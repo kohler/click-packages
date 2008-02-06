@@ -65,11 +65,11 @@ Packet *
 TXStat::simple_action(Packet *p_in)
 {
   click_ether *eh = (click_ether *) p_in->data();
-  //click_chatter("SRCR %s: got sr packet", _ip.s().c_str());
+  //click_chatter("SRCR %s: got sr packet", _ip.unparse().c_str());
   
   EtherAddress dst = EtherAddress(eh->ether_dhost);
   if (dst == _bcast) {
-    //click_chatter("TXStat %s: broadcast packet", _eth.s().c_str());
+    //click_chatter("TXStat %s: broadcast packet", _eth.unparse().c_str());
     p_in->kill();
     return 0;
   }
@@ -90,7 +90,7 @@ TXStat::simple_action(Packet *p_in)
   //nfo->_short_retries += short_retries;
   nfo->_rate = rate;
   //click_chatter("TXStat %s: long=%d, short=%d, fail=%s", 
-  //_eth.s().c_str(), long_retries, short_retries, failure ? "true" : "false");
+  //_eth.unparse().c_str(), long_retries, short_retries, failure ? "true" : "false");
   if (!success) {
     nfo->_failures++;
   }
@@ -111,7 +111,7 @@ TXStat::print_tx_stats()
   StringAccum sa;
   for (TXNIter iter = _neighbors.begin(); iter.live(); iter++) {
     TXNeighborInfo nfo = iter.value();
-    sa << nfo._eth.s() << "\n";
+    sa << nfo._eth.unparse() << "\n";
     sa << " packets sent :" << nfo._packets_sent << "\n";
     sa << " failures     :" << nfo._failures << "\n";
     sa << " long_retries :" << nfo._long_retries << "\n";

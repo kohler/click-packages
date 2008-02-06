@@ -108,7 +108,7 @@ SetGateway::push_fwd(Packet *p_in, IPAddress best_gw)
 		}
 		
 		click_chatter("%{element}::%s no match. guessing for %s\n",
-			      this, __func__, flowid.s().c_str());
+			      this, __func__, flowid.unparse().c_str());
 	}
 	
 	if (!best_gw) {
@@ -149,9 +149,9 @@ SetGateway::push_rev(Packet *p_in)
 			if (match->_gw != MISC_IP_ANNO(p_in)) {
 				click_chatter("%{element}::%s flow %s got packet from weird gw %s, expected %s\n",
 					      this, __func__,
-					      flowid.s().c_str(),
-					      p_in->dst_ip_anno().s().c_str(),
-					      match->_gw.s().c_str());
+					      flowid.unparse().c_str(),
+					      p_in->dst_ip_anno().unparse().c_str(),
+					      match->_gw.unparse().c_str());
 				p_in->kill();
 				return;
 			}
@@ -181,7 +181,7 @@ SetGateway::push_rev(Packet *p_in)
 	}
 	
 	click_chatter("%{element}::%s couldn't find non-pending match, creating %s\n",
-		      this, __func__, flowid.s().c_str());
+		      this, __func__, flowid.unparse().c_str());
 	
 	_flow_table.insert(flowid, FlowTableEntry());
 	match = _flow_table.findp(flowid);
@@ -282,7 +282,7 @@ SetGateway::read_param(Element *e, void *vparam)
   switch ((intptr_t)vparam) {
   case 0:
     if (d->_gw) {
-      return d->_gw.s() + "\n";
+      return d->_gw.unparse() + "\n";
     }
     return "auto\n";
   default:

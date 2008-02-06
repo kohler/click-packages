@@ -119,9 +119,9 @@ MetricFlood::update_link(IPAddress from, IPAddress to,
   if (_link_table && !_link_table->update_link(from, to, seq, age, metric)) {
     click_chatter("%{element} couldn't update link %s > %d > %s\n",
 		  this,
-		  from.s().c_str(),
+		  from.unparse().c_str(),
 		  metric,
-		  to.s().c_str());
+		  to.unparse().c_str());
     return false;
   }
   return true;
@@ -169,7 +169,7 @@ MetricFlood::forward_query(Seen *s)
 		  click_chatter("%{element} :: %s :: invalid route from src %s\n",
 				this,
 				__func__,
-				src.s().c_str());
+				src.unparse().c_str());
 	  }
     p_in->kill();
     return;
@@ -178,8 +178,8 @@ MetricFlood::forward_query(Seen *s)
   if (_debug) {
      click_chatter("%{element}: forward_query %s -> %s %d\n", 
 		  this,
-		  s->_src.s().c_str(),
-		  s->_dst.s().c_str(),
+		  s->_src.unparse().c_str(),
+		  s->_dst.unparse().c_str(),
 		  s->_seq);
   }
 
@@ -251,7 +251,7 @@ MetricFlood::start_flood(Packet *p_in) {
 
   if (_debug) {
     click_chatter("%{element} start_query %s %d\n",
-		  this, qdst.s().c_str(), _seq);
+		  this, qdst.unparse().c_str(), _seq);
 
   }
 
@@ -288,16 +288,16 @@ MetricFlood::process_flood(Packet *p_in) {
     if (fwd_m && !update_link(a, b, seq, age, fwd_m)) {
       click_chatter("%{element} couldn't update fwd_m %s > %d > %s\n",
 		    this,
-		    a.s().c_str(),
+		    a.unparse().c_str(),
 		    fwd_m,
-		    b.s().c_str());
+		    b.unparse().c_str());
     }
     if (rev_m && !update_link(b, a, seq, age, rev_m)) {
       click_chatter("%{element} couldn't update rev_m %s > %d > %s\n",
 		    this,
-		    b.s().c_str(),
+		    b.unparse().c_str(),
 		    rev_m,
-		    a.s().c_str());
+		    a.unparse().c_str());
     }
   }
   
@@ -390,7 +390,7 @@ MetricFlood_read_param(Element *e, void *thunk)
   case H_DEBUG:
     return String(td->_debug) + "\n";
   case H_IP:
-    return td->_ip.s() + "\n";
+    return td->_ip.unparse() + "\n";
   case H_FLOODS: {
 	  StringAccum sa;
 	  int x;

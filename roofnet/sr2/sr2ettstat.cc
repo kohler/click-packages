@@ -50,7 +50,7 @@ SR2ETTStat_read_param(Element *e, void *thunk)
     switch ((uintptr_t) thunk) {
     case H_BCAST_STATS: return td->read_bcast_stats();
     case H_BAD_VERSION: return td->bad_nodes();
-    case H_IP: return td->_ip.s() + "\n";
+    case H_IP: return td->_ip.unparse() + "\n";
     case H_TAU: return String(td->_tau) + "\n";
     case H_PERIOD: return String(td->_period) + "\n";
     case H_PROBES: {
@@ -354,7 +354,7 @@ SR2ETTStat::send_probe()
     if (!probe) {
       click_chatter("%{element}: lookup for %s, %d failed in ad \n", 
 		    this,
-		    _neighbors[_next_neighbor_to_ad].s().c_str(),
+		    _neighbors[_next_neighbor_to_ad].unparse().c_str(),
 		    _next_neighbor_to_ad);
     } else {
 
@@ -459,7 +459,7 @@ SR2ETTStat::simple_action(Packet *p)
       click_chatter ("%{element}: unknown sr version %x from %s", 
 		     this,
 		     lp->_version,
-		     EtherAddress(eh->ether_shost).s().c_str());
+		     EtherAddress(eh->ether_shost).unparse().c_str());
     }    
     p->kill();
     return 0;
@@ -483,7 +483,7 @@ SR2ETTStat::simple_action(Packet *p)
   if (ip == _ip) {
     click_chatter("%{element} got own packet %s\n",
 		  this,
-		  _ip.s().c_str());
+		  _ip.unparse().c_str());
     p->kill();
     return 0;
   }
@@ -516,18 +516,18 @@ SR2ETTStat::simple_action(Packet *p)
     _neighbors.push_back(ip);
   } else if (l->_period != new_period) {
     click_chatter("SR2ETTStat %s: %s has changed its link probe period from %u to %u; clearing probe info",
-		  name().c_str(), ip.s().c_str(), l->_period, new_period);
+		  name().c_str(), ip.unparse().c_str(), l->_period, new_period);
     l->_probes.clear();
   } else if (l->_tau != tau) {
     click_chatter("SR2ETTStat %s: %s has changed its link tau from %u to %u; clearing probe info",
-		  name().c_str(), ip.s().c_str(), l->_tau, tau);
+		  name().c_str(), ip.unparse().c_str(), l->_tau, tau);
     l->_probes.clear();
   }
 
   if (ntohl(lp->_sent) < (unsigned)l->_sent) {
 	  if (0) {
 		  click_chatter("SR2ETTStat %s: %s has reset; clearing probe info",
-				name().c_str(), ip.s().c_str());
+				name().c_str(), ip.unparse().c_str());
 	  }
     l->_probes.clear();
   }
@@ -591,7 +591,7 @@ SR2ETTStat::simple_action(Packet *p)
 		    this,
 		    link_number,
 		    num_links,
-		    neighbor.s().c_str(),
+		    neighbor.unparse().c_str(),
 		    num_rates);
     }
 
@@ -608,8 +608,8 @@ SR2ETTStat::simple_action(Packet *p)
       if (0) {
 	click_chatter("%{element} on %s neighbor %s: size %d rate %d fwd %d rev %d\n",
 		      this,
-		      ip.s().c_str(),
-		      neighbor.s().c_str(),
+		      ip.unparse().c_str(),
+		      neighbor.unparse().c_str(),
 		      nfo_size,
 		      nfo_rate,
 		      nfo_fwd,
@@ -682,7 +682,7 @@ SR2ETTStat::read_bcast_stats()
     if (_arp_table) {
       EtherAddress eth_dest = _arp_table->lookup(ip);
       if (eth_dest) {
-	sa << " " << eth_dest.s().c_str();
+	sa << " " << eth_dest.unparse().c_str();
       } else {
 	sa << " ?";
       }
@@ -712,7 +712,7 @@ SR2ETTStat::read_bcast_stats()
 	    if (_arp_table) {
 		    EtherAddress eth_dest = _arp_table->lookup(ip);
 		    if (eth_dest) {
-			    sa << " " << eth_dest.s();
+			    sa << " " << eth_dest.unparse();
 		    } else {
 			    sa << " ?";
 		    }
@@ -738,7 +738,7 @@ SR2ETTStat::bad_nodes() {
   for (BadTable::const_iterator i = _bad_table.begin(); i.live(); i++) {
     uint8_t version = i.value();
     EtherAddress dst = i.key();
-    sa << this << " eth " << dst.s().c_str() << " version " << (int) version << "\n";
+    sa << this << " eth " << dst.unparse().c_str() << " version " << (int) version << "\n";
   }
 
   return sa.take_string();
@@ -757,7 +757,7 @@ SR2ETTStat::clear_stale()
     if (!l || 
 	(unsigned) now.sec() - l->_last_rx.sec() > 2 * l->_tau/1000) {
       click_chatter("%{element} clearing stale neighbor %s age %d\n ",
-		    this, n.s().c_str(),
+		    this, n.unparse().c_str(),
 		    now.sec() - l->_last_rx.sec());
       _bcast_stats.remove(n);
     } else {

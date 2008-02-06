@@ -126,14 +126,14 @@ PrintSR::sr_to_string(struct srpacket *pk)
 
   sa << " [";
   for(int i = 0; i< pk->num_links(); i++) {
-    sa << " "<< pk->get_link_node(i).s() << " ";
+    sa << " "<< pk->get_link_node(i).unparse() << " ";
     int fwd = pk->get_link_fwd(i);
     int rev = pk->get_link_rev(i);
     int seq = pk->get_link_seq(i);
     int age = pk->get_link_age(i);
     sa << "<" << fwd << " (" << seq << "," << age << ") " << rev << ">";
   }
-  sa << " "<< pk->get_link_node(pk->num_links()).s() << " ";
+  sa << " "<< pk->get_link_node(pk->num_links()).unparse() << " ";
   sa << "]";
 
   return sa.take_string();

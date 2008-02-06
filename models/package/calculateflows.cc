@@ -933,8 +933,8 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
-		_aggregate, _flowid.saddr().s().c_str(), ntohs(_flowid.sport()),
-		_flowid.daddr().s().c_str(), ntohs(_flowid.dport()),
+		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
+		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
 		_init_time._sec, _init_time._subsec,
 		end_time._sec, end_time._subsec);
 	if (_filepos)

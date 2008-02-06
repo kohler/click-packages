@@ -90,7 +90,7 @@ IPAddressCounter::stats()
 
   for (IPIter iter = _table.begin(); iter.live(); iter++) {
     IPAddressInfo n = iter.value();
-    sa << n._ip.s().c_str();
+    sa << n._ip.unparse().c_str();
     sa << " packets " << n._packets;
     sa << " kbytes " << n._bytes / 1024;
     sa << "\n";

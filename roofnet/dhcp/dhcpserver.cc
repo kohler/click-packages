@@ -71,7 +71,7 @@ DHCPServer::configure( Vector<String> &conf, ErrorHandler *errh )
 	}
 	for (u_int32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
 		IPAddress ip = IPAddress(htonl(x));
-		//click_chatter("%s: inserting ip %s\n", __func__, ip.s().c_str());
+		//click_chatter("%s: inserting ip %s\n", __func__, ip.unparse().c_str());
 		_free.insert(ip, ip);
 		_free_list.push_back(ip);
 	}

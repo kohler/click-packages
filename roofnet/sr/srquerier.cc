@@ -120,7 +120,7 @@ SRQuerier::push(int, Packet *p_in)
   if (!dst) {
     click_chatter("%{element}: got invalid dst %s\n",
 		  this,
-		  dst.s().c_str());
+		  dst.unparse().c_str());
     p_in->kill();
     return;
   }
@@ -170,7 +170,7 @@ SRQuerier::push(int, Packet *p_in)
 		  click_chatter("%{element} :: %s no valid route to %s\n",
 				this,
 				__func__,
-				dst.s().c_str());
+				dst.unparse().c_str());
 	  }
 	  p_in->kill();
   }

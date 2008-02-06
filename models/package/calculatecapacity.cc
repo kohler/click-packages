@@ -455,8 +455,8 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
-		_aggregate, _flowid.saddr().s().c_str(), ntohs(_flowid.sport()),
-		_flowid.daddr().s().c_str(), ntohs(_flowid.dport()),
+		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
+		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
 		_init_time.sec(), _init_time.subsec(),
 		end_time.sec(), end_time.subsec());
 	if (_filepos)

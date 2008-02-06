@@ -74,7 +74,7 @@ SetSourceRoute::simple_action(Packet *p_in)
   if (!dst) {
 	  click_chatter("%{element}: got invalid dst %s\n",
 			this,
-			dst.s().c_str());
+			dst.unparse().c_str());
 	  p_in->kill();
 	  return 0;
   }
@@ -111,8 +111,8 @@ SetSourceRoute::static_set_route(const String &arg, Element *e,
   }
   if (p[0] != n->_ip) {
     return errh->error("First hop %s doesn't match my ip %s",
-		       p[0].s().c_str(),
-		       n->_ip.s().c_str());
+		       p[0].unparse().c_str(),
+		       n->_ip.unparse().c_str());
   }
   n->set_route(p);
   return 0;
@@ -128,8 +128,8 @@ SetSourceRoute::set_route(Path p)
   if (p[0] != _ip) {
     click_chatter("%{element}: First node must be me (%s) not %s!\n",
 		  this,
-		  _ip.s().c_str(),
-		  p[0].s().c_str());
+		  _ip.unparse().c_str(),
+		  p[0].unparse().c_str());
   }
 
   _routes.insert(p[p.size()-1], p);

@@ -1124,8 +1124,8 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
-		_aggregate, _flowid.saddr().s().c_str(), ntohs(_flowid.sport()),
-		_flowid.daddr().s().c_str(), ntohs(_flowid.dport()),
+		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
+		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
 		_init_time.tv_sec, _init_time.tv_usec,
 		end_time.tv_sec, end_time.tv_usec);
 	if (_filepos)

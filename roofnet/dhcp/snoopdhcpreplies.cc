@@ -58,12 +58,12 @@ SnoopDHCPReplies::simple_action(Packet *p)
 	
 	if (d->op == DHCP_BOOTREPLY) {
 		IPAddress dst = d->yiaddr;
-		click_chatter("%{element} got %d for %s\n", this, d->op, dst.s().c_str());
+		click_chatter("%{element} got %d for %s\n", this, d->op, dst.unparse().c_str());
 		/* add route via ifname */
 		char tmp[512];
-		sprintf(tmp, "/sbin/route del -host %s", dst.s().c_str());
+		sprintf(tmp, "/sbin/route del -host %s", dst.unparse().c_str());
 		system(tmp);
-		sprintf(tmp, "/sbin/route add -host %s/32 %s", dst.s().c_str(), _ifname.c_str());
+		sprintf(tmp, "/sbin/route add -host %s/32 %s", dst.unparse().c_str(), _ifname.c_str());
 		system(tmp);
 	}
 	return p;

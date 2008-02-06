@@ -270,7 +270,7 @@ CounterFlood::push(int port, Packet *p_in)
 	click_chatter("%{element} first_rx seq %d src %s",
 		      this,
 		      _packets[index]._seq,
-		      src.s().c_str());
+		      src.unparse().c_str());
       }
       /* finally, clone the packet and push it out */
       output(1).push(p_in);
@@ -279,7 +279,7 @@ CounterFlood::push(int port, Packet *p_in)
 	click_chatter("%{element} extra_rx seq %d src %s",
 		      this,
 		      _packets[index]._seq,
-		      src.s().c_str());
+		      src.unparse().c_str());
       }
       /* we've seen this packet before */
       p_in->kill();

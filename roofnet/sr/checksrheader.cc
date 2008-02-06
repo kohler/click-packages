@@ -83,7 +83,7 @@ CheckSRHeader::simple_action(Packet *p)
       click_chatter ("%{element}: unknown sr version %x from %s", 
 		     this,
 		     pk->_version,
-		     EtherAddress(eh->ether_shost).s().c_str());
+		     EtherAddress(eh->ether_shost).unparse().c_str());
     }
 
      
@@ -108,7 +108,7 @@ CheckSRHeader::simple_action(Packet *p)
   if (pk->next() > pk->num_links()){
     click_chatter("%{element}: data with bad next hop from %s\n", 
 		  this,
-		  pk->get_link_node(0).s().c_str());
+		  pk->get_link_node(0).unparse().c_str());
     goto bad;
   }
 
@@ -131,7 +131,7 @@ CheckSRHeader::bad_nodes() {
   for (BadTable::const_iterator i = _bad_table.begin(); i.live(); i++) {
     uint8_t version = i.value();
     EtherAddress dst = i.key();
-    sa << this << " eth " << dst.s().c_str() << " version " << (int) version << "\n";
+    sa << this << " eth " << dst.unparse().c_str() << " version " << (int) version << "\n";
   }
 
   return sa.take_string();

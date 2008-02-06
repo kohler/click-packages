@@ -110,9 +110,9 @@ SRQueryResponder::update_link(IPAddress from, IPAddress to, uint32_t seq, int me
   if (_link_table && !_link_table->update_link(from, to, seq, 0, metric)) {
     click_chatter("%{element} couldn't update link %s > %d > %s\n",
 		  this,
-		  from.s().c_str(),
+		  from.unparse().c_str(),
 		  metric,
-		  to.s().c_str());
+		  to.unparse().c_str());
     return false;
   }
   return true;
@@ -129,8 +129,8 @@ SRQueryResponder::forward_reply(struct srpacket *pk1)
   if (_debug) {
     click_chatter("%{element}: forward_reply %s <- %s\n", 
 		  this,
-		  pk1->get_link_node(0).s().c_str(),
-		  IPAddress(pk1->_qdst).s().c_str());
+		  pk1->get_link_node(0).unparse().c_str(),
+		  IPAddress(pk1->_qdst).unparse().c_str());
   }
   if(pk1->next() >= pk1->num_links()) {
     click_chatter("%{element} forward_reply strange next=%d, nhops=%d", 
@@ -204,7 +204,7 @@ SRQueryResponder::start_reply(IPAddress src, IPAddress qdst, uint32_t seq)
     click_chatter("%{element} :: %s :: invalid route for src %s: %s\n",
 		  this,
 		  __func__,
-		  src.s().c_str(),
+		  src.unparse().c_str(),
 		  path_to_string(best).c_str());
     return;
   }
@@ -213,8 +213,8 @@ SRQueryResponder::start_reply(IPAddress src, IPAddress qdst, uint32_t seq)
   if (_debug) {
     click_chatter("%{element}: start_reply %s <- %s\n",
 		  this,
-		  src.s().c_str(),
-		  qdst.s().c_str());
+		  src.unparse().c_str(),
+		  qdst.unparse().c_str());
   }
   WritablePacket *p = Packet::make(len + sizeof(click_ether));
   if(p == 0)
@@ -256,8 +256,8 @@ SRQueryResponder::got_reply(struct srpacket *pk)
   if (_debug) {
     click_chatter("%{element}: got_reply %s <- %s\n", 
 		  this,
-		  _ip.s().c_str(),
-		  dst.s().c_str());
+		  _ip.unparse().c_str(),
+		  dst.unparse().c_str());
   }
   _link_table->dijkstra(true);
 
@@ -303,7 +303,7 @@ SRQueryResponder::push(int, Packet *p_in)
 		  this,
 		  pk->next(),
 		  pk->num_links(),
-		  pk->get_link_node(pk->next()).s().c_str());
+		  pk->get_link_node(pk->next()).unparse().c_str());
     p_in->kill();
     return;
   }
@@ -320,16 +320,16 @@ SRQueryResponder::push(int, Packet *p_in)
     if (fwd_m && !update_link(a,b,seq,fwd_m)) {
       click_chatter("%{element} couldn't update fwd_m %s > %d > %s\n",
 		    this,
-		    a.s().c_str(),
+		    a.unparse().c_str(),
 		    fwd_m,
-		    b.s().c_str());
+		    b.unparse().c_str());
     }
     if (rev_m && !update_link(b,a,seq,rev_m)) {
       click_chatter("%{element} couldn't update rev_m %s > %d > %s\n",
 		    this,
-		    b.s().c_str(),
+		    b.unparse().c_str(),
 		    rev_m,
-		    a.s().c_str());
+		    a.unparse().c_str());
     }
   }
   
@@ -359,7 +359,7 @@ SRQueryResponder_read_param(Element *e, void *thunk)
   case H_DEBUG:
     return String(td->_debug) + "\n";
   case H_IP:
-    return td->_ip.s() + "\n";
+    return td->_ip.unparse() + "\n";
   default:
     return String();
   }

@@ -611,7 +611,7 @@ String
 TCPAddressTranslator::Mapping6::s() const
 {
   StringAccum sa;
-  sa << reverse()->flow_id().rev().s() << " => " << flow_id().s()
+  sa << reverse()->flow_id().rev().unparse() << " => " << flow_id().unparse()
      << " seq " << (_delta > 0 ? "+" : "") << _delta
      << " [" + String(output()) + "]";
   return sa.take_string();

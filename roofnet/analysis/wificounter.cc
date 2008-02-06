@@ -97,8 +97,8 @@ WifiCounter_read_param(Element *e, void *thunk)
 	StringAccum sa;
 	for (WifiCounter::ETIter iter = td->_pairs.begin(); iter.live(); iter++) {
 		WifiCounter::EtherPairCount c = iter.value();
-		sa << c._pair._src.s().c_str() << " ";
-		sa << c._pair._dst.s().c_str() << " ";
+		sa << c._pair._src.unparse().c_str() << " ";
+		sa << c._pair._dst.unparse().c_str() << " ";
 		sa << c._count;
 		sa << "\n";
 	}

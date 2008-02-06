@@ -92,9 +92,9 @@ SR2Forwarder::update_link(IPAddress from, IPAddress to,
 	if (_link_table && !_link_table->update_link(from, to, seq, age, metric)) {
 		click_chatter("%{element} couldn't update link %s > %d > %s\n",
 			      this,
-			      from.s().c_str(),
+			      from.unparse().c_str(),
 			      metric,
-			      to.s().c_str());
+			      to.unparse().c_str());
 		return false;
 	}
 	return true;
@@ -117,7 +117,7 @@ SR2Forwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
 	int next = index_of(r, _ip) + 1;
 	if (next < 0 || next >= r.size()) {
 		click_chatter("SR2Forwarder %s: encap couldn't find %s (%d) in path %s",
-			      name().c_str(), _ip.s().c_str(),
+			      name().c_str(), _ip.unparse().c_str(),
 			      next, path_to_string(r).c_str());
 		p_in->kill();
 		return (0);
@@ -125,7 +125,7 @@ SR2Forwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
 	EtherAddress eth_dest = _arp_table->lookup(r[next]);
 	if (eth_dest.is_group()) {
 		click_chatter("SR2Forwarder %s: arp lookup failed for %s",
-			      name().c_str(), r[next].s().c_str());
+			      name().c_str(), r[next].unparse().c_str());
 	}
 	
 	memcpy(p->data(), eth_dest.data(), 6);
@@ -172,7 +172,7 @@ SR2Forwarder::push(int port, Packet *p_in)
 	
 	if (pk->_type != SR2_PT_DATA) {
 		click_chatter("SR2Forwarder %s: bad packet_type %04x",
-			      _ip.s().c_str(), pk->_type);
+			      _ip.unparse().c_str(), pk->_type);
 		goto bad;
 	}
 
@@ -185,8 +185,8 @@ SR2Forwarder::push(int port, Packet *p_in)
 			 */
 			click_chatter("%{element} data not for me seq %d %d/%d ip %s eth %s",
 				      name().c_str(), pk->data_seq(), pk->next(), pk->num_links(),
-				      pk->get_link_node(pk->next()).s().c_str(),
-				      EtherAddress(eh->ether_dhost).s().c_str());
+				      pk->get_link_node(pk->next()).unparse().c_str(),
+				      EtherAddress(eh->ether_dhost).unparse().c_str());
 		}
 		goto bad;
 	}
@@ -212,7 +212,7 @@ SR2Forwarder::push(int port, Packet *p_in)
 	if (eth_dest.is_group()) {
 		click_chatter("%{element}::%s arp lookup failed for %s",
 			      this, __func__,
-			      pk->get_link_node(pk->next()).s().c_str());
+			      pk->get_link_node(pk->next()).unparse().c_str());
 	}
 	memcpy(eh->ether_dhost, eth_dest.data(), 6);
 	memcpy(eh->ether_shost, _eth.data(), 6);

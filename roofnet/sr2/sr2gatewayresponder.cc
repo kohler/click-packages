@@ -106,8 +106,8 @@ SR2GatewayResponder::run_timer(Timer *)
 			if (_debug) {
 				click_chatter("%{element}: start_reply %s <- %s\n",
 					      this,
-					      gateway.s().c_str(),
-					      _ip.s().c_str());
+					      gateway.unparse().c_str(),
+					      _ip.unparse().c_str());
 			}
 			WritablePacket *p = Packet::make(len + sizeof(click_ether));
 			if(p == 0)
@@ -163,7 +163,7 @@ SR2GatewayResponder_read_param(Element *e, void *thunk)
   case H_DEBUG:
     return String(td->_debug) + "\n";
   case H_IP:
-    return td->_ip.s() + "\n";
+    return td->_ip.unparse() + "\n";
   default:
     return String();
   }

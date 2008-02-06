@@ -94,7 +94,7 @@ FloodTracker::print_gateway_stats()
 	Timestamp now = Timestamp::now();
 	for(IPIter iter = _gateways.begin(); iter.live(); iter++) {
 		IPInfo nfo = iter.value();
-		sa << nfo._ip.s() << " ";
+		sa << nfo._ip.unparse() << " ";
 		sa << "seen " << nfo._seen << " ";
 		sa << "first_update " << now - nfo._first_update << " ";
 		sa << "last_update " << now - nfo._last_update << " ";
