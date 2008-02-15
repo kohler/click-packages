@@ -34,7 +34,7 @@ Packet *
 TXFLog::simple_action(Packet *p_in)
 {
   struct click_wifi_extra e;
-  memcpy(&e, p_in->all_user_anno(), sizeof(struct click_wifi_extra));
+  memcpy(&e, p_in->user_anno(), sizeof(struct click_wifi_extra));
   _p.push_back(e);      
   _t.push_back(p_in->timestamp_anno());
   return p_in;

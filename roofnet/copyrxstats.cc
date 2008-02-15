@@ -31,7 +31,7 @@ CopyRXStats::configure(Vector<String> &conf, ErrorHandler *errh)
 Packet *
 CopyRXStats::simple_action(Packet *p_in)
 {
-  struct click_wifi_extra *eh = (struct click_wifi_extra *) p_in->all_user_anno();
+  struct click_wifi_extra *eh = (struct click_wifi_extra *) p_in->user_anno();
   
   uint8_t rate = eh->rate;
   uint8_t signal = eh->rssi;

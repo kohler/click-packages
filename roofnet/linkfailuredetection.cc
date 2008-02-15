@@ -88,7 +88,7 @@ LinkFailureDetection::simple_action(Packet *p_in)
     /* don't record bcast packets */
     return p_in;
   }
-  click_wifi_extra *ceh = (click_wifi_extra *) p_in->all_user_anno();
+  click_wifi_extra *ceh = (click_wifi_extra *) p_in->user_anno();
   bool success = !(ceh->flags & WIFI_EXTRA_TX_FAIL);
 
   DstInfo *nfo = _neighbors.findp(dst);

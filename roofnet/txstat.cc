@@ -74,7 +74,7 @@ TXStat::simple_action(Packet *p_in)
     return 0;
   }
   
-  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p_in->all_user_anno();
+  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p_in->user_anno();
   //int long_retries = p_in->user_anno_c (TX_ANNO_LONG_RETRIES);
   bool success = !(ceh->flags & WIFI_EXTRA_TX_FAIL);
   int rate = ceh->rate;

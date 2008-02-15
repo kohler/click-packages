@@ -74,7 +74,7 @@ PrintSeq::simple_action(Packet *p)
   if (_label[0] != 0) {
     sa << _label.c_str() << ": ";
   }
-  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p->all_user_anno();  
+  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p->user_anno();  
   sa << p->timestamp_anno();
   sa << " seq " << seq;
   sa << " rate " << (int) ceh->rate;
