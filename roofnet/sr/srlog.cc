@@ -23,10 +23,9 @@ int
 SRLog::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   _active = false;
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords,
-		  "ACTIVE", cpBool, "xxx", &_active,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "ACTIVE", 0, cpBool, &_active,
+		   cpEnd) < 0) {
     return -1;
   }
 

@@ -44,13 +44,12 @@ CountFecBytes::configure(Vector<String> &conf, ErrorHandler *errh)
   _overhead = 0;
   _tolerate = 0;
   _adaptive = false;
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords, 
-		  "LENGTH", cpUnsigned, "", &_length,
-		  "TOLERATE", cpUnsigned, "", &_tolerate,
-		  "OVERHEAD", cpUnsigned, "", &_overhead,
-		  "ADAPTIVE", cpBool, "", &_adaptive,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "LENGTH", 0, cpUnsigned, &_length,
+		   "TOLERATE", 0, cpUnsigned, &_tolerate,
+		   "OVERHEAD", 0, cpUnsigned, &_overhead,
+		   "ADAPTIVE", 0, cpBool, &_adaptive,
+		   cpEnd) < 0) {
     return -1;
   }
   return 0;

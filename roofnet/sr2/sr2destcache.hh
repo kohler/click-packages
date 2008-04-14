@@ -40,7 +40,6 @@ class SR2DestCache : public Element {
   const char *port_count() const		{ return "2/2"; }
   const char *processing() const		{ return PUSH; }
   const char *flow_code() const			{ return "#/#"; }
-  int configure(Vector<String> &conf, ErrorHandler *errh);
 
 
   /* handler stuff */

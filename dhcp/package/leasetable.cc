@@ -21,7 +21,6 @@
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/bighashmap.cc>
 #include <click/vector.cc>
 #include <click/straccum.hh>
 #include "leasetable.hh"
@@ -58,14 +57,19 @@ DHCPLeaseTable::cast(const char *n)
 Lease *
 DHCPLeaseTable::rev_lookup(EtherAddress eth)
 {
-	IPAddress *ip = _ips.findp(eth);
-	return ip ? _leases.findp(*ip) : 0;
+    if (HashTable<EtherAddress, IPAddress>::iterator it = _ips.find(eth))
+	return lookup(it.value());
+    else
+	return 0;
 }
 
 Lease *
 DHCPLeaseTable::lookup(IPAddress ip)
 {
-	return _leases.findp(ip);
+    if (LeaseMap::iterator it = _leases.find(ip))
+	return &it.value();
+    else
+	return 0;
 }
 
 void
@@ -73,8 +77,8 @@ DHCPLeaseTable::remove(EtherAddress eth)
 {
     if (Lease *l = rev_lookup(eth)) {
 	IPAddress ip = l->_ip;
-	_leases.remove(ip);
-	_ips.remove(eth);
+	_leases.erase(ip);
+	_ips.erase(eth);
     }
 }
 
@@ -82,8 +86,8 @@ bool
 DHCPLeaseTable::insert(Lease l) {
 	IPAddress ip = l._ip;
 	EtherAddress eth = l._eth;
-	_ips.insert(eth, ip);
-	_leases.insert(ip, l);
+	_ips.set(eth, ip);
+	_leases.set(ip, l);
 	return true;
 }
 

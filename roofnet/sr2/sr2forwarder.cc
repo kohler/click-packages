@@ -48,15 +48,14 @@ int
 SR2Forwarder::configure (Vector<String> &conf, ErrorHandler *errh)
 {
 	int res;
-	res = cp_va_parse(conf, this, errh,
-			  cpKeywords,
-			  "ETHTYPE", cpUnsignedShort, "Ethernet encapsulation type", &_et,
-			  "IP", cpIPAddress, "IP address", &_ip,
-			  "ETH", cpEtherAddress, "Ethernet Address", &_eth,
-			  "ARP", cpElement, "ARPTable element", &_arp_table,
-			  /* below not required */
-			  "LT", cpElement, "LinkTable element", &_link_table,
-			  cpEnd);
+	res = cp_va_kparse(conf, this, errh,
+			   "ETHTYPE", 0, cpUnsignedShort, &_et,
+			   "IP", 0, cpIPAddress, &_ip,
+			   "ETH", 0, cpEtherAddress, &_eth,
+			   "ARP", 0, cpElement, &_arp_table,
+			   /* below not required */
+			   "LT", 0, cpElement, &_link_table,
+			   cpEnd);
 	
 	if (!_et) 
 		return errh->error("ETHTYPE not specified");

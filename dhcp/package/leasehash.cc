@@ -21,7 +21,6 @@
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/bighashmap.cc>
 #include <click/vector.cc>
 #include <click/straccum.hh>
 #include <click/crc32.h>

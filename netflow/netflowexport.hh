@@ -126,7 +126,7 @@ private:
   bool _debug;
 
   Timestamp _start;
-  HashMap<uint32_t, Flow *> _flows;
+  HashTable<uint32_t, Flow *> _flows;
   unsigned _flow_sequence;
 
   Timer _timer;

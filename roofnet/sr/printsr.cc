@@ -43,11 +43,9 @@ int
 PrintSR::configure(Vector<String> &conf, ErrorHandler* errh)
 {
   int ret;
-  ret = cp_va_parse(conf, this, errh,
-                  cpOptional,
-		  cpString, "label", &_label,
-		  cpKeywords,
-		    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "LABEL", cpkP, cpString, &_label,
+		     cpEnd);
   return ret;
 }
 

@@ -43,12 +43,10 @@ FragmentDupeFilter::configure(Vector<String> &conf, ErrorHandler *errh)
 
   _window_size = 500;
   _debug = false;
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-		  cpKeywords,
-		  "WINDOW", cpUnsigned, "", &_window_size,
-		  "DEBUG", cpBool, "", &_debug,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "WINDOW", 0, cpUnsigned, &_window_size,
+		   "DEBUG", 0, cpBool, &_debug,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }

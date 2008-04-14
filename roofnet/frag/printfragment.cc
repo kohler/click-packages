@@ -41,11 +41,9 @@ int
 PrintFragment::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-		  cpString, "label", &_label,
-		  cpKeywords,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "LABEL", cpkP, cpString, &_label,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }

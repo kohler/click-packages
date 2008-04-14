@@ -2,8 +2,7 @@
 #define DHCPCLASSIFIER_HH
 
 #include <click/element.hh>
-
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 
 /*
  * =c 
@@ -44,7 +43,7 @@ public:
   virtual void push(int port, Packet *p);
   
 private:
-  HashMap<uint32_t, int> _dhcp_msg_to_outport_map;
+  HashTable<uint32_t, int> _dhcp_msg_to_outport_map;
   
 };
 

@@ -58,16 +58,15 @@ SR2Querier::configure (Vector<String> &conf, ErrorHandler *errh)
   _debug = false;
   _route_dampening = true;
   _time_before_switch_sec = 10;
-  ret = cp_va_parse(conf, this, errh,
-                    cpKeywords,
-		    "ETH", cpEtherAddress, "EtherAddress", &_en,
-		    "SR", cpElement, "SRForwarder element", &_sr_forwarder,
-		    "LT", cpElement, "LinkTable element", &_link_table,
-		    /* below not required */
-		    "DEBUG", cpBool, "Debug", &_debug,
-		    "ROUTE_DAMPENING", cpBool, "Enable Route Dampening", &_route_dampening,
-		    "TIME_BEFORE_SWITCH", cpUnsigned, "", &_time_before_switch_sec,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "ETH", 0, cpEtherAddress, &_en,
+		     "SR", 0, cpElement, &_sr_forwarder,
+		     "LT", 0, cpElement, &_link_table,
+		     /* below not required */
+		     "DEBUG", 0, cpBool, &_debug,
+		     "ROUTE_DAMPENING", 0, cpBool, &_route_dampening,
+		     "TIME_BEFORE_SWITCH", 0, cpUnsigned, &_time_before_switch_sec,
+		     cpEnd);
 
   if (!_en) 
     return errh->error("ETH not specified");

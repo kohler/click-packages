@@ -2,7 +2,7 @@
 #include <click/config.h>
 #include "tcpcollector.hh"
 #include <click/error.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/straccum.hh>
 #include <click/confparse.hh>
 #include <clicknet/ip.h>
@@ -424,7 +424,7 @@ TCPCollector::new_conn(Packet* p)
 	    _stream_attachments[i]->new_stream_hook(stream0, conn, _stream_attachment_offsets[i]);
 	    _stream_attachments[i]->new_stream_hook(stream1, conn, _stream_attachment_offsets[i]);
 	}
-	_conn_map.insert(AGGREGATE_ANNO(p), conn);
+	_conn_map.set(AGGREGATE_ANNO(p), conn);
 #if TCPCOLLECTOR_MEMSTATS
 	_memusage += _conn_size + 2 * _stream_size;
 	if (_memusage > _max_memusage)
@@ -858,7 +858,7 @@ TCPCollector::simple_action(Packet *p)
 {
     uint32_t aggregate = AGGREGATE_ANNO(p);
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())) {
-	Conn *conn = _conn_map.find(aggregate);
+	Conn *conn = _conn_map.get(aggregate);
 	if (!conn && !(conn = new_conn(p))) {
 	    click_chatter("out of memory!");
 	    p->kill();
@@ -876,8 +876,8 @@ void
 TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
-	if (Conn *conn = _conn_map.find(aggregate)) {
-	    _conn_map.remove(aggregate);
+	if (Conn *conn = _conn_map.get(aggregate)) {
+	    _conn_map.erase(aggregate);
 	    kill_conn(conn);
 	}
 }
@@ -935,6 +935,5 @@ TCPCollector::add_handlers()
 
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(TCPCollector)
-#include <click/bighashmap.cc>
 #include <click/vector.cc>
 CLICK_ENDDECLS

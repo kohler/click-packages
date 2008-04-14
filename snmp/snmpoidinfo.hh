@@ -3,7 +3,7 @@
 #include "snmpbasics.hh"
 #include "snmpoidtree.hh"
 #include <click/element.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 
 /*
 =c
@@ -132,7 +132,7 @@ class SNMPOidInfo : public Element { public:
   
  private:
 
-  HashMap<String, int> _map;
+  HashTable<String, int> _map;
   Vector<String> _context;
   Vector<int> _next;
   Vector<SNMPOidTree::Node *> _tree_ptr;

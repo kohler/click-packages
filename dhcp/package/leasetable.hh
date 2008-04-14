@@ -3,7 +3,7 @@
 #include <click/element.hh>
 #include <click/ipaddress.hh>
 #include <click/etheraddress.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 CLICK_DECLS
 
 
@@ -60,11 +60,11 @@ public:
   IPAddress _ip;
   IPAddress _subnet;
   EtherAddress _eth;
-  typedef HashMap<IPAddress, Lease> LeaseMap;
+  typedef HashTable<IPAddress, Lease> LeaseMap;
   typedef LeaseMap::const_iterator LeaseIter;
   LeaseMap _leases;
 
-  HashMap<EtherAddress, IPAddress> _ips;
+  HashTable<EtherAddress, IPAddress> _ips;
 
 
   static String read_handler(Element *e, void *thunk);

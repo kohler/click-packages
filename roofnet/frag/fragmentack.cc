@@ -44,15 +44,13 @@ FragmentAck::configure(Vector<String> &conf, ErrorHandler *errh)
   _window_size = 30;
   _ack_timeout_ms = 0;
   _debug = false;
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-		  cpKeywords,
-		  "ETHTYPE", cpUnsignedShort, "Ethernet encapsulation type", &_et,
-		  "ETH", cpEtherAddress, "EtherAddress", &_en,
-		  "WINDOW", cpUnsigned, "", &_window_size,
-		  "ACK_TIMEOUT", cpUnsigned, "", &_ack_timeout_ms,
-		  "DEBUG", cpBool, "", &_debug,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "ETHTYPE", 0, cpUnsignedShort, &_et,
+		   "ETH", 0, cpEtherAddress, &_en,
+		   "WINDOW", 0, cpUnsigned, &_window_size,
+		   "ACK_TIMEOUT", 0, cpUnsigned, &_ack_timeout_ms,
+		   "DEBUG", 0, cpBool, &_debug,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }

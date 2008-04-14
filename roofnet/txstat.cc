@@ -40,10 +40,9 @@ TXStat::~TXStat()
 int
 TXStat::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  int res = cp_va_parse(conf, this, errh,
-			cpEtherAddress, "Source Ethernet address", &_eth,
-			cpKeywords,
-			cpEnd);
+  int res = cp_va_kparse(conf, this, errh,
+			 "SRCETH", cpkP+cpkM, cpEtherAddress, &_eth,
+			 cpEnd);
   return res;
   
 

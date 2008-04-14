@@ -2,7 +2,7 @@
 #include <click/config.h>
 #include "calculateflows.hh"
 #include <click/error.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/straccum.hh>
 #include <click/confparse.hh>
 #include <clicknet/ip.h>
@@ -1216,10 +1216,10 @@ CalculateFlows::simple_action(Packet *p)
 {
     uint32_t aggregate = AGGREGATE_ANNO(p);
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP && IP_FIRSTFRAG(p->ip_header())) {
-	ConnInfo *loss = _conn_map.find(aggregate);
+	ConnInfo *loss = _conn_map.get(aggregate);
 	if (!loss) {
 	    if ((loss = new ConnInfo(p, _filepos_h)))
-		_conn_map.insert(aggregate, loss);
+		_conn_map.set(aggregate, loss);
 	    else {
 		click_chatter("out of memory!");
 		p->kill();
@@ -1238,8 +1238,8 @@ void
 CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
-	if (ConnInfo *tmploss = _conn_map.find(aggregate)) {
-	    _conn_map.remove(aggregate);
+	if (ConnInfo *tmploss = _conn_map.get(aggregate)) {
+	    _conn_map.erase(aggregate);
 	    tmploss->kill(this);
 	}
 }
@@ -1250,7 +1250,7 @@ enum { H_CLEAR, H_SAVE };
 int
 CalculateFlows::save(int, uint32_t aggregate, int direction, const String &filename, ErrorHandler *errh)
 {
-    ConnInfo *loss = _conn_map.find(aggregate);
+    ConnInfo *loss = _conn_map.get(aggregate);
     if (!loss)
 	return errh->error("no '%u' aggregate", aggregate);
     
@@ -1309,6 +1309,5 @@ CalculateFlows::add_handlers()
 
 ELEMENT_REQUIRES(userlevel TCPScoreboard)
 EXPORT_ELEMENT(CalculateFlows)
-#include <click/bighashmap.cc>
 #include <click/dequeue.cc>
 CLICK_ENDDECLS

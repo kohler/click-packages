@@ -37,10 +37,9 @@ int
 LocationHistogram::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   _length = 0;
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords, 
-		  "LENGTH", cpUnsigned, "", &_length,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "LENGTH", 0, cpUnsigned, &_length,
+		   cpEnd) < 0) {
     return -1;
   }
 

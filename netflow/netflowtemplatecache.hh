@@ -8,7 +8,7 @@
 #ifndef NETFLOWTEMPLATECACHE_HH
 #define NETFLOWTEMPLATECACHE_HH
 #include <click/element.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include "netflowtemplate.hh"
 CLICK_DECLS
 
@@ -54,11 +54,14 @@ public:
 
   bool insert(IPAddress srcaddr, uint32_t source_id, uint16_t template_id, const NetflowTemplate &templ) {
     const Netflow_Template_Key key = { srcaddr, source_id, template_id };
-    return _t.insert(key, templ);
+    return _t.set(key, templ);
   }
-  NetflowTemplate *findp(IPAddress srcaddr, uint32_t source_id, uint16_t template_id) const {
+  NetflowTemplate *findp(IPAddress srcaddr, uint32_t source_id, uint16_t template_id) {
     const Netflow_Template_Key key = { srcaddr, source_id, template_id };
-    return _t.findp(key);
+    if (Table::iterator it = _t.find(key))
+      return &it.value();
+    else
+      return 0;
   }
   bool remove(IPAddress srcaddr, uint32_t source_id, uint16_t template_id);
   bool remove(IPAddress srcaddr, uint32_t source_id);
@@ -67,8 +70,8 @@ public:
 
  private:
 
-  typedef HashMap<Netflow_Template_Key, NetflowTemplate> Table;
-  HashMap<Netflow_Template_Key, NetflowTemplate> _t;
+  typedef HashTable<Netflow_Template_Key, NetflowTemplate> Table;
+  HashTable<Netflow_Template_Key, NetflowTemplate> _t;
   
 };
 

@@ -2,7 +2,7 @@
 #define CLICK_LINKFAILUREDETECTION_HH
 #include <click/element.hh>
 #include <click/etheraddress.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/glue.hh>
 CLICK_DECLS
 
@@ -76,19 +76,12 @@ class LinkFailureDetection : public Element { public:
       memset(this, 0, sizeof(*this));
     }
 
-    DstInfo(EtherAddress eth) { 
-      memset(this, 0, sizeof(*this));
-      _eth = eth;
-      _successive_failures = 0;
-      _notified = false;
-    }
-
   };
 
   int _threshold;
   Element *_handler_e;
   String _handler_name;
-  typedef HashMap<EtherAddress, DstInfo> NeighborTable;
+  typedef HashTable<EtherAddress, DstInfo> NeighborTable;
   typedef NeighborTable::const_iterator NIter;
 
   NeighborTable _neighbors;

@@ -2,7 +2,7 @@
 #ifndef CLICK_TCPCOLLECTOR_HH
 #define CLICK_TCPCOLLECTOR_HH
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/ipflowid.hh>
 #include <clicknet/tcp.h>
 #include "tcpscoreboard.hh"
@@ -180,7 +180,7 @@ class TCPCollector : public Element, public AggregateListener { public:
     int add_stream_attachment(AttachmentManager*, unsigned size);
     int add_conn_attachment(AttachmentManager*, unsigned size);
     
-    typedef HashMap<unsigned, Conn *> ConnMap;
+    typedef HashTable<unsigned, Conn *> ConnMap;
     
   private:
     

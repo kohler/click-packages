@@ -11,7 +11,7 @@
 #include <click/packet.hh>
 #include <click/straccum.hh>
 #include <click/vector.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/string.hh>
 #include <click/error.hh>
 #include <click/etheraddress.hh>
@@ -318,9 +318,9 @@ Netflow_Field_Key::hashcode() const
   return type;
 }
 
-typedef HashMap<Netflow_Field_Key, NetflowData>::const_iterator NetflowDataIterator;
+typedef HashTable<Netflow_Field_Key, NetflowData>::const_iterator NetflowDataIterator;
 
-class NetflowDataRecord : public HashMap<Netflow_Field_Key, NetflowData> {
+class NetflowDataRecord : public HashTable<Netflow_Field_Key, NetflowData> {
 
 public:
 
@@ -328,11 +328,14 @@ public:
 
   bool insert(const NetflowData &data) {
     const Netflow_Field_Key key = { data.enterprise(), data.type() };
-    return HashMap<Netflow_Field_Key, NetflowData>::insert(key, data);
+    return HashTable<Netflow_Field_Key, NetflowData>::set(key, data);
   }
-  NetflowData *findp(uint32_t enterprise, const uint16_t type) const {
+  const NetflowData *findp(uint32_t enterprise, const uint16_t type) const {
     const Netflow_Field_Key key = { enterprise, type };
-    return HashMap<Netflow_Field_Key, NetflowData>::findp(key);
+    if (const_iterator it = find(key))
+      return &it.value();
+    else
+      return 0;
   }
 
   // These functions exist solely for compatibility with
@@ -361,28 +364,28 @@ public:
   unsigned char pad1() const { return value<unsigned char>(0, IPFIX_paddingOctets); }
 
   IPAddress ipaddress(uint32_t enterprise, uint16_t type) const {
-    NetflowData *data = findp(enterprise, type);
+    const NetflowData *data = findp(enterprise, type);
     return (data && data->parsed()) ? data->ipaddress() : IPAddress(0);
   }
 #if HAVE_IP6
   IP6Address ip6address(uint32_t enterprise, uint16_t type) const {
-    NetflowData *data = findp(enterprise, type);
+    const NetflowData *data = findp(enterprise, type);
     return (data && data->parsed()) ? data->ip6address() : IP6Address(0);
   }
 #endif
   template<class T> T value(uint32_t enterprise, uint16_t type) const {
-    NetflowData *data = findp(enterprise, type);
+    const NetflowData *data = findp(enterprise, type);
     return (data && data->parsed()) ? data->value<T>() : (T)0;
   }
   bool has_egress_counts() const
   {
-    NetflowData *bytes = findp(0, IPFIX_postOctetDeltaCount);
-    NetflowData *pckts = findp(0, IPFIX_postPacketDeltaCount);
+    const NetflowData *bytes = findp(0, IPFIX_postOctetDeltaCount);
+    const NetflowData *pckts = findp(0, IPFIX_postPacketDeltaCount);
     return ((bytes && bytes->parsed()) || (pckts && pckts->parsed()));
   }
   bool has_egress_tos() const
   {
-    NetflowData *etos = findp(0, IPFIX_postClassOfServiceIPv4);
+    const NetflowData *etos = findp(0, IPFIX_postClassOfServiceIPv4);
     return (etos && etos->parsed());
   }
 };

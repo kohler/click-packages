@@ -3,7 +3,7 @@
 #include "snmpbasics.hh"
 #include "snmpoidtree.hh"
 #include <click/element.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 class SNMPBEREncoder;
 
 /*

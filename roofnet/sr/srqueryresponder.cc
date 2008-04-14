@@ -46,16 +46,15 @@ SRQueryResponder::configure (Vector<String> &conf, ErrorHandler *errh)
 {
   int ret;
   _debug = false;
-  ret = cp_va_parse(conf, this, errh,
-                    cpKeywords,
-		    "ETHTYPE", cpUnsigned, "Ethernet encapsulation type", &_et,
-                    "IP", cpIPAddress, "IP address", &_ip,
-		    "ETH", cpEtherAddress, "EtherAddress", &_en,
-		    "LT", cpElement, "LinkTable element", &_link_table,
-		    "ARP", cpElement, "ARPTable element", &_arp_table,
-		    /* below not required */
-		    "DEBUG", cpBool, "Debug", &_debug,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "ETHTYPE", 0, cpUnsigned, &_et,
+		     "IP", 0, cpIPAddress, &_ip,
+		     "ETH", 0, cpEtherAddress, &_en,
+		     "LT", 0, cpElement, &_link_table,
+		     "ARP", 0, cpElement, &_arp_table,
+		     /* below not required */
+		     "DEBUG", 0, cpBool, &_debug,
+		     cpEnd);
 
   if (!_et) 
     return errh->error("ETHTYPE not specified");

@@ -74,7 +74,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
 
   // check against well-known values
   if (this != well_known_oids) {
-    int well_known_map = well_known_oids->_map[new_identifier];
+    int well_known_map = well_known_oids->_map.get(new_identifier);
     if (well_known_map >= 0) {
       SNMPOid old_oid;
       well_known_oids->extract_tree_oid(well_known_map, &old_oid);
@@ -85,7 +85,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
     }
   }
   
-  int prev_map = _map[new_identifier];
+  int prev_map = _map.get(new_identifier);
 
   if (prev_map >= 0) {
     // check against existing values
@@ -108,7 +108,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
     _next.push_back(-1);
     _tree_ptr.push_back(tree_ptr);
     if (prev_map < 0)
-      _map.insert(new_identifier, _context.size() - 1);
+      _map[new_identifier] = _context.size() - 1;
     else
       _next[prev_map] = _context.size() - 1;
   }

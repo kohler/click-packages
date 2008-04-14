@@ -26,7 +26,7 @@ s/\.dump//'`
 
 from=''
 case $file in
-  *.dump|*.dump.gz)
+  *.dump|*.dump.gz|*.bin)
     from='FromDump("'"$file"'", FORCE_IP true, STOP true)';;
   *.gz)
     text=`zcat "$file" | head -c 2000`;;

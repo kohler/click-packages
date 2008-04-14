@@ -2,7 +2,7 @@
 #define DHCPSERVER_HH
 
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/vector.hh>
 #include <click/dequeue.hh>
 #include <click/etheraddress.hh>
@@ -88,14 +88,14 @@ private:
   Lease *rev_lookup(EtherAddress eth);
   Lease *lookup(IPAddress ip);
 
-  typedef HashMap<IPAddress, Lease> LeaseMap;
+  typedef HashTable<IPAddress, Lease> LeaseMap;
   typedef LeaseMap::const_iterator LeaseIter;
   LeaseMap _leases;
 
-  HashMap<EtherAddress, IPAddress> _ips;
+  HashTable<EtherAddress, IPAddress> _ips;
 
   DEQueue<IPAddress> _free_list;
-  HashMap<IPAddress, IPAddress> _free;
+  HashTable<IPAddress, IPAddress> _free;
 
   IPAddress _start;
   IPAddress _end;

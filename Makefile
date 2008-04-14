@@ -11,13 +11,14 @@ srcdir = .
 
 
 CLICKDIR = $(HOME)/click
-SUBDIRS = dhcp iias ip6_natpt models multicast multicast6 netflow \
-	roofnet security snmp unibo_qos
+SUBDIRS = dhcp iias models multicast netflow roofnet security snmp unibo_qos
+IP6_SUBDIRS = ip6_natpt multicast6
 
 distdir = $(PACKAGE)-$(VERSION)
 
 all install clean distclean:
-	for d in $(SUBDIRS); do { cd $$d; $(MAKE) $@; cd ..; }; done
+	for d in $(SUBDIRS); do { cd $$d; $(MAKE) $@ || exit 1; cd ..; }; done
+	if click-buildtool provides ip6; then for d in $(IP6_SUBDIRS); do { cd $$d; $(MAKE) $@ || exit 1; cd ..; }; done; fi
 
 dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)

@@ -43,11 +43,10 @@ CountErrors::configure(Vector<String> &conf, ErrorHandler *errh)
   _ok_bytes = 0;
   _error_bytes = 0;
 
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords, 
-		  "LENGTH", cpUnsigned, "", &_length,
-		  "RUNS", cpBool, "", &_runs,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "LENGTH", 0, cpUnsigned, &_length,
+		   "RUNS", 0, cpBool, &_runs,
+		   cpEnd) < 0) {
     return -1;
   }
 

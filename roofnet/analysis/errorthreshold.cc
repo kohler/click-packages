@@ -39,11 +39,10 @@ ErrorThreshold::configure(Vector<String> &conf, ErrorHandler *errh)
 
   _correct_threshold = 0;
 
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords, 
-		  "LENGTH", cpUnsigned, "", &_length,
-		  "CORRECT_THRESH", cpUnsigned, "", &_correct_threshold,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "LENGTH", 0, cpUnsigned, &_length,
+		   "CORRECT_THRESH", 0, cpUnsigned, &_correct_threshold,
+		   cpEnd) < 0) {
     return -1;
   }
 
