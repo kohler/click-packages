@@ -15,13 +15,14 @@ if test $# = 0; then
     usage
 fi
 
-if echo "$1" | grep '/' >/dev/null; then
-    dir=`echo $1 | sed 's/\(.*\/\)[^\/]*/\1/'`
+wholefile="$1"
+if echo "$wholefile" | grep '/' >/dev/null; then
+    dir=`echo "$wholefile" | sed 's/\(.*\/\)[^\/]*/\1/'`
 else
     dir='./'
 fi
-file=`echo $1 | sed 's/.*\///'`
-base=`echo $file | sed 's/\.gz//
+file=`echo "$wholefile" | sed 's/.*\///'`
+base=`echo "$file" | sed 's/\.gz//
 s/\.dump//'`
 
 from=''
@@ -29,16 +30,18 @@ case $file in
   *.dump|*.dump.gz)
     from='FromDump("'"$file"'", FORCE_IP true, STOP true)';;
   *.gz)
-    text=`zcat "$file" | head -c 2000`;;
+    text=`zcat "$wholefile" | head -c 2000`;;
   *)
-    text=`head -c 2000 "$file"`;;
+    text=`head -c 2000 "$wholefile"`;;
 esac
 
 if test -z "$from"; then
+    hex_a1b2c3d4=`printf "\241\262\303\324"`
+    hex_d4c3b2a1=`printf "\324\303\262\241"`
     case "$text" in
       [0-9]*)
         from='FromTcpdump("'"$file"'", STOP true)';;
-      \xA1\xB2\xC3\xD4*)
+      $hex_a1b2c3d4*|$hex_d4c3b2a1*)
         from='FromDump("'"$file"'", FORCE_IP true, STOP true)';;
       !*)
         from='FromIPSummaryDump("'"$file"'", STOP true)';;
@@ -66,6 +69,6 @@ DriverManager(wait, write loss.clear, /*write tifd.clear,*/ stop)
 if test $doconfig = 1; then 
     echo "$config"
 else
-    cd $dir
+    cd $dir || { echo "$!\n" 1>&2; exit 1; }
     click -e "$config"
 fi
