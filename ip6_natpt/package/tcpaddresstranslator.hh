@@ -3,7 +3,7 @@
 #include "elements/ip6/addresstranslator.hh"
 #include <click/element.hh>
 #include <click/timer.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/ip6flowid.hh>
 #include <click/ipflowid.hh>
 #include <clicknet/ip.h>
@@ -27,7 +27,7 @@ class TCPAddressTranslator : public Element {
   public:
 
   class Mapping6;
-  typedef HashMap<IP6FlowID, Mapping6 *> Map6;
+  typedef HashTable<IP6FlowID, Mapping6 *> Map6;
   
   TCPAddressTranslator();
   ~TCPAddressTranslator();

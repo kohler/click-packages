@@ -134,7 +134,7 @@ int
 SNMPVariableInfo::initialize(ErrorHandler *errh)
 {
   Vector<String> conf;
-  configuration(conf);
+  cp_argvec(configuration(), conf);
   return do_configure(conf, true, errh);
 }
 

@@ -198,7 +198,7 @@ TCPAddressTranslator::translate_ipv6to4(Packet *p)
     click_chatter("LOOKUP FAILED: Cannot update seq. numbers!");
   }
 
-  Mapping6 *m = static_cast<Mapping6 *>(_tcp_map.find(flow6));
+  Mapping6 *m = static_cast<Mapping6 *>(_tcp_map.get(flow6));
 
   if (!m)
   {			// create new mapping
@@ -231,7 +231,7 @@ TCPAddressTranslator::translate_ipv4to6(Packet *p)
   unsigned  short ssport = tcph->th_sport;
   unsigned  short ddport = tcph->th_dport;
   IP6FlowID flow(ip6_sr,ssport,ip6_ds,ddport);
-  Mapping6 *m = static_cast<Mapping6 *>(_tcp_map.find(flow));
+  Mapping6 *m = static_cast<Mapping6 *>(_tcp_map.get(flow));
 
   if (!m)
   {			// create new mapping
@@ -417,8 +417,8 @@ TCPAddressTranslator::apply_create(IPAddress &ip_src, unsigned short
       Mapping6::make_pair(0,flow, flow,forward, reverse);
 
       IP6FlowID reverse_flow = forward->flow_id().rev();
-      _tcp_map.insert(flow, forward);
-      _tcp_map.insert(reverse_flow, reverse);
+      _tcp_map.set(flow, forward);
+      _tcp_map.set(reverse_flow, reverse);
      return forward;
     }
     else
@@ -443,8 +443,8 @@ TCPAddressTranslator::apply_create(int ip_p, const IP6FlowID &flow)
       Mapping6::make_pair(0,flow, flow,forward, reverse);
 
       IP6FlowID reverse_flow = forward->flow_id().rev();
-      _tcp_map.insert(flow, forward);
-      _tcp_map.insert(reverse_flow, reverse);
+      _tcp_map.set(flow, forward);
+      _tcp_map.set(reverse_flow, reverse);
      return forward;
     }
     else

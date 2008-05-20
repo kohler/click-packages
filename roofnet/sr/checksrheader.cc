@@ -162,11 +162,6 @@ CheckSRHeader::add_handlers()
   add_read_handler("bad_version", CheckSRHeader_read_param, (void *) H_BAD_VERSION);
 }
 
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<EtherAddress, uint8_t>;
-#endif
-
 EXPORT_ELEMENT(CheckSRHeader)
 CLICK_ENDDECLS
 

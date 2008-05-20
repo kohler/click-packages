@@ -49,10 +49,9 @@ ETTMetric::cast(const char *n)
 int
 ETTMetric::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  int res = cp_va_parse(conf, this, errh,
-			cpKeywords,
-			"LT", cpElement, "LinkTable element", &_link_table, 
-			cpEnd);
+  int res = cp_va_kparse(conf, this, errh,
+			 "LT", 0, cpElement, &_link_table, 
+			 cpEnd);
   if (res < 0)
     return res;
   if (_link_table == 0) {

@@ -35,17 +35,6 @@ FloodTracker::~FloodTracker()
 {
 }
 
-int
-FloodTracker::configure (Vector<String> &conf, ErrorHandler *errh)
-{
-	int ret;
-	ret = cp_va_parse(conf, this, errh,
-			  cpKeywords,
-			  cpEnd);
-	
-	return ret;
-}
-
 Packet *
 FloodTracker::simple_action(Packet *p_in)
 {

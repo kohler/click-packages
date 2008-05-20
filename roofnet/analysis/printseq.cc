@@ -44,13 +44,11 @@ PrintSeq::configure(Vector<String> &conf, ErrorHandler* errh)
   int ret;
   _offset = 0;
   _bytes = 4;
-  ret = cp_va_parse(conf, this, errh,
-		    cpOptional,
-		    cpString, "label", &_label,
-		    cpKeywords,
-		    "OFFSET", cpUnsigned, "offset", &_offset,
-		    "BYTES", cpUnsigned, "bytes", &_bytes,
-		    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "LABEL", cpkP, cpString, &_label,
+		     "OFFSET", 0, cpUnsigned, &_offset,
+		     "BYTES", 0, cpUnsigned, &_bytes,
+		     cpEnd);
   return ret;
 }
 

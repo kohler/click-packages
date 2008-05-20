@@ -40,10 +40,9 @@ PrintRate::configure(Vector<String> &conf, ErrorHandler*errh)
 {
 	_print = false;
 	_rate = 0;
-	int ret = cp_va_parse(conf, this, errh,
-			      cpKeywords,
-			      "PRINT", cpBool, "xxx", &_print,
-			      0);
+	int ret = cp_va_kparse(conf, this, errh,
+			       "PRINT", 0, cpBool, &_print,
+			       cpEnd);
 	return ret;
 }
 

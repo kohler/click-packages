@@ -2,7 +2,7 @@
 #ifndef CLICK_CALCULATECAPACITY_HH
 #define CLICK_CALCULATECAPACITY_HH
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/handlercall.hh>
 #include "elements/analysis/aggregatenotifier.hh"
 #include "elements/analysis/toipflowdumps.hh"
@@ -98,7 +98,7 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     FILE *traceinfo_file() const	{ return _traceinfo_file; }
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
-    typedef HashMap<unsigned, ConnInfo *> ConnMap;
+    typedef HashTable<unsigned, ConnInfo *> ConnMap;
     
   private:
     

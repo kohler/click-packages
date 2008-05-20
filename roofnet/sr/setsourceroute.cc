@@ -44,11 +44,10 @@ int
 SetSourceRoute::configure (Vector<String> &conf, ErrorHandler *errh)
 {
   int ret;
-  ret = cp_va_parse(conf, this, errh,
-		    cpKeywords,
-                    "IP", cpIPAddress, "IP address", &_ip,
-		    "SR", cpElement, "SRForwarder element", &_sr_forwarder,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "IP", 0, cpIPAddress, &_ip,
+		     "SR", 0, cpElement, &_sr_forwarder,
+		     cpEnd);
 
   if (!_sr_forwarder || _sr_forwarder->cast("SRForwarder") == 0) 
     return errh->error("SRForwarder element is not a SRForwarder or not specified");

@@ -106,14 +106,13 @@ FragmentResender::configure(Vector<String> &conf, ErrorHandler *errh)
   _ack_timeout_ms = 100;
   resend_index = 0;
   resend_limit = 0;
-  if (cp_va_parse(conf, this, errh,
-		  /* not required */
-		  cpKeywords,
-		  "WINDOW", cpUnsigned, "", &_window_size,
-		  "ACK_TIMEOUT", cpUnsigned, "", &_ack_timeout_ms,
-		  "DEBUG", cpBool, "Debug", &_debug,
-		  "ETHTYPE", cpUnsignedShort, "Ethernet encapsulation type", &_et,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   /* not required */
+		   "WINDOW", 0, cpUnsigned, &_window_size,
+		   "ACK_TIMEOUT", 0, cpUnsigned, &_ack_timeout_ms,
+		   "DEBUG", 0, cpBool, &_debug,
+		   "ETHTYPE", 0, cpUnsignedShort, &_et,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }

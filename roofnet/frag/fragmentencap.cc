@@ -43,12 +43,11 @@ FragmentEncap::configure(Vector<String> &conf, ErrorHandler *errh)
   _debug = false;
   _frag_length = 100;
   _packet_num = 0;
-  if (cp_va_parse(conf, this, errh,
-		  /* not required */
-		  cpKeywords,
-		  "DEBUG", cpBool, "Debug", &_debug,
-		  "LENGTH", cpUnsigned, "length", &_frag_length,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   /* not required */
+		   "DEBUG", 0, cpBool, &_debug,
+		   "LENGTH", 0, cpUnsigned, &_frag_length,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }

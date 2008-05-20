@@ -59,20 +59,19 @@ int
 DHCPServer::configure( Vector<String> &conf, ErrorHandler *errh )
 {
 	_debug = false;
-	if (cp_va_parse(conf, this, errh,
-			cpIPAddress, "server ip address", &_ip,
-			cpKeywords, 
-			"DEBUG", cpBool, "debug", &_debug,
-			"START", cpIPAddress, "start", &_start,
-			"END", cpIPAddress, "end", &_end,
-			"BCAST", cpIPAddress, "bcast", &_bcast,
-			cpEnd) < 0) {
+	if (cp_va_kparse(conf, this, errh,
+			 "SRVIP", cpkP+cpkM, cpIPAddress, &_ip,
+			 "DEBUG", 0, cpBool, &_debug,
+			 "START", 0, cpIPAddress, &_start,
+			 "END", 0, cpIPAddress, &_end,
+			 "BCAST", 0, cpIPAddress, &_bcast,
+			 cpEnd) < 0) {
 		return -1;
 	}
 	for (u_int32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
 		IPAddress ip = IPAddress(htonl(x));
 		//click_chatter("%s: inserting ip %s\n", __func__, ip.unparse().c_str());
-		_free.insert(ip, ip);
+		_free.set(ip, ip);
 		_free_list.push_back(ip);
 	}
 	return 0;
@@ -97,13 +96,18 @@ get_dhcp_option(unsigned char *options, int option_val, int *option_size)
 Lease *
 DHCPServer::lookup(IPAddress ip)
 {
-	return _leases.findp(ip);
+    if (HashTable<IPAddress, Lease>::iterator it = _leases.find(ip))
+	return &it.value();
+    else
+	return 0;
 }
 Lease *
 DHCPServer::rev_lookup(EtherAddress eth)
 {
-	IPAddress *ip = _ips.findp(eth);
-	return ip ? _leases.findp(*ip) : 0;
+    if (HashTable<EtherAddress, IPAddress>::iterator it = _ips.find(eth))
+	return lookup(it.value());
+    else
+	return 0;
 }
 Lease *
 DHCPServer::new_lease(EtherAddress eth, IPAddress ip)
@@ -112,7 +116,7 @@ DHCPServer::new_lease(EtherAddress eth, IPAddress ip)
 	if (l) {
 		return l;
 	}
-	if (_free.findp(ip)) {
+	if (_free.find(ip)) {
 		Lease l;
 		l._eth = eth;
 		l._ip = ip;
@@ -134,7 +138,7 @@ DHCPServer::new_lease_any(EtherAddress eth)
 	while (_free_list.size()) {
 		IPAddress next = _free_list[0];
 		_free_list.pop_front();
-		if (_free.findp(next)) {
+		if (_free.find(next)) {
 			return new_lease(eth, next);
 		}
 	}
@@ -143,20 +147,20 @@ DHCPServer::new_lease_any(EtherAddress eth)
 
 void
 DHCPServer::insert(Lease l) {
-	_free.remove(l._ip);
-	_ips.insert(l._eth, l._ip);
-	_leases.insert(l._ip, l);
+	_free.erase(l._ip);
+	_ips.set(l._eth, l._ip);
+	_leases.set(l._ip, l);
 }
 void
 DHCPServer::remove(EtherAddress eth)
 {
 	Lease *l = rev_lookup(eth);
 	if (l) {
-		_free.insert(l->_ip, l->_ip);
+		_free.set(l->_ip, l->_ip);
 		_free_list.push_back(l->_ip);
 		
-		_leases.remove(l->_ip);
-		_ips.remove(l->_eth);
+		_leases.erase(l->_ip);
+		_ips.erase(l->_eth);
 	}
 }
 void

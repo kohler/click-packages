@@ -154,7 +154,7 @@ NetflowExport::Flow::fill_record(NetflowExport *exporter, Record *r, Timestamp &
   };
     
   for (unsigned i = 0; i < ARRAYSIZE(v1_fields); i++) {
-    NetflowData *data = findp(0, v1_fields[i].type);
+    const NetflowData *data = findp(0, v1_fields[i].type);
     if (data) {
       // Assert that everything we added in the ctor was parsed
       assert(data->data() && data->parsed() &&
@@ -357,16 +357,16 @@ NetflowExport::aggregate_notify(uint32_t agg, AggregateEvent event, const Packet
   switch (event) {
 
   case NEW_AGG:
-    _flows.insert(agg, new Flow(p, this, _flow_sequence++));
+    _flows.set(agg, new Flow(p, this, _flow_sequence++));
     // Fall through to immediately generating a flow record for new
     // flows if debugging.
     if (!_debug)
       break;
 
   case DELETE_AGG: {
-    Flow *flow = _flows.find(agg);
-    if (flow) {
-      _flows.remove(agg);
+    if (HashTable<uint32_t, Flow *>::iterator it = _flows.find(agg)) { 
+      Flow *flow = it.value();
+      _flows.erase(it);
       flow->send(this);
       delete flow;
     }
@@ -378,7 +378,7 @@ NetflowExport::aggregate_notify(uint32_t agg, AggregateEvent event, const Packet
 Packet *
 NetflowExport::simple_action(Packet *p)
 {
-  Flow *flow = _flows.find(AGGREGATE_ANNO(p));
+  Flow *flow = _flows.get(AGGREGATE_ANNO(p));
   if (flow)
     flow->handle_packet(p);
   p->kill();
@@ -388,16 +388,13 @@ NetflowExport::simple_action(Packet *p)
 void
 NetflowExport::run_timer(Timer *)
 {
-  for (HashMap<uint32_t, Flow *>::iterator i = _flows.begin();
+  for (HashTable<uint32_t, Flow *>::iterator i = _flows.begin();
        i != _flows.end();
        ++i)
     if (i.value())
       i.value()->send(this);
   _timer.reschedule_after_msec(_interval);
 }
-
-#include <click/hashmap.cc>
-template class HashMap<uint32_t, NetflowExport::Flow *>;
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(userlevel AggregateNotifier NetflowPacket)

@@ -148,19 +148,18 @@ int
 ETTStat::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   String probes;
-  int res = cp_va_parse(conf, this, errh,
-			cpKeywords,
-			"ETHTYPE", cpUnsigned, "Ethernet encapsulation type", &_et,
-			"IP", cpIPAddress, "IP address", &_ip,
-			"ETH", cpEtherAddress, "Source Ethernet address", &_eth,
-			"PERIOD", cpUnsigned, "Probe broadcast period (msecs)", &_period,
-			"TAU", cpUnsigned, "Loss-rate averaging period (msecs)", &_tau,
-			"ETT", cpElement, "ETT Metric element", &_ett_metric,
-			"ETX", cpElement, "ETX Metric element", &_etx_metric,
-			"ARP", cpElement, "ARPTable element", &_arp_table,
-			"PROBES", cpString, "PROBES", &probes,
-			"RT", cpElement, "AvailabeRates", &_rtable,
-			cpEnd);
+  int res = cp_va_kparse(conf, this, errh,
+			 "ETHTYPE", 0, cpUnsigned, &_et,
+			 "IP", 0, cpIPAddress, &_ip,
+			 "ETH", 0, cpEtherAddress, &_eth,
+			 "PERIOD", 0, cpUnsigned, &_period,
+			 "TAU", 0, cpUnsigned, &_tau,
+			 "ETT", 0, cpElement, &_ett_metric,
+			 "ETX", 0, cpElement, &_etx_metric,
+			 "ARP", 0, cpElement, &_arp_table,
+			 "PROBES", 0, cpString, &probes,
+			 "RT", 0, cpElement, &_rtable,
+			 cpEnd);
 
 
   if (res < 0)

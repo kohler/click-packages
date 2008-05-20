@@ -2,7 +2,7 @@
 #include <click/config.h>
 #include "tcpmystery.hh"
 #include <click/error.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/straccum.hh>
 #include <click/confparse.hh>
 #include <clicknet/ip.h>
@@ -1470,6 +1470,5 @@ TCPMystery::add_handlers()
 
 ELEMENT_REQUIRES(userlevel TCPScoreboard)
 EXPORT_ELEMENT(TCPMystery)
-#include <click/bighashmap.cc>
 #include <click/dequeue.cc>
 CLICK_ENDDECLS

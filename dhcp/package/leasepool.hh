@@ -2,7 +2,7 @@
 #define LEASEPOOL_HH
 
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/vector.hh>
 #include <click/dequeue.hh>
 #include <click/etheraddress.hh>
@@ -65,7 +65,7 @@ public:
 private:
 
   DEQueue<IPAddress> _free_list;
-  HashMap<IPAddress, IPAddress> _free;
+  HashTable<IPAddress, IPAddress> _free;
 
   IPAddress _start;
   IPAddress _end;

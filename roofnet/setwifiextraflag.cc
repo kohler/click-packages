@@ -37,10 +37,9 @@ SetWifiExtraFlag::~SetWifiExtraFlag()
 int
 SetWifiExtraFlag::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if (cp_va_parse(conf, this, errh,
-		  cpUnsigned, "flags", &_flag,
-		  cpKeywords, 
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "FLAGS", cpkP+cpkM, cpUnsigned, &_flag,
+		   cpEnd) < 0) {
     return -1;
   }
   return 0;

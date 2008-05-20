@@ -38,11 +38,10 @@ TXFeedbackStats::~TXFeedbackStats()
 int
 TXFeedbackStats::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  int res = cp_va_parse(conf, this, errh,
-			cpKeywords,
-			"TAU", cpUnsigned, "TX feedback tracking period (msecs)", &_tau,
-			"MIN_PKTS", cpUnsigned, "minimum number of packets required to estimate TX count", &_min_pkts,
-			cpEnd);
+  int res = cp_va_kparse(conf, this, errh,
+			 "TAU", 0, cpUnsigned, &_tau,
+			 "MIN_PKTS", 0, cpUnsigned, &_min_pkts,
+			 cpEnd);
   if (res < 0)
     return res;
 

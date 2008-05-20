@@ -40,7 +40,6 @@ class TXFLog : public Element { public:
   const char *processing() const		{ return AGNOSTIC; }
   const char *flow_code() const			{ return "#/#"; }
   
-  int configure(Vector<String> &, ErrorHandler *);
   bool can_live_reconfigure() const		{ return true; }
 
   Packet *simple_action(Packet *);

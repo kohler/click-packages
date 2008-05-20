@@ -91,11 +91,9 @@ LinkFailureDetection::simple_action(Packet *p_in)
   click_wifi_extra *ceh = (click_wifi_extra *) p_in->user_anno();
   bool success = !(ceh->flags & WIFI_EXTRA_TX_FAIL);
 
-  DstInfo *nfo = _neighbors.findp(dst);
-  if (!nfo) {
-    DstInfo foo = DstInfo(dst);
-    _neighbors.insert(dst, foo);
-    nfo = _neighbors.findp(dst);
+  DstInfo *nfo = &_neighbors[dst];
+  if (!nfo->_eth) {
+      nfo->_eth = dst;
   }
   click_gettimeofday(&nfo->_last_received);
   if (success) {
@@ -153,11 +151,7 @@ LinkFailureDetection::add_handlers()
   add_read_handler("stats", static_print_stats, 0);
 
 }
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<EtherAddress, LinkFailureDetection::DstInfo>;
-#endif
+
 CLICK_ENDDECLS
 EXPORT_ELEMENT(LinkFailureDetection)
 

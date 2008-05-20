@@ -37,14 +37,6 @@ SRDestCache::~SRDestCache()
 {
 }
 
-int
-SRDestCache::configure (Vector<String> &conf, ErrorHandler *errh)
-{
-	return cp_va_parse(conf, this, errh,
-			   cpKeywords,
-			   cpEnd);	
-}
-
 void
 SRDestCache::push(int port, Packet *p_in)
 {

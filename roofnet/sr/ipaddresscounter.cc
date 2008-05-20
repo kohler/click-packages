@@ -40,11 +40,10 @@ IPAddressCounter::configure (Vector<String> &conf, ErrorHandler *errh)
   bool track_src = false;
   bool track_dst = false;
 
-  ret = cp_va_parse(conf, this, errh,
-                    cpKeywords,
-		    "USE_SRC", cpBool, "", &track_src,
-		    "USE_DST", cpBool, "", &track_dst,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "USE_SRC", 0, cpBool, &track_src,
+		     "USE_DST", 0, cpBool, &track_dst,
+		     cpEnd);
 
   if (!(track_src ^ track_dst)) {
     return errh->error("exactly one of SRC or DST must be specified\n");

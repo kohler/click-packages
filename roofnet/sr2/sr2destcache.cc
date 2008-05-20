@@ -37,14 +37,6 @@ SR2DestCache::~SR2DestCache()
 {
 }
 
-int
-SR2DestCache::configure (Vector<String> &conf, ErrorHandler *errh)
-{
-	return cp_va_parse(conf, this, errh,
-			   cpKeywords,
-			   cpEnd);	
-}
-
 void
 SR2DestCache::push(int port, Packet *p_in)
 {

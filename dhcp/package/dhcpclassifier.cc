@@ -29,23 +29,23 @@ DHCPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
     for (int argno = 0 ; argno < conf.size(); argno++) {
 	String s = conf[argno];
 	if (s == "discover") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_DISCOVER, argno);
+	    _dhcp_msg_to_outport_map[DHCP_DISCOVER] = argno;
 	} else if (s == "offer") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_OFFER, argno);
+	    _dhcp_msg_to_outport_map[DHCP_OFFER] = argno;
 	} else if (s == "request") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_REQUEST, argno);
+	    _dhcp_msg_to_outport_map[DHCP_REQUEST] = argno;
 	} else if (s == "decline") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_DECLINE, argno);
+	    _dhcp_msg_to_outport_map[DHCP_DECLINE] = argno;
 	} else if (s == "ack") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_ACK, argno);
+	    _dhcp_msg_to_outport_map[DHCP_ACK] = argno;
 	} else if (s == "nack") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_NACK, argno);
+	    _dhcp_msg_to_outport_map[DHCP_NACK] = argno;
 	} else if (s == "release") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_RELEASE, argno);
+	    _dhcp_msg_to_outport_map[DHCP_RELEASE] = argno;
 	} else if (s == "inform") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_INFORM, argno);
+	    _dhcp_msg_to_outport_map[DHCP_INFORM] = argno;
 	} else if (s == "-") {
-	    _dhcp_msg_to_outport_map.insert(DHCP_REST, argno);
+	    _dhcp_msg_to_outport_map[DHCP_REST] = argno;
 	}
     }
     return 0;
@@ -57,12 +57,11 @@ DHCPClassifier::push(int, Packet *p)
     const uint8_t *mtype = DHCPOptionUtil::fetch(p, DHO_DHCP_MESSAGE_TYPE, 1);
     int port = -1;
     if (mtype)
-	port = _dhcp_msg_to_outport_map.find(*mtype);
+	port = _dhcp_msg_to_outport_map.get(*mtype);
     if (port < 0)
-	port = _dhcp_msg_to_outport_map.find(DHCP_REST);
+	port = _dhcp_msg_to_outport_map.get(DHCP_REST);
     checked_output_push(port, p);
 }
 
-#include <click/bighashmap.cc>
 EXPORT_ELEMENT(DHCPClassifier)
 ELEMENT_REQUIRES(DHCPOptionUtil)  

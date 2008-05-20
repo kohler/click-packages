@@ -50,18 +50,17 @@ PFlood::configure (Vector<String> &conf, ErrorHandler *errh)
   _p = 0;
   _max_delay_ms = 750;
   _history = 100;
-  ret = cp_va_parse(conf, this, errh,
-                    cpKeywords,
-		    "ETHTYPE", cpUnsigned, "Ethernet encapsulation type", &_et,
-                    "IP", cpIPAddress, "IP address", &_ip,
-                    "BCAST_IP", cpIPAddress, "IP address", &_bcast_ip,
-		    "ETH", cpEtherAddress, "EtherAddress", &_en,
-		    "P", cpInteger, "Count", &_p,
-		    "MAX_DELAY", cpUnsigned, "Max Delay (ms)", &_max_delay_ms,
-		    /* below not required */
-		    "DEBUG", cpBool, "Debug", &_debug,
-		    "HISTORY", cpUnsigned, "history", &_history,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "ETHTYPE", 0, cpUnsigned, &_et,
+		     "IP", 0, cpIPAddress, &_ip,
+		     "BCAST_IP", 0, cpIPAddress, &_bcast_ip,
+		     "ETH", 0, cpEtherAddress, &_en,
+		     "P", 0, cpInteger, &_p,
+		     "MAX_DELAY", 0, cpUnsigned, &_max_delay_ms,
+		     /* below not required */
+		     "DEBUG", 0, cpBool, &_debug,
+		     "HISTORY", 0, cpUnsigned, &_history,
+		     cpEnd);
 
   if (!_et) 
     return errh->error("ETHTYPE not specified");

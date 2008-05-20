@@ -2,7 +2,7 @@
 #ifndef CLICK_TCPMYSTERY_HH
 #define CLICK_TCPMYSTERY_HH
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/handlercall.hh>
 #include "tcpcollector.hh"
 #include "elements/analysis/aggregatenotifier.hh"

@@ -317,7 +317,7 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
     sa << tag << ": ";
   sa << "    ";
 
-  NetflowData *src, *dst, *sport, *dport;
+  const NetflowData *src, *dst, *sport, *dport;
   src = _r[i].findp(0, IPFIX_sourceIPv4Address);
   dst = _r[i].findp(0, IPFIX_destinationIPv4Address);
   sport = _r[i].findp(0, IPFIX_sourceTransportPort);
@@ -333,7 +333,7 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
   if (dport)
     sa << ":" << dport->str();
 
-  NetflowData *first, *last;
+  const NetflowData *first, *last;
   first = _r[i].findp(0, IPFIX_flowStartSysUpTime);
   last = _r[i].findp(0, IPFIX_flowEndSysUpTime);
   if ((first && first->parsed()) || (last && last->parsed())) {
@@ -348,17 +348,17 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
     sa << ")";
   }
 
-  NetflowData *prot;
+  const NetflowData *prot;
   prot = _r[i].findp(0, IPFIX_protocolIdentifier);
   if (prot)
     sa << "; prot " << prot->str();
 
   if (verbose) {
-    NetflowData *input, *output;
+    const NetflowData *input, *output;
     input = _r[i].findp(0, IPFIX_ingressInterface);
     output = _r[i].findp(0, IPFIX_egressInterface);
 
-    NetflowData *in_src_mac, *in_dst_mac, *out_src_mac, *out_dst_mac;
+    const NetflowData *in_src_mac, *in_dst_mac, *out_src_mac, *out_dst_mac;
     in_src_mac = _r[i].findp(0, IPFIX_sourceMacAddress);
     in_dst_mac = _r[i].findp(0, IPFIX_destinationMacAddress);
     out_src_mac = _r[i].findp(0, IPFIX_postSourceMacAddress);
@@ -401,7 +401,7 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
       }
     }
 
-    NetflowData *dpkts, *doctets;
+    const NetflowData *dpkts, *doctets;
     dpkts = _r[i].findp(0, IPFIX_packetDeltaCount);
     doctets = _r[i].findp(0, IPFIX_octetDeltaCount);
     if (dpkts || doctets) {
@@ -418,12 +418,12 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
       }
     }
 
-    NetflowData *tos;
+    const NetflowData *tos;
     tos = _r[i].findp(0, IPFIX_classOfServiceIPv4);
     if (tos && tos->parsed())
       sa << "; tos " << print_hex(_r[i].tos());
 
-    NetflowData *flags;
+    const NetflowData *flags;
     flags = _r[i].findp(0, IPFIX_tcpControlBits);
     if (flags && flags->parsed())
       sa << "; flags " << print_hex(_r[i].flags());
@@ -441,12 +441,6 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
 }
 
 // Instantiations
-
-// Data record is a hash of fields
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<Netflow_Field_Key, NetflowData>;
-#endif
 
 // Data flowset is a vector of data records
 #include <click/vector.cc>

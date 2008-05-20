@@ -2,7 +2,7 @@
 #define LEASEHASH_HH
 
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/vector.hh>
 #include <click/dequeue.hh>
 #include <click/etheraddress.hh>

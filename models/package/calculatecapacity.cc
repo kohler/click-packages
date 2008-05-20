@@ -2,7 +2,7 @@
 #include <click/config.h>
 #include "calculatecapacity.hh"
 #include <click/error.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/straccum.hh>
 #include <click/confparse.hh>
 #include <clicknet/ip.h>
@@ -679,10 +679,10 @@ CalculateCapacity::simple_action(Packet *p)
 {
     uint32_t aggregate = AGGREGATE_ANNO(p);
     if (aggregate != 0 && p->ip_header()->ip_p == IP_PROTO_TCP) {
-	ConnInfo *loss = _conn_map.find(aggregate);
+	ConnInfo *loss = _conn_map.get(aggregate);
 	if (!loss) {
 	    if ((loss = new ConnInfo(p, _filepos_h)))
-		_conn_map.insert(aggregate, loss);
+		_conn_map.set(aggregate, loss);
 	    else {
 		click_chatter("out of memory!");
 		p->kill();
@@ -701,8 +701,8 @@ void
 CalculateCapacity::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
-	if (ConnInfo *tmploss = _conn_map.find(aggregate)) {
-	    _conn_map.remove(aggregate);
+	if (ConnInfo *tmploss = _conn_map.get(aggregate)) {
+	    _conn_map.erase(aggregate);
 	    tmploss->kill(this);
 	}
 }
@@ -734,5 +734,4 @@ CalculateCapacity::add_handlers()
 
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(CalculateCapacity)
-#include <click/bighashmap.cc>
 CLICK_ENDDECLS

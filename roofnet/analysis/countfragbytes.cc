@@ -53,15 +53,14 @@ CountFragBytes::configure(Vector<String> &conf, ErrorHandler *errh)
 
   _adaptive_window_smaller_sample = 10;
 
-  if (cp_va_parse(conf, this, errh,
-		  cpKeywords, 
-		  "LENGTH", cpUnsigned, "", &_length,
-		  "FRAG_SIZE", cpUnsigned, "", &_frag_size,
-		  "OVERHEAD", cpUnsigned, "", &_overhead,
-		  "ADAPTIVE", cpBool, "", &_adaptive,
-		  "ADAPTIVE_WINDOW", cpUnsigned, "", &_adaptive_window,
-		  "ADAPTIVE_SMALL_SAMPLE", cpUnsigned, "", &_adaptive_window_smaller_sample,
-		  cpEnd) < 0) {
+  if (cp_va_kparse(conf, this, errh,
+		   "LENGTH", 0, cpUnsigned, &_length,
+		   "FRAG_SIZE", 0, cpUnsigned, &_frag_size,
+		   "OVERHEAD", 0, cpUnsigned, &_overhead,
+		   "ADAPTIVE", 0, cpBool, &_adaptive,
+		   "ADAPTIVE_WINDOW", 0, cpUnsigned, &_adaptive_window,
+		   "ADAPTIVE_SMALL_SAMPLE", 0, cpUnsigned, &_adaptive_window_smaller_sample,
+		   cpEnd) < 0) {
     return -1;
   }
 

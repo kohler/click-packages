@@ -45,11 +45,10 @@ SetGateway::configure (Vector<String> &conf, ErrorHandler *errh)
 {
   _gw = IPAddress();
   int ret;
-  ret = cp_va_parse(conf, this, errh,
-                    cpKeywords,
-		    "GW", cpIPAddress, "Gateway IP Address", &_gw,
-		    "SEL", cpElement, "GatewaySelector element", &_gw_sel,
-                    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "GW", 0, cpIPAddress, &_gw,
+		     "SEL", 0, cpElement, &_gw_sel,
+		     cpEnd);
 
   if (_gw_sel && _gw_sel->cast("GatewaySelector") == 0) 
     return errh->error("GatewaySelector element is not a GatewaySelector");

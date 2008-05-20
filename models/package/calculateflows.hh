@@ -2,7 +2,7 @@
 #ifndef CLICK_CALCULATEFLOWS_HH
 #define CLICK_CALCULATEFLOWS_HH
 #include <click/element.hh>
-#include <click/bighashmap.hh>
+#include <click/hashtable.hh>
 #include <click/handlercall.hh>
 #include <click/dequeue.hh>
 #include "elements/analysis/aggregatenotifier.hh"
@@ -172,7 +172,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     enum { SAVE_UNDELIVERED_PACKETNO };
     int save(int what, uint32_t aggregate, int direction, const String &filename, ErrorHandler *);
     
-    typedef HashMap<unsigned, ConnInfo *> ConnMap;
+    typedef HashTable<unsigned, ConnInfo *> ConnMap;
     
   private:
     

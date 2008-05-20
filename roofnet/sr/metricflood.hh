@@ -6,7 +6,7 @@
 #include <click/ipaddress.hh>
 #include <click/etheraddress.hh>
 #include <click/vector.hh>
-#include <click/hashmap.hh>
+#include <click/hashtable.hh>
 #include <click/dequeue.hh>
 #include <elements/wifi/linktable.hh>
 #include <elements/wifi/arptable.hh>
@@ -80,7 +80,7 @@ class MetricFlood : public Element {
     }
   };
 
-  typedef HashMap<IPAddress, bool> IPMap;
+  typedef HashTable<IPAddress, bool> IPMap;
   IPMap _neighbors;
   Vector<IPAddress> _neighbors_v;
 

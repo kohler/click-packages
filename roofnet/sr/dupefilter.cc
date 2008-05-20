@@ -43,11 +43,10 @@ int
 DupeFilter::configure(Vector<String> &conf, ErrorHandler* errh)
 {
   int ret;
-  ret = cp_va_parse(conf, this, errh,
-		    cpKeywords,
-		    "WINDOW", cpInteger, "window length", &_window,
-		    "DEBUG", cpInteger, "debug level", &_debug,
-		    cpEnd);
+  ret = cp_va_kparse(conf, this, errh,
+		     "WINDOW", 0, cpInteger, &_window,
+		     "DEBUG", 0, cpInteger, &_debug,
+		     cpEnd);
   return ret;
 }
 

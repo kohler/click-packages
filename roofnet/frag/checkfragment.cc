@@ -42,11 +42,9 @@ CheckFragment::configure(Vector<String> &conf, ErrorHandler *errh)
 {
 
   _header_only = false;
-  if (cp_va_parse(conf, this, errh,
-		  cpOptional,
-		  cpKeywords,
-		  "HEADER_ONLY", cpBool, "", &_header_only,
-		  cpEnd) < 0)
+  if (cp_va_kparse(conf, this, errh,
+		   "HEADER_ONLY", 0, cpBool, &_header_only,
+		   cpEnd) < 0)
     return -1;
   return 0;
 }
