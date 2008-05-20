@@ -54,9 +54,9 @@ as C<filepos> attributes on any C<flow> elements.
 =item NOTIFIER
 
 An AggregateNotifier element, such as AggregateIPFlows.
-CalculateTCPLossEvents registers with the notifier to receive "delete
+TCPCollector registers with the notifier to receive "delete
 aggregate" messages.  It uses these messages to delete state.  If you don't
-provide a NOTIFIER, CalculateTCPLossEvents will keep some state for every
+provide a NOTIFIER, TCPCollector will keep some state for every
 aggregate it sees until the router quits.
 
 =item IP_ID
