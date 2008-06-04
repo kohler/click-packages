@@ -101,7 +101,7 @@ SR2QueryForwarder::get_random_neighbor()
   if (!_neighbors_v.size()) {
     return IPAddress();
   }
-  int ndx = random() % _neighbors_v.size();
+  int ndx = click_random(0, _neighbors_v.size() - 1);
   return _neighbors_v[ndx];
 
 }
@@ -168,7 +168,7 @@ SR2QueryForwarder::process_query(struct sr2packet *pk1)
 
   
   /* schedule timer */
-  int delay_time = random() % 1750 + 1;
+  int delay_time = click_random(1, 1750);
   
   _seen[si]._to_send = _seen[si]._when + Timestamp::make_msec(delay_time);
   _seen[si]._forwarded = false;

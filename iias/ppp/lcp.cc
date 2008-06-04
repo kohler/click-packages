@@ -39,7 +39,7 @@ LCP::addci(uint8_t *data)
   ci->len = offsetof(struct ppp_ci, data) + sizeof(magic);
   // recalculate magic number
   if (state != REQSENT && state != ACKRCVD && state != ACKSENT)
-    magic = random();
+    magic = click_random();
   memcpy(ci->data, &magic, sizeof(magic));
 
   return (unsigned)ci->len;

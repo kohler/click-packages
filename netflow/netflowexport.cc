@@ -31,7 +31,7 @@ NetflowExport::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   Element *e = 0;
   _version = 9;
-  _source_id = random() % 65536;
+  _source_id = click_random(0, 65535);
   _template_id = 1025;
   _debug = false;
   _interval = 0;

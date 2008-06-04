@@ -197,13 +197,13 @@ ETTStat::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 void add_jitter(unsigned int max_jitter, Timestamp *t) {
-  unsigned j = (unsigned) (random() % (max_jitter + 1));
-  if (random() & 1) {
-      *t += Timestamp::make_msec(j);
-  } else {
-      *t -= Timestamp::make_msec(j);
-  }
-  return;
+    uint32_t j = click_random(0, 2 * max_jitter);
+    if (j >= max_jitter) {
+	*t += Timestamp::make_msec(j - max_jitter);
+    } else {
+	*t -= Timestamp::make_msec(j);
+    }
+    return;
 }
 
 void

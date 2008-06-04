@@ -149,7 +149,7 @@ SNMPTrapSource::initialize(ErrorHandler *)
 {
   _task.initialize(this, false);
   _jiffies0 = snmp_time_ticks_since(0);
-  _id = random();
+  _id = click_random();
   return 0;
 }
 

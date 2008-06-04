@@ -131,7 +131,7 @@ CounterFlood::forward(Broadcast *bcast) {
   pk->set_link_node(hops,_ip);
   pk->set_next(hops);
   pk->set_seq(bcast->_seq);
-  uint32_t link_seq = random();
+  uint32_t link_seq = click_random();
   pk->set_seq2(link_seq);
 
   bcast->_sent_seq.push_back(link_seq);
@@ -206,7 +206,7 @@ CounterFlood::push(int port, Packet *p_in)
     /* from me */
     int index = _packets.size();
     _packets.push_back(Broadcast());
-    _packets[index]._seq = random();
+    _packets[index]._seq = click_random();
     _packets[index]._originated = true;
     _packets[index]._p = p_in->clone();
     _packets[index]._num_rx = 0;
@@ -257,7 +257,7 @@ CounterFlood::push(int port, Packet *p_in)
       _packets[index]._rx_from_seq.push_back(link_seq);
 
       /* schedule timer */
-      int delay_time = (random() % _max_delay_ms) + 1;
+      int delay_time = click_random(1, _max_delay_ms);
       sr_assert(delay_time > 0);
       
       _packets[index]._to_send = now + Timestamp::make_msec(delay_time);

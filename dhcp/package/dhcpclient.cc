@@ -27,7 +27,7 @@ DHCPClient::DHCPClient()
       _lease_call(0)
 {
     for (int i = 0; i < NTIMERS; i++)
-	_timers[i].set_hook(this);
+	_timers[i].assign(this);
 }
 
 DHCPClient::~DHCPClient()
@@ -84,8 +84,8 @@ void DHCPClient::save_lease(Packet *p)
 	_t2_timestamp_sec = (_lease_duration * 7 / 8) + now_sec;
 	_lease_expired_sec = _lease_duration + now_sec; 
   
-	_timers[T_RENEW].schedule_after_sec(_lease_duration/2 + random() % 10);
-	_timers[T_REBIND].schedule_after_sec((_lease_duration * 7 / 8) + random() % 10);
+	_timers[T_RENEW].schedule_after_sec(_lease_duration/2 + click_random(0, 9));
+	_timers[T_REBIND].schedule_after_sec((_lease_duration * 7 / 8) + click_random(0, 9));
 	_timers[T_LEASE_EXPIRED].schedule_after_sec(_lease_duration);
     } else {
 	_start_timestamp_sec = _t1_timestamp_sec
@@ -288,7 +288,7 @@ WritablePacket *DHCPClient::make_bootrequest(int mtype, uint32_t ciaddr, uint32_
 
 Packet *DHCPClient::make_request_with_ciaddr()
 {
-    WritablePacket *q = make_bootrequest(DHCP_REQUEST, _my_ip.addr(), random());
+    WritablePacket *q = make_bootrequest(DHCP_REQUEST, _my_ip.addr(), click_random());
     if (!q)
 	return 0;
 
@@ -346,7 +346,7 @@ Packet *DHCPClient::make_request(Packet *offer)
 
 Packet *DHCPClient::make_release()
 {
-    WritablePacket *q = make_bootrequest(DHCP_RELEASE, _my_ip.addr(), random());
+    WritablePacket *q = make_bootrequest(DHCP_RELEASE, _my_ip.addr(), click_random());
     if (!q)
 	return 0;
     
@@ -364,7 +364,7 @@ Packet *DHCPClient::make_release()
 
 Packet *DHCPClient::make_discovery()
 {
-    WritablePacket *q = make_bootrequest(DHCP_DISCOVER, 0, random());
+    WritablePacket *q = make_bootrequest(DHCP_DISCOVER, 0, click_random());
     if (!q)
 	return 0;
 
@@ -417,7 +417,7 @@ DHCPClient::enter_init_state()
     _lease_expired_sec = 0;
   
     _timers[T_TIMEOUT].schedule_after(_timeout);
-    _timers[T_RESEND_DISCOVER].schedule_after_sec(random() % 10);
+    _timers[T_RESEND_DISCOVER].schedule_after_sec(click_random(0, 9));
 }
 
 void

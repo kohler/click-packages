@@ -145,9 +145,8 @@ SR2GatewayResponder::run_timer(Timer *)
 	}
 	unsigned p = _period * 1000;
 	unsigned max_jitter = p / 7;
-	long r2 = random();
-	unsigned j = (unsigned) ((r2 >> 1) % (max_jitter + 1));
-	unsigned int delta_us = 1000 * ((r2 & 1) ? p - j : p + j);
+	unsigned j = click_random(0, 2 * max_jitter);
+	unsigned int delta_us = 1000 * (p + j - max_jitter);
 	_timer.schedule_at(Timestamp::now() + Timestamp::make_usec(delta_us));
 }
 

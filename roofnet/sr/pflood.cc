@@ -146,7 +146,7 @@ PFlood::forward_hook()
       /* this timer has expired */
       if (!_packets[x]._forwarded) {
 	/* we haven't forwarded this packet yet */
-	if (random() % 100 <= _p) {
+	if (click_random(0, 99) <= _p) {
 	  forward(&_packets[x]);
 	} 
 	_packets[x]._forwarded = true;
@@ -183,7 +183,7 @@ PFlood::push(int port, Packet *p_in)
 	/* from me */
 	int index = _packets.size();
 	_packets.push_back(Broadcast());
-	_packets[index]._seq = random();
+	_packets[index]._seq = click_random();
 	_packets[index]._originated = true;
 	_packets[index]._p = p_in;
 	_packets[index]._num_rx = 0;
@@ -223,7 +223,7 @@ PFlood::push(int port, Packet *p_in)
       _packets[index].t = NULL;
 
       /* schedule timer */
-      int delay_time = (random() % _max_delay_ms) + 1;
+      int delay_time = click_random(1, _max_delay_ms);
       sr_assert(delay_time > 0);
       
       _packets[index].t = new Timer(static_forward_hook, (void *) this);
