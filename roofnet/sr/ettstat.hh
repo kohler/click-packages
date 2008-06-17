@@ -50,7 +50,7 @@ rate for each host.  Defaults to 10,000 (10 seconds).
 #include <click/element.hh>
 #include <click/glue.hh>
 #include <click/etheraddress.hh>
-#include <elements/wifi/arptable.hh>
+#include <elements/ethernet/arptable.hh>
 #include <clicknet/wifi.h>
 #include <click/timer.hh>
 CLICK_DECLS

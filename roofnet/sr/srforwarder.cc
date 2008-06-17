@@ -26,7 +26,7 @@
 #include <clicknet/ether.h>
 #include "srforwarder.hh"
 #include "srpacket.hh"
-#include "elements/wifi/arptable.hh"
+#include "elements/ethernet/arptable.hh"
 CLICK_DECLS
 
 
@@ -132,7 +132,7 @@ SRForwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
     return (0);
   }
   EtherAddress eth_dest = _arp_table->lookup(r[next]);
-  if (eth_dest == _arp_table->_bcast) {
+  if (eth_dest.is_broadcast()) {
     click_chatter("%{element}: arp lookup failed for %s",
 		  this,
 		  r[next].unparse().c_str());
@@ -301,7 +301,7 @@ SRForwarder::push(int port, Packet *p_in)
   IPAddress nxt = pk->get_link_node(pk->next());
   
   edst = _arp_table->lookup(nxt);
-  if (edst == _arp_table->_bcast) {
+  if (edst.is_broadcast()) {
     click_chatter("%{element}::%s arp lookup failed for %s",
 		  this,
 		  __func__,

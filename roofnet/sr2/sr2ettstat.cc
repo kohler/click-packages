@@ -680,7 +680,7 @@ SR2ETTStat::read_bcast_stats()
     sa << ip;
     if (_arp_table) {
       EtherAddress eth_dest = _arp_table->lookup(ip);
-      if (eth_dest) {
+      if (eth_dest && !eth_dest.is_broadcast()) {
 	sa << " " << eth_dest.unparse().c_str();
       } else {
 	sa << " ?";
@@ -710,7 +710,7 @@ SR2ETTStat::read_bcast_stats()
 	    sa << ip;
 	    if (_arp_table) {
 		    EtherAddress eth_dest = _arp_table->lookup(ip);
-		    if (eth_dest) {
+		    if (eth_dest && !eth_dest.is_broadcast()) {
 			    sa << " " << eth_dest.unparse();
 		    } else {
 			    sa << " ?";

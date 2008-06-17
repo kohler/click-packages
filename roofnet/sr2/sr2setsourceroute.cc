@@ -23,7 +23,7 @@
 #include <click/straccum.hh>
 #include <clicknet/ether.h>
 #include <elements/wifi/linktable.hh>
-#include <elements/wifi/arptable.hh>
+#include <elements/ethernet/arptable.hh>
 #include <elements/wifi/path.hh>
 #include "sr2setsourceroute.hh"
 #include "sr2forwarder.hh"

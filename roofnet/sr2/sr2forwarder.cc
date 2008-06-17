@@ -26,7 +26,7 @@
 #include <clicknet/ether.h>
 #include "sr2forwarder.hh"
 #include "sr2packet.hh"
-#include "elements/wifi/arptable.hh"
+#include "elements/ethernet/arptable.hh"
 CLICK_DECLS
 
 SR2Forwarder::SR2Forwarder()

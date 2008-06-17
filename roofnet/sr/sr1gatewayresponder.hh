@@ -9,7 +9,7 @@
 #include <click/hashmap.hh>
 #include <click/dequeue.hh>
 #include <elements/wifi/linktable.hh>
-#include <elements/wifi/arptable.hh>
+#include <elements/ethernet/arptable.hh>
 #include <elements/wifi/path.hh>
 #include "gatewayselector.hh"
 CLICK_DECLS
