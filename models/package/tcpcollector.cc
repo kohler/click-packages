@@ -83,7 +83,7 @@ TCPCollector::Stream::process_data(Pkt* k, const Packet* p, Conn* conn)
     k->sack = 0;
     k->ip_id = (conn->ip_id() ? iph->ip_id : 0);
     k->timestamp = p->timestamp_anno() - conn->init_time();
-    k->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
+    k->packetno_anno = PACKET_NUMBER_ANNO(p);
     k->flags = 0;
 
     // update counters

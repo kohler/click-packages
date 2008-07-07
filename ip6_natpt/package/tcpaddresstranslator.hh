@@ -125,7 +125,7 @@ bool, Mapping6 *);
     void add_to_free_tracked_tail(Mapping6 *&head, Mapping6 *&tail);
     void clear_free_tracked();
 
-    void apply(int p,Packet *p);
+    void apply(int port, Packet *p);
     String s() const;
 
     bool used_since(uint32_t) const;

@@ -997,7 +997,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
 	    np->ack = 0;
 	np->ip_id = (parent->_ip_id ? iph->ip_id : 0);
 	np->timestamp = p->timestamp_anno() - _init_time;
-	np->packetno_anno = PACKET_NUMBER_ANNO(p, 0);
+	np->packetno_anno = PACKET_NUMBER_ANNO(p);
 	np->flags = 0;
 	np->event_id = stream.event_id;
 
