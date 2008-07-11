@@ -387,11 +387,9 @@ SRQueryForwarder::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<SRQueryForwarder::IPAddress>;
 template class DEQueue<SRQueryForwarder::Seen>;
 #endif
 

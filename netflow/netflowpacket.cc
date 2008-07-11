@@ -443,10 +443,6 @@ NetflowTemplatePacket<Header, Template_Field>::unparse_record(int i, String tag,
 // Instantiations
 
 // Data flowset is a vector of data records
-#include <click/vector.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<NetflowDataRecord>;
-#endif
 
 // NetflowVersion9Packet
 template class NetflowTemplatePacket<NetflowPacket::V9_Header, NetflowPacket::V9_Template_Field>;

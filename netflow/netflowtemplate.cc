@@ -10,12 +10,5 @@
 #include "netflowtemplate.hh"
 CLICK_DECLS
 
-#include <click/vector.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<NetflowTemplateField>;
-#endif
-
 CLICK_ENDDECLS
-
 ELEMENT_PROVIDES(NetflowTemplate)
-

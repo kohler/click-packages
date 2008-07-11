@@ -811,7 +811,6 @@ ELEMENT_REQUIRES(SR2TXCountMetric)
 ELEMENT_REQUIRES(SR2ETTMetric)
 #include <click/bighashmap.cc>
 #include <click/dequeue.cc>
-#include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<SR2ETTStat::probe_t>;
 template class HashMap<IPAddress, SR2ETTStat::probe_list_t>;

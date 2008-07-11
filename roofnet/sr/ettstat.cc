@@ -829,7 +829,6 @@ ELEMENT_REQUIRES(TXCountMetric)
 ELEMENT_REQUIRES(ETTMetric)
 #include <click/bighashmap.cc>
 #include <click/dequeue.cc>
-#include <click/vector.cc>
 template class DEQueue<ETTStat::probe_t>;
 template class HashMap<IPAddress, ETTStat::probe_list_t>;
 template class HashMap<EtherAddress, uint8_t>;

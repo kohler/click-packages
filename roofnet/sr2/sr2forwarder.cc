@@ -245,12 +245,8 @@ SR2Forwarder::add_handlers()
 
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/bighashmap.cc>
 #include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-
-#endif
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SR2Forwarder)

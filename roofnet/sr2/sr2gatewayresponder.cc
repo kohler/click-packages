@@ -191,12 +191,9 @@ SR2GatewayResponder::add_handlers()
   add_write_handler("debug", SR2GatewayResponder_write_param, (void *) H_DEBUG);
 }
 
-// generate Vector template instance
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<SR2GatewayResponder::IPAddress>;
 template class DEQueue<SR2GatewayResponder::Seen>;
 #endif
 

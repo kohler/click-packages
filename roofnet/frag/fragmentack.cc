@@ -137,9 +137,6 @@ FragmentAck::simple_action(Packet *p)
   
 }
 
-
-
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class HashMap<EtherAddress, FragmentAck::WindowInfo>;

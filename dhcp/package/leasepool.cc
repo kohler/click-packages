@@ -21,7 +21,6 @@
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/vector.cc>
 #include <click/straccum.hh>
 #include "leasepool.hh"
 CLICK_DECLS
@@ -119,7 +118,6 @@ LeasePool::configure( Vector<String> &conf, ErrorHandler *errh )
 
 EXPORT_ELEMENT(LeasePool LeasePool-LeasePool)
 #include <click/dequeue.cc>
-#include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<IPAddress>;
 #endif

@@ -630,7 +630,6 @@ Histogram::add_sorted(const double *cur, const double *end)
 #endif
 
 
-#include <click/vector.cc>
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(MultiQ)
 CLICK_ENDDECLS

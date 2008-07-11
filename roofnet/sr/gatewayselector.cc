@@ -535,12 +535,10 @@ GatewaySelector::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/bighashmap.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<GatewaySelector::IPAddress>;
 template class DEQueue<GatewaySelector::Seen>;
 #endif
 

@@ -127,5 +127,4 @@ CLICK_ENDDECLS
 EXPORT_ELEMENT(WifiCounter)
 
 #include <click/hashmap.cc>
-#include <click/vector.cc>
 CLICK_ENDDECLS

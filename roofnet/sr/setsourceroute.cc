@@ -183,7 +183,6 @@ SetSourceRoute::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/bighashmap.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>

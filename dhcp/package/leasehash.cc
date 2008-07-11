@@ -21,7 +21,6 @@
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/vector.cc>
 #include <click/straccum.hh>
 #include <click/crc32.h>
 #include "leasehash.hh"
@@ -93,7 +92,6 @@ LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 
 EXPORT_ELEMENT(LeaseHash LeaseHash-LeaseHash)
 #include <click/dequeue.cc>
-#include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class DEQueue<IPAddress>;
 #endif

@@ -439,11 +439,9 @@ MetricFlood::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<MetricFlood::IPAddress>;
 template class DEQueue<MetricFlood::Seen>;
 #endif
 

@@ -388,12 +388,9 @@ SR2QueryForwarder::add_handlers()
   add_write_handler("clear", SR2QueryForwarder_write_param, (void *) H_CLEAR);
 }
 
-// generate Vector template instance
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<SR2QueryForwarder::IPAddress>;
 template class DEQueue<SR2QueryForwarder::Seen>;
 #endif
 

@@ -258,11 +258,9 @@ SR2Querier::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/hashmap.cc>
 #include <click/dequeue.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<SR2Querier::IPAddress>;
 template class DEQueue<SR2Querier::Seen>;
 #endif
 

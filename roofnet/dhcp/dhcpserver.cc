@@ -22,7 +22,6 @@
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
 #include <click/bighashmap.cc>
-#include <click/vector.cc>
 #include <click/straccum.hh>
 #include <click/atomic.hh>
 #include <click/packet_anno.hh>
@@ -495,5 +494,4 @@ DHCPServer::add_handlers()
 
 EXPORT_ELEMENT(DHCPServer)
 #include <click/dequeue.cc>
-#include <click/vector.cc>
 template class DEQueue<IPAddress>;

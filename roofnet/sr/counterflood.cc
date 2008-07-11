@@ -402,11 +402,7 @@ CounterFlood::add_handlers()
 }
 
 // generate Vector template instance
-#include <click/vector.cc>
 #include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class Vector<CounterFlood::Broadcast>;
-#endif
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(CounterFlood)

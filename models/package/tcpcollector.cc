@@ -935,5 +935,4 @@ TCPCollector::add_handlers()
 
 ELEMENT_REQUIRES(userlevel)
 EXPORT_ELEMENT(TCPCollector)
-#include <click/vector.cc>
 CLICK_ENDDECLS

@@ -21,7 +21,6 @@
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/vector.cc>
 #include <click/straccum.hh>
 #include "leasetable.hh"
 
