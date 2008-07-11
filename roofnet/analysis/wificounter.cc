@@ -123,8 +123,6 @@ WifiCounter::add_handlers()
 	add_read_handler("stats", WifiCounter_read_param, (void *) H_STATS);
 	add_read_handler("types", WifiCounter_read_param, (void *) H_TYPES);
 }
+
 CLICK_ENDDECLS
 EXPORT_ELEMENT(WifiCounter)
-
-#include <click/hashmap.cc>
-CLICK_ENDDECLS

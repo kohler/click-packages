@@ -263,12 +263,5 @@ SRQuerier::add_handlers()
   add_write_handler("query", write_param, (void *) H_QUERY);
 }
 
-// generate Vector template instance
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SRQuerier::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SRQuerier)

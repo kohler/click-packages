@@ -92,7 +92,5 @@ SRDestCache::add_handlers()
   add_read_handler("cache", read_param, (void *) H_CACHE);
 }
 
-// generate Vector template instance
-#include <click/hashmap.cc>
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SRDestCache)

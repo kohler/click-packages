@@ -321,13 +321,5 @@ SetGateway::add_handlers()
   add_write_handler("gateway", change_param, (void *) 0);
 }
 
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SetGateway::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SetGateway)

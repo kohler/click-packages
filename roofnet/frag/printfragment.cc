@@ -103,12 +103,6 @@ PrintFragment::simple_action(Packet *p)
   return p;
 }
 
-
-
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<int, PrintFragment::PacketInfo>;
-#endif
 EXPORT_ELEMENT(PrintFragment)
 CLICK_ENDDECLS
 

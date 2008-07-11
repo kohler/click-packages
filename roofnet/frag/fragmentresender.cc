@@ -528,10 +528,6 @@ FragmentResender::add_handlers()
   add_write_handler("debug", FragmentResender_write_param, (void *) H_DEBUG);
 }
 
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<int, FragmentResender::PacketInfo>;
-#endif
 EXPORT_ELEMENT(FragmentResender)
 CLICK_ENDDECLS
 

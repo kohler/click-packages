@@ -67,5 +67,4 @@ TCPScoreboard::contains(tcp_seq_t seq, tcp_seq_t end_seq) const
 }
 
 ELEMENT_PROVIDES(TCPScoreboard)
-#include <click/dequeue.cc>
 CLICK_ENDDECLS

@@ -401,8 +401,5 @@ CounterFlood::add_handlers()
   add_write_handler("clear", write_param, (void *) 5);
 }
 
-// generate Vector template instance
-#include <click/dequeue.cc>
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(CounterFlood)

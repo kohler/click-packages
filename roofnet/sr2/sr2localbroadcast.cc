@@ -182,12 +182,5 @@ SR2LocalBroadcast::add_handlers()
   add_write_handler("debug", static_write_debug, 0);
 }
 
-// generate Vector template instance
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SR2LocalBroadcast::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SR2LocalBroadcast)

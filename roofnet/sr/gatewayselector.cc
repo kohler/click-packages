@@ -534,13 +534,5 @@ GatewaySelector::add_handlers()
   add_write_handler("allow_clear", write_param, (void *) 6);
 }
 
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<GatewaySelector::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(GatewaySelector)

@@ -1470,5 +1470,4 @@ TCPMystery::add_handlers()
 
 ELEMENT_REQUIRES(userlevel TCPScoreboard)
 EXPORT_ELEMENT(TCPMystery)
-#include <click/dequeue.cc>
 CLICK_ENDDECLS

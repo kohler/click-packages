@@ -438,12 +438,5 @@ MetricFlood::add_handlers()
   add_write_handler("clear", MetricFlood_write_param, (void *) H_CLEAR);
 }
 
-// generate Vector template instance
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<MetricFlood::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(MetricFlood)

@@ -389,12 +389,5 @@ SRQueryResponder::add_handlers()
   add_write_handler("debug", SRQueryResponder_write_param, (void *) H_DEBUG);
 }
 
-// generate Vector template instance
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SRQueryResponder::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SRQueryResponder)

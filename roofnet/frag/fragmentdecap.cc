@@ -125,10 +125,6 @@ FragmentDecap::add_handlers()
   add_write_handler("debug", FragmentDecap_write_param, (void *) H_DEBUG);
 }
 
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<int, FragmentDecap::PacketInfo>;
-#endif
 EXPORT_ELEMENT(FragmentDecap)
 CLICK_ENDDECLS
 

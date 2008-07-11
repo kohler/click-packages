@@ -163,9 +163,5 @@ DupeFilter::add_handlers()
 }
 
 EXPORT_ELEMENT(DupeFilter)
-
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-template class DEQueue<int>;
 CLICK_ENDDECLS
 

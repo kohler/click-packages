@@ -134,10 +134,6 @@ IPAddressCounter::add_handlers()
   add_write_handler("stats", write_param, (void *) 0);
   add_write_handler("reset", write_param, (void *) 1);
 }
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<IPAddress, IPAddressCounter::IPAddressInfo>;
-#endif
+
 CLICK_ENDDECLS
 EXPORT_ELEMENT(IPAddressCounter)

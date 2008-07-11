@@ -113,13 +113,5 @@ FloodTracker::add_handlers()
 	add_read_handler("stats", read_param, (void *) H_STATS);
 }
 
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<FloodTracker::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(FloodTracker)

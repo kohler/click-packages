@@ -345,7 +345,5 @@ PFlood::add_handlers()
   add_write_handler("p", static_write_p, 0);
 }
 
-#include <click/dequeue.cc>
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(PFlood)

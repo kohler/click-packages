@@ -182,13 +182,5 @@ SetSourceRoute::add_handlers()
   add_write_handler("set_route", static_set_route, 0);
 }
 
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<IPAddress, Path>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SetSourceRoute)

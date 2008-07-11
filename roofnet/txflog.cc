@@ -108,10 +108,6 @@ TXFLog::add_handlers()
   add_read_handler("log", TXFLog_read_param, (void *) H_LOG);
   add_write_handler("reset", TXFLog_write_param, (void *) H_RESET);
 }
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<struct click_wifi_extra>;
-#endif
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(TXFLog)

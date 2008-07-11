@@ -117,8 +117,4 @@ LeasePool::configure( Vector<String> &conf, ErrorHandler *errh )
 
 
 EXPORT_ELEMENT(LeasePool LeasePool-LeasePool)
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<IPAddress>;
-#endif
 CLICK_ENDDECLS

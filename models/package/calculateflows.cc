@@ -1309,5 +1309,4 @@ CalculateFlows::add_handlers()
 
 ELEMENT_REQUIRES(userlevel TCPScoreboard)
 EXPORT_ELEMENT(CalculateFlows)
-#include <click/dequeue.cc>
 CLICK_ENDDECLS

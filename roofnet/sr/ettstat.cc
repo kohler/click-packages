@@ -827,9 +827,4 @@ ETTStat::reverse_arp(EtherAddress eth)
 EXPORT_ELEMENT(ETTStat)
 ELEMENT_REQUIRES(TXCountMetric)
 ELEMENT_REQUIRES(ETTMetric)
-#include <click/bighashmap.cc>
-#include <click/dequeue.cc>
-template class DEQueue<ETTStat::probe_t>;
-template class HashMap<IPAddress, ETTStat::probe_list_t>;
-template class HashMap<EtherAddress, uint8_t>;
 CLICK_ENDDECLS

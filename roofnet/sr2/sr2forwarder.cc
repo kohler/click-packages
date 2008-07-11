@@ -242,11 +242,5 @@ SR2Forwarder::add_handlers()
 	add_read_handler("stats", static_print_stats, 0);
 }
 
-
-
-// generate Vector template instance
-#include <click/bighashmap.cc>
-#include <click/hashmap.cc>
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SR2Forwarder)

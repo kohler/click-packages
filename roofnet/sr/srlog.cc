@@ -138,8 +138,6 @@ SRLog::add_handlers()
   add_write_handler("active", SRLog_write_param, (void *) H_ACTIVE);
 
 }
-#include <click/dequeue.cc>
-template class DEQueue<struct click_wifi_extra>;
 
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SRLog)

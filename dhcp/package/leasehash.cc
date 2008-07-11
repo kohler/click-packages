@@ -91,8 +91,4 @@ LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 
 
 EXPORT_ELEMENT(LeaseHash LeaseHash-LeaseHash)
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<IPAddress>;
-#endif
 CLICK_ENDDECLS

@@ -809,11 +809,4 @@ SR2ETTStat::reverse_arp(EtherAddress eth)
 EXPORT_ELEMENT(SR2ETTStat)
 ELEMENT_REQUIRES(SR2TXCountMetric)
 ELEMENT_REQUIRES(SR2ETTMetric)
-#include <click/bighashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SR2ETTStat::probe_t>;
-template class HashMap<IPAddress, SR2ETTStat::probe_list_t>;
-template class HashMap<EtherAddress, uint8_t>;
-#endif
 CLICK_ENDDECLS

@@ -191,11 +191,5 @@ SR2GatewayResponder::add_handlers()
   add_write_handler("debug", SR2GatewayResponder_write_param, (void *) H_DEBUG);
 }
 
-#include <click/hashmap.cc>
-#include <click/dequeue.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class DEQueue<SR2GatewayResponder::Seen>;
-#endif
-
 CLICK_ENDDECLS
 EXPORT_ELEMENT(SR2GatewayResponder)

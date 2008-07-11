@@ -129,6 +129,4 @@ TXStat::add_handlers()
 }
 
 EXPORT_ELEMENT(TXStat)
-
-#include <click/bighashmap.cc>
 CLICK_ENDDECLS

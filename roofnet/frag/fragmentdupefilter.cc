@@ -94,13 +94,6 @@ FragmentDupeFilter::simple_action(Packet *p)
   
 }
 
-
-#include <click/vector.cc>
-#include <click/dequeue.cc>
-#include <click/hashmap.cc>
-#if EXPLICIT_TEMPLATE_INSTANCES
-template class HashMap<EtherAddress, FragmentDupeFilter::DstInfo>;
-#endif
 EXPORT_ELEMENT(FragmentDupeFilter)
 CLICK_ENDDECLS
 
