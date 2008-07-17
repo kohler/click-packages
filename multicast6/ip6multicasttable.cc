@@ -217,7 +217,7 @@ bool IP6MulticastTable::printgroups(bool printreceivers)
 void IP6MulticastTable::push(int port, Packet *p_in)
 {
   bool submitted_packet=false;
-  click_in6_addr group=click_in6_addr(p_in->dst_ip6_anno());
+  click_in6_addr group=click_in6_addr(DST_IP6_ANNO(p_in));
   Vector<MulticastGroup>::iterator  i;
   for(i=multicastgroups.begin(); i!=multicastgroups.end(); ++i)
 	{
@@ -233,7 +233,7 @@ void IP6MulticastTable::push(int port, Packet *p_in)
 			  click_ip6 *ip = p->ip6_header();
 			  ip->ip6_hlim++;
 			  click_in6_addr r=click_in6_addr((*a).receiver);
-			  p->set_dst_ip6_anno(IP6Address(r));
+			  SET_DST_IP6_ANNO(p, r);
 			  output(0).push(p);
 			}
 		}

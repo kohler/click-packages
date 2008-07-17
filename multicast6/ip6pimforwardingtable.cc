@@ -183,7 +183,7 @@ bool IP6PIMForwardingTable::printgroups()
  *******************************************************************************************/
 void IP6PIMForwardingTable::push(int port, Packet *p_in)
 {
-  IP6Address group=p_in->dst_ip6_anno();
+  IP6Address group=DST_IP6_ANNO(p_in);
   click_ip6* ip;
   ip=(click_ip6 *)p_in->data();
   IP6Address source=IP6Address(ip->ip6_src);
@@ -202,7 +202,7 @@ void IP6PIMForwardingTable::push(int port, Packet *p_in)
 				{
 				  Packet *q_in = p_in->clone();
 				  WritablePacket *p = q_in->uniqueify();
-				  p->set_dst_ip6_anno((*i).neighbor);
+				  SET_DST_IP6_ANNO(p, (*i).neighbor);
 				  output(0).push(p);
 				  // debug_msg("IP6PIMForwardingTable forwarding ...");
 				}

@@ -106,8 +106,8 @@ IP6PIMControl::generatejoinprune(IP6Address group, IP6Address source, bool join)
   nip->ip6_dst = IP6Address(source);
   // ** debug
   //  nip->ip6_dst = IP6Address("FF02::d");
-  //  q->set_dst_ip6_anno(IP6Address(source));
-  q->set_dst_ip6_anno(IP6Address(source));
+  //  SET_DST_IP6_ANNO(q, IP6Address(source));
+  SET_DST_IP6_ANNO(q, IP6Address(source));
   nip->ip6_plen=htons(sizeof(*header)+sizeof(*unicastneighbor)+sizeof(*joinprune)+sizeof(*grouprecord)+sizeof(*sender));
 
   header->ver_type=0x23;
@@ -182,7 +182,7 @@ IP6PIMControl::generate_hello()
   nip->ip6_nxt = 0x67;
   nip->ip6_src = IP6Address("0::0");
   nip->ip6_plen=htons(sizeof(*p_header)+sizeof(*p_options));
-  q->set_dst_ip6_anno(IP6Address("ff02::d")); //PIM all router address
+  SET_DST_IP6_ANNO(q, IP6Address("ff02::d")); //PIM all router address
 
   nip->ip6_hlim=0x01; //kill at next router but let pass through this one
   nip->ip6_dst = IP6Address("ff02::d");
@@ -201,7 +201,7 @@ IP6PIMControl::generate_hello()
   p_options->value=0xFFFF; 
 
   //  q->set_ip_header(nip, nip->ip_hl << 2);
-  q->set_dst_ip6_anno(IP6Address(nip->ip6_dst));
+  SET_DST_IP6_ANNO(q, IP6Address(nip->ip6_dst));
   // q->timestamp_anno().set_now();
   //  SET_FIX_IP_SRC_ANNO(q, true);
 

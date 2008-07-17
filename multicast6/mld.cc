@@ -424,7 +424,7 @@ MLD::generalquery()
   nip->ip6_src = IP6Address("fe80::204:23ff:fe45:9d71");
  
   nip->ip6_dst = IP6Address("ff02::1");
-  q->set_dst_ip6_anno(IP6Address("ff02::1"));
+  SET_DST_IP6_ANNO(q, IP6Address("ff02::1"));
   hopbyhop->type=0x3a;  //MLD router alert
   hopbyhop->length=0;
   hopbyhop->parameter=0x0502;
