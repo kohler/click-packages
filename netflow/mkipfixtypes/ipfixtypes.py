@@ -128,7 +128,7 @@ enum IPFIX_fieldType {
   %(field_types)s
 };
 
-static inline const IPFIX_dataType
+static inline IPFIX_dataType
 ipfix_datatype(uint16_t type) {
   switch (type) {
   %(ipfix_datatypes)s
@@ -144,7 +144,7 @@ ipfix_name(uint16_t type) {
   return "unknown";
 }
 
-static inline const uint16_t
+static inline uint16_t
 ipfix_type(const char *name) {
   if (0) { }
   %(ipfix_types)s

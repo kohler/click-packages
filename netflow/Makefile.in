@@ -57,7 +57,9 @@ include $(clickdatadir)/pkg-Makefile
 
 # Also build mkipfixtypes
 
-mkipfixtypes ipfixtypes $(srcdir)/ipfixtypes.hh:
+mkipfixtypes ipfixtypes:
+	@cd mkipfixtypes && $(MAKE) all
+$(srcdir)/ipfixtypes.hh: $(srcdir)/mkipfixtypes/ipfixtypes.py $(wildcard $(srcdir)/mkipfixtypes/*.xml)
 	@cd mkipfixtypes && $(MAKE) all
 
 .PHONY: mkipfixtypes ipfixtypes

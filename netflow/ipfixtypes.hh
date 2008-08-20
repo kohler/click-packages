@@ -1,4 +1,4 @@
-// DO NOT EDIT. Generated at Fri May 12 09:36:05 2006.
+// DO NOT EDIT. Generated at Wed Aug 20 11:25:20 2008.
 
 #ifndef IPFIXTYPES_HH
 #define IPFIXTYPES_HH
@@ -181,7 +181,7 @@ enum IPFIX_fieldType {
   IPFIX_mplsPayloadLength = 214
 };
 
-static inline const IPFIX_dataType
+static inline IPFIX_dataType
 ipfix_datatype(uint16_t type) {
   switch (type) {
   case IPFIX_sourceIPv4Address:
@@ -520,7 +520,7 @@ ipfix_name(uint16_t type) {
   return "unknown";
 }
 
-static inline const uint16_t
+static inline uint16_t
 ipfix_type(const char *name) {
   if (0) { }
   else if (strcmp(name, "octetDeltaCount") == 0) { return IPFIX_octetDeltaCount; }
