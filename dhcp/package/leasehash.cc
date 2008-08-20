@@ -39,7 +39,7 @@ LeaseHash::hash(EtherAddress eth)
 {
 	u_int32_t crc = update_crc(0, (char *)eth.data(), 6);
 	return IPAddress((_subnet.addr() & 0xff) |
-			 (~0xff) & crc);
+			 (~0xff & crc));
 }
 void *
 LeaseHash::cast(const char *n) 
