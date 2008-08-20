@@ -78,11 +78,11 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     fprintf(f,"    <interarrival>\n");
     for(unsigned int i=0; i < pkt_cnt; i++){
 	fprintf(f, "%d " PRITIMESTAMP " %d " PRITIMESTAMP "\n", intervals[i].size,
-		intervals[i].interval._sec,
-		intervals[i].interval._subsec,
+		intervals[i].interval.sec(),
+		intervals[i].interval.subsec(),
 		intervals[i].newack,
-		intervals[i].time._sec,
-		intervals[i].time._subsec);
+		intervals[i].time.sec(),
+		intervals[i].time.subsec());
     }
     fprintf(f,"    </interarrival>\n");
     fprintf(f, " </stream>\n");
@@ -140,9 +140,8 @@ CalculateCapacity::StreamInfo::findpeaks()
     for(j = 0, n = 0; j < pkt_cnt; j++){
 	struct IntervalStream *i = intervals + j;
 	Timestamp *t = &(i->interval);
-	if (t->_sec == 0 && t->_subsec == 0){
+	if (!*t)
 	    continue;
-	}
 	if(i->size < 500 && i->newack < 500){
 	    continue;
 	}

@@ -755,7 +755,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 {
     fprintf(f, "    <acklatency");
     if (have_ack_latency)
-	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     fprintf(f, ">\n");
 
     const StreamInfo *acks = conn->stream(!direction);
@@ -766,7 +766,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 	    last_ack = ack->ack;
 	    if (Pkt *k = find_acked_pkt(ack, hint)) {
 		Timestamp latency = ack->timestamp - k->timestamp;
-		fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq, latency._sec, latency._subsec);
+		fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq, latency.sec(), latency.subsec());
 		hint = k;
 	    }
 	}
@@ -779,14 +779,14 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *, FILE *f) const
 {
     fprintf(f, "    <ackcausality");
     if (have_ack_latency)
-	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     fprintf(f, ">\n");
     
     for (Pkt *k = pkt_head; k; k = k->next)
 	if (k->caused_ack) {
 	    Pkt *ack = k->caused_ack;
 	    Timestamp latency = ack->timestamp - k->timestamp;
-	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, ack->ack, latency._sec, latency._subsec);
+	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp.sec(), k->timestamp.subsec(), ack->ack, latency.sec(), latency.subsec());
 	}
     
     fprintf(f, "    </ackcausality>\n");
@@ -801,7 +801,7 @@ CalculateFlows::StreamInfo::write_reordered_xml(FILE *f, WriteFlags write_flags,
 	    if ((k->flags & Pkt::F_REORDER)
 		|| (k->caused_ack && k->next && k->next->caused_ack
 		    && k->caused_ack->timestamp > k->next->caused_ack->timestamp)) {
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	    }
 	fprintf(f, "    </reordered>\n");
     } else
@@ -815,7 +815,7 @@ CalculateFlows::StreamInfo::write_full_rcv_window_xml(FILE *f) const
 	fprintf(f, "    <fullrcvwindow>\n");
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	fprintf(f, "    </fullrcvwindow>\n");
     }
 }
@@ -827,7 +827,7 @@ CalculateFlows::StreamInfo::write_window_probe_xml(FILE *f) const
 	fprintf(f, "    <windowprobe>\n");
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_WINDOW_PROBE)
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	fprintf(f, "    </windowprobe>\n");
     }
 }
@@ -839,7 +839,7 @@ CalculateFlows::StreamInfo::write_undelivered_xml(FILE *f, WriteFlags write_flag
 	fprintf(f, "    <undelivered n='%d'>\n", nundelivered);
 	for (Pkt *k = pkt_head; k; k = k->next)
 	    if (!(k->flags & Pkt::F_DELIVERED) && k->seq != k->end_seq)
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	fprintf(f, "    </undelivered>\n");
     } else
 	fprintf(f, "    <undelivered n='%d' />\n", nundelivered);
@@ -850,7 +850,7 @@ CalculateFlows::StreamInfo::write_packets_xml(FILE *f) const
 {
     fprintf(f, "    <packet>\n");
     for (Pkt *k = pkt_head; k; k = k->next)
-	fprintf(f, PRITIMESTAMP " %u %u %u\n", k->timestamp._sec, k->timestamp._subsec, k->seq, k->end_seq - k->seq, k->ack);
+	fprintf(f, PRITIMESTAMP " %u %u %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->seq, k->end_seq - k->seq, k->ack);
     fprintf(f, "    </packet>\n");
 }
 
@@ -861,7 +861,7 @@ CalculateFlows::StreamInfo::write_xml(ConnInfo *conn, FILE *f, WriteFlags write_
 	    direction, total_packets - ack_packets, ack_packets,
 	    init_seq, total_seq, loss_events, false_loss_events);
     if (have_ack_latency)
-	fprintf(f, " minacklatency='" PRITIMESTAMP "'", min_ack_latency._sec, min_ack_latency._subsec);
+	fprintf(f, " minacklatency='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     if (sent_sackok)
 	fprintf(f, " sentsackok='yes'");
     if (different_syn)
@@ -935,15 +935,15 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
-		_init_time._sec, _init_time._subsec,
-		end_time._sec, end_time._subsec);
+		_init_time.sec(), _init_time.subsec(),
+		end_time.sec(), end_time.subsec());
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).c_str());
 	fprintf(f, ">\n");
 
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
 	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
-	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt._sec, min_rtt._subsec);
+	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt.sec(), min_rtt.subsec());
 	}
 	
 	_stream[0].write_xml(this, f, cf->write_flags());

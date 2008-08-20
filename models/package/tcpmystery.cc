@@ -220,7 +220,7 @@ TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCol
 	MyPkt* mk = my->mypkt(k);
 	if (Pkt* ackk = mk->caused_ack) {
 	    Timestamp latency = ackk->timestamp - k->timestamp;
-	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp._sec, k->timestamp._subsec, ackk->max_ack(), latency._sec, latency._subsec);
+	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp.sec(), k->timestamp.subsec(), ackk->max_ack(), latency.sec(), latency.subsec());
 	}
     }
     
@@ -278,7 +278,7 @@ TCPMystery::mystery_undelivered_xmltag(FILE* f, TCPCollector::Stream* s, TCPColl
 		fprintf(f, ">\n");
 		any = true;
 	    }
-	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	}
 
     if (any)
@@ -1134,7 +1134,7 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 
 	if (_stream[0].have_ack_latency && _stream[1].have_ack_latency) {
 	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
-	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt._sec, min_rtt._subsec);
+	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt.sec(), min_rtt.subsec());
 	}
 	
 	_stream[0].write_xml(this, f, cf->write_flags());

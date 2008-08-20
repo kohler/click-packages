@@ -589,8 +589,8 @@ TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
 	    _aggregate,
 	    _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 	    _flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
-	    _init_time._sec, _init_time._subsec,
-	    duration._sec, duration._subsec);
+	    _init_time.sec(), _init_time.subsec(),
+	    duration.sec(), duration.subsec());
 
     if (_filepos)
 	fprintf(f, " filepos='%s'", String(_filepos).c_str());
@@ -646,7 +646,7 @@ TCPCollector::Stream::packet_xmltag(FILE* f, Stream* stream, Conn*, const String
     if (stream->pkt_head) {
 	fprintf(f, "    <%s>", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next) {
-	    fprintf(f, "\n" PRITIMESTAMP " %u %u %u", k->timestamp._sec, k->timestamp._subsec, k->seq, k->end_seq - k->seq, k->ack);
+	    fprintf(f, "\n" PRITIMESTAMP " %u %u %u", k->timestamp.sec(), k->timestamp.subsec(), k->seq, k->end_seq - k->seq, k->ack);
 	    if (const uint32_t* sack = k->sack) {
 		const uint32_t* end_sack = sack + *sack + 1;
 		char sep = ' ';
@@ -665,7 +665,7 @@ TCPCollector::Stream::fullrcvwindow_xmltag(FILE* f, Stream* stream, Conn*, const
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_FILLS_RCV_WINDOW)
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
 }
@@ -677,7 +677,7 @@ TCPCollector::Stream::windowprobe_xmltag(FILE* f, Stream* stream, Conn*, const S
 	fprintf(f, "    <%s>\n", tagname.c_str());
 	for (Pkt *k = stream->pkt_head; k; k = k->next)
 	    if (k->flags & Pkt::F_WINDOW_PROBE)
-		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp._sec, k->timestamp._subsec, k->end_seq);
+		fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
 	fprintf(f, "    </%s>\n", tagname.c_str());
     }
 }
