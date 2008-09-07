@@ -333,7 +333,7 @@ CalculateFlows::StreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) co
 		Timestamp delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
 		// XXX apply some fudge factor to this comparison?
 		if (delta < result_delta
-		    && (delta._sec > 0 || delta._subsec > 0)) {
+		    && (delta.sec() > 0 || delta.subsec() > 0)) {
 		    result = k;
 		    result_delta = delta;
 		}
@@ -357,7 +357,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_la
     }
     
     while (ackwindow_begin
-	   && (cur_ack->timestamp - ackwindow_begin->timestamp)._sec > 5) {
+	   && (cur_ack->timestamp - ackwindow_begin->timestamp).sec() > 5) {
 	if (ackwindow_begin->cumack_pkt
 	    && ackwindow_begin->timestamp - ackwindow_begin->cumack_pkt->timestamp <= running_min_ack_latency)
 	    refind_min_ack_latency = true;
@@ -365,19 +365,19 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_la
     }
 
     if (refind_min_ack_latency) {
-	running_min_ack_latency._sec = 10000;	
+	running_min_ack_latency.set_sec(10000);	
 	ackwindow_end = ackwindow_begin;
     }
     
     while (ackwindow_end
-	   && (ackwindow_end->timestamp - cur_ack->timestamp)._sec < 5) {
+	   && (ackwindow_end->timestamp - cur_ack->timestamp).sec() < 5) {
 	if (ackwindow_end->cumack_pkt
 	    && ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp < running_min_ack_latency)
 	    running_min_ack_latency = ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp;
 	ackwindow_end = ackwindow_end->next;
     }
 
-    if (running_min_ack_latency._sec >= 10000)
+    if (running_min_ack_latency.sec() >= 10000)
 	cur_min_ack_latency = min_ack_latency;
     else
 	cur_min_ack_latency = running_min_ack_latency;

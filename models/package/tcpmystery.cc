@@ -601,7 +601,7 @@ TCPMystery::MStreamInfo::find_ack_cause(const Pkt *ackk, Pkt *search_hint) const
 		Timestamp delta = (ackk->timestamp - k->timestamp) - min_ack_latency;
 		// XXX apply some fudge factor to this comparison?
 		if (delta < result_delta
-		    && (delta._sec > 0 || delta._subsec > 0)) {
+		    && (delta.sec() > 0 || delta.subsec() > 0)) {
 		    result = k;
 		    result_delta = delta;
 		}
