@@ -205,7 +205,7 @@ public:
       
       Timestamp since_start = now - start;
 
-      uint32_t ms_since_start = MAX(0, since_start.msec1());
+      uint32_t ms_since_start = MAX(0, since_start.msecval());
       uint32_t fake_tau = MIN(_tau, ms_since_start);
       assert(_probe_types.size());
       int num_expected = fake_tau / _period;
