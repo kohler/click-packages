@@ -73,16 +73,14 @@ private:
   public:
     Path _p;
     int _seq;
-    struct timeval _last_tx;
     void reset() { _seq = 0; }
     PathInfo() :  _p() { reset(); }
     PathInfo(Path p) :  _p(p)  { reset(); }
   };
   typedef HashMap<Path, PathInfo> PathTable;
   PathTable _paths;
-  
-  bool update_link(IPAddress from, IPAddress to, 
-		   uint32_t seq, uint32_t age, uint32_t metric);
+
+  static String read_handler(Element *, void *);
 };
 
 

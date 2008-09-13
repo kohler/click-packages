@@ -37,7 +37,7 @@ class FragmentResender : public Element { public:
   void print_window();
   struct PacketInfo {
     EtherAddress dst;
-    struct timeval last_tx;
+    Timestamp last_tx;
     Vector <int> frag_status; /* 1 if acked, 0 otherwize */
     Vector <int> frag_sends; /* 1 if acked, 0 otherwize */
     Packet *p;

@@ -46,7 +46,7 @@ class DupeFilter : public Element {
   class PathInfo {
   public:
     Path _p;
-    struct timeval _last;
+    Timestamp _last;
     int _dupes;
     int _packets;
     DEQueue<int> _sequences; //most recently received seq nos
@@ -58,7 +58,7 @@ class DupeFilter : public Element {
       _dupes = 0;
       _packets = 0;
       _sequences.clear();
-      click_gettimeofday(&_last);
+      _last.set_now();
     }
   };
 

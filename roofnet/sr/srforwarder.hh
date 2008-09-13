@@ -74,7 +74,6 @@ private:
   public:
     Path _p;
     int _seq;
-    struct timeval _last_tx;
     void reset() { _seq = 0; }
     PathInfo() :  _p() { reset(); }
     PathInfo(Path p) :  _p(p)  { reset(); }

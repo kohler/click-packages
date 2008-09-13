@@ -88,7 +88,7 @@ class MetricFlood : public Element {
 
   int MaxSeen;   // Max size of table of already-seen queries.
   int MaxHops;   // Max hop count for queries.
-  struct timeval _query_wait;
+  Timestamp _query_wait;
   u_long _seq;      // Next query sequence number to use.
   IPAddress _ip;    // My IP address.
   EtherAddress _en; // My ethernet address.

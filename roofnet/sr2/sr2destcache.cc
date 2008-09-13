@@ -72,12 +72,11 @@ SR2DestCache::read_param(Element *e, void *vparam)
   switch ((intptr_t)vparam) {
   case H_CACHE: {
 	  StringAccum sa;
-	  struct timeval now;
-	  click_gettimeofday(&now);
+	  Timestamp now = Timestamp::now();
 	  
 	  for(FTIter iter = d->_cache.begin(); iter.live(); iter++) {
 		  CacheEntry c = iter.value();
-		  sa << c._client << " " << c._ap << " age " << Timestamp::now() - c._last << "\n";
+		  sa << c._client << " " << c._ap << " age " << (now - c._last) << "\n";
 	  }
 	  
 	  return sa.take_string();

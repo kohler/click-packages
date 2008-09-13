@@ -26,7 +26,7 @@ class FragmentAck : public Element { public:
   struct WindowInfo {
     EtherAddress src;
     Vector<struct fragid> frags_rx;
-    struct timeval first_rx;
+    Timestamp first_rx;
     bool waiting;
     WindowInfo() { }
     WindowInfo(EtherAddress s) { src = s; }

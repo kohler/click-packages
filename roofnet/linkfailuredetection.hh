@@ -70,7 +70,7 @@ class LinkFailureDetection : public Element { public:
   public:
     EtherAddress _eth;
     int _successive_failures;
-    struct timeval _last_received;
+    Timestamp _last_received;
     bool _notified;
     DstInfo() { 
       memset(this, 0, sizeof(*this));

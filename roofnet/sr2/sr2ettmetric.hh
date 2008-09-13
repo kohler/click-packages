@@ -20,8 +20,6 @@ CLICK_DECLS
  *
  */
 
-
-
 inline unsigned sr2_ett_metric(int ack_prob, int data_prob, int data_rate) 
 {
   
@@ -38,33 +36,19 @@ inline unsigned sr2_ett_metric(int ack_prob, int data_prob, int data_rate)
 
 }
 
-class ETTStat;
-
 class SR2ETTMetric : public SR2LinkMetric {
   
 public:
-
 
   SR2ETTMetric();
   ~SR2ETTMetric();
   const char *class_name() const { return "SR2ETTMetric"; }
   const char *processing() const { return AGNOSTIC; }
 
-  int configure(Vector<String> &, ErrorHandler *);
-
-  void *cast(const char *);
-
-  static String read_stats(Element *xf, void *);
-
   void update_link(IPAddress from, IPAddress to, 
 		   Vector<SR2RateSize> rs, 
 		   Vector<int> fwd, Vector<int> rev, 
 		   uint32_t seq);
-
-  int get_tx_rate(EtherAddress);
-
-private:
-  class LinkTable *_link_table;
 
 };
 

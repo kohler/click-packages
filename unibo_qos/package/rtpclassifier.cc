@@ -172,9 +172,8 @@ void
 RTPClassifier::push(int, Packet *p)
 {  
     unsigned ssrc,nf,sec;
-    struct timeval now;
-    click_gettimeofday(&now);
-    sec = now.tv_sec;
+    Timestamp now = Timestamp::now();
+    sec = now.sec();
     ssrc = SSRC_ANNO(p); 
     del_old_flow(sec);
     nf = ins_flow(ssrc,sec);

@@ -57,9 +57,7 @@ DupeFilter::simple_action(Packet *p_in)
   struct srpacket *pk = (struct srpacket *) (eh+1);
   Path p = pk->get_path();
   PathInfo *nfo = _paths.findp(p);
-  struct timeval now;
-
-  click_gettimeofday(&now);
+  Timestamp now = Timestamp::now();
 
   if (!nfo) {
     _paths.insert(p, PathInfo(p));
@@ -68,7 +66,7 @@ DupeFilter::simple_action(Packet *p_in)
   }
 
   int seq = pk->data_seq();
-  if (0 == seq || (now.tv_sec - nfo->_last.tv_sec > 30)) {
+  if (0 == seq || (now.sec() - nfo->_last.sec() > 30)) {
     /* reset */
     if (_debug > 2) {
       click_chatter("%{element}: reset seq %d path %s\n",
@@ -112,13 +110,11 @@ DupeFilter::static_read_stats(Element *xf, void *)
 {
   DupeFilter *e = (DupeFilter *) xf;
   StringAccum sa;
-  struct timeval now;
-
-  click_gettimeofday(&now);
+  Timestamp now = Timestamp::now();
 
   for(PathTable::const_iterator i = e->_paths.begin(); i.live(); i++) {
     PathInfo nfo = i.value();
-    sa << "age " << now - nfo._last;
+    sa << "age " << (now - nfo._last);
     sa << " packets " << nfo._packets;
     sa << " dupes " << nfo._dupes;
     sa << " seq_size " << nfo._sequences.size();

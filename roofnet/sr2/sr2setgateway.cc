@@ -257,8 +257,6 @@ String
 SR2SetGateway::print_flows()
 {
   StringAccum sa;
-  struct timeval now;
-  click_gettimeofday(&now);
   for(FTIter iter = _flow_table.begin(); iter.live(); iter++) {
     FlowTableEntry f = iter.value();
     sa << f._id << " gw " << f._gw << " age " << f.age() << "\n";

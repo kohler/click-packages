@@ -40,9 +40,7 @@ SR2GatewaySelector::SR2GatewaySelector()
   MaxHops = 30;
 
   // Pick a starting sequence number that we have not used before.
-  struct timeval tv;
-  click_gettimeofday(&tv);
-  _seq = tv.tv_usec;
+  _seq = Timestamp::now().usec();
 
   static unsigned char bcast_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
   _bcast = EtherAddress(bcast_addr);
@@ -84,7 +82,7 @@ SR2GatewaySelector::configure (Vector<String> &conf, ErrorHandler *errh)
   if (_arp_table && _arp_table->cast("ARPTable") == 0) 
     return errh->error("ARPTable element is not an ARPtable");
 
-  _gw_expire.set(_period*10, 0);
+  _gw_expire.assign(_period*10, 0);
 
   return ret;
 }

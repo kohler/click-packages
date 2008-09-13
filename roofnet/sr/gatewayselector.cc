@@ -40,9 +40,7 @@ GatewaySelector::GatewaySelector()
   MaxHops = 30;
 
   // Pick a starting sequence number that we have not used before.
-  struct timeval tv;
-  click_gettimeofday(&tv);
-  _seq = tv.tv_usec;
+  _seq = Timestamp::now().usec();
 
   static unsigned char bcast_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
   _bcast = EtherAddress(bcast_addr);

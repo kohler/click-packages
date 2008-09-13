@@ -22,49 +22,14 @@
 #include <elements/wifi/linktable.hh>
 CLICK_DECLS 
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
-
 SR2TXCountMetric::SR2TXCountMetric()
-  : SR2LinkMetric(), 
-    _link_table(0)
+  : SR2LinkMetric()
 {
 }
 
 SR2TXCountMetric::~SR2TXCountMetric()
 {
 }
-
-void *
-SR2TXCountMetric::cast(const char *n) 
-{
-  if (strcmp(n, "SR2TXCountMetric") == 0)
-    return (SR2TXCountMetric *) this;
-  else if (strcmp(n, "SR2LinkMetric") == 0)
-    return (SR2LinkMetric *) this;
-  else
-    return 0;
-}
-
-int
-SR2TXCountMetric::configure(Vector<String> &conf, ErrorHandler *errh)
-{
-  int res = cp_va_kparse(conf, this, errh,
-			 "LT", 0, cpElement, &_link_table, 
-			 cpEnd);
-  if (res < 0)
-    return res;
-  if (_link_table == 0) {
-    click_chatter("%{element}: no LTelement specified",
-		  this);
-  }
-  if (_link_table && _link_table->cast("LinkTable") == 0) {
-    return errh->error("LinkTable element is not a LinkTable");
-  }
-  return 0;
-}
-
-
 
 void
 SR2TXCountMetric::update_link(IPAddress from, IPAddress to, 
@@ -99,7 +64,7 @@ SR2TXCountMetric::update_link(IPAddress from, IPAddress to,
   }
 }
 
-
 EXPORT_ELEMENT(SR2TXCountMetric)
 ELEMENT_REQUIRES(bitrate)
+ELEMENT_REQUIRES(SR2LinkMetric)
 CLICK_ENDDECLS

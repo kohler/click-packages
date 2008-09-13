@@ -145,8 +145,6 @@ SRQueryResponder::forward_reply(struct srpacket *pk1)
     fwd.push_back(pk1->get_link_node(i));
   }
   rev = reverse_path(fwd);
-  struct timeval now;
-  click_gettimeofday(&now);
 
   int len = pk1->hlen_wo_data();
   WritablePacket *p = Packet::make(len + sizeof(click_ether));

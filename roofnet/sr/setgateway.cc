@@ -244,7 +244,7 @@ SetGateway::cleanup() {
 	
 	for(FTIter i = _flow_table.begin(); i.live(); i++) {
 		FlowTableEntry f = i.value();
-		if (f.age() < timeout && f._fwd_alive || f._rev_alive) {
+		if (f.age() < timeout && (f._fwd_alive || f._rev_alive)) {
 			new_table.insert(f._id, f);
 		}
 	}
@@ -264,8 +264,6 @@ String
 SetGateway::print_flows()
 {
   StringAccum sa;
-  struct timeval now;
-  click_gettimeofday(&now);
   for(FTIter iter = _flow_table.begin(); iter.live(); iter++) {
     FlowTableEntry f = iter.value();
     sa << f._id << " gw " << f._gw << " age " << f.age() << "\n";

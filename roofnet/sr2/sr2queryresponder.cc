@@ -121,7 +121,7 @@ SR2QueryResponder::update_link(IPAddress from, IPAddress to, uint32_t seq, int m
 void
 SR2QueryResponder::forward_reply(struct sr2packet *pk1)
 {
-	u_int8_t type = pk1->_type;
+	uint8_t type = pk1->_type;
 	assert(type == SR2_PT_REPLY);
 	
   _link_table->dijkstra(true);
@@ -145,8 +145,6 @@ SR2QueryResponder::forward_reply(struct sr2packet *pk1)
     fwd.push_back(pk1->get_link_node(i));
   }
   rev = reverse_path(fwd);
-  struct timeval now;
-  click_gettimeofday(&now);
 
   int len = pk1->hlen_wo_data();
   WritablePacket *p = Packet::make(len + sizeof(click_ether));

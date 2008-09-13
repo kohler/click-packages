@@ -211,10 +211,12 @@ SR2ETTStat::run_timer(Timer *)
 	unsigned max_jitter = p / 10;
 	
 	send_probe();
-	
-	_next += Timestamp::make_msec(p);
-	sr2_add_jitter(max_jitter, &_next);
-	_timer.schedule_at(_next);
+
+	Timestamp delay = Timestamp::make_msec(p);
+	sr2_add_jitter(max_jitter, &delay);
+	_timer.schedule_after(delay);
+
+	_next = _timer.expiry();
 }
 
 void
@@ -400,7 +402,7 @@ SR2ETTStat::send_probe()
   lp->_cksum = click_in_cksum((unsigned char *) lp, ntohs(lp->_psz));
   
 
-  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p->user_anno();
+  struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
   ceh->magic = WIFI_EXTRA_MAGIC;
   ceh->rate = rate;
   checked_output_push(0, p);
@@ -490,7 +492,7 @@ SR2ETTStat::simple_action(Packet *p)
     _arp_table->insert(ip, EtherAddress(eh->ether_shost));
     _rev_arp.insert(EtherAddress(eh->ether_shost), ip);
   }
-  struct click_wifi_extra *ceh = (struct click_wifi_extra *) p->user_anno();
+  struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
   uint16_t rate = ceh->rate;
 
   if (ceh->rate != ntohs(lp->_rate)) {

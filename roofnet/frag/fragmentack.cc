@@ -125,9 +125,7 @@ FragmentAck::simple_action(Packet *p)
   } 
   
   if (new_packets && !nfo->waiting) {
-    struct timeval now;
-    click_gettimeofday(&now);
-    nfo->first_rx = now;
+    nfo->first_rx.set_now();
   }
 
   if (fh->flags & FRAG_ACKME) {

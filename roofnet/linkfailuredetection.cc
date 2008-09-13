@@ -70,7 +70,7 @@ LinkFailureDetection::call_handler(EtherAddress dst) {
   if (h->writable()) {
     ContextErrorHandler cerrh
       (errh, "In write handler `" + h->unparse_name(_handler_e) + "':");
-    h->call_write(dst.unparse(), _handler_e, false, &cerrh);
+    h->call_write(dst.unparse(), _handler_e, &cerrh);
   } else {
     errh->error("%s: no write handler `%s'", 
 		name().c_str(), 
@@ -95,7 +95,7 @@ LinkFailureDetection::simple_action(Packet *p_in)
   if (!nfo->_eth) {
       nfo->_eth = dst;
   }
-  click_gettimeofday(&nfo->_last_received);
+  nfo->_last_received.set_now();
   if (success) {
     nfo->_successive_failures = 0;
     nfo->_notified = false;
@@ -129,13 +129,12 @@ LinkFailureDetection::static_print_stats(Element *e, void *)
 String
 LinkFailureDetection::print_stats() 
 {
-  struct timeval now;
-  click_gettimeofday(&now);
+  Timestamp now = Timestamp::now();
   
   StringAccum sa;
   for (NIter iter = _neighbors.begin(); iter.live(); iter++) {
     DstInfo n = iter.value();
-    struct timeval age = now - n._last_received;
+    Timestamp age = now - n._last_received;
     sa << n._eth.unparse().c_str();
     sa << " successive_failures: " << n._successive_failures;
     if (n._notified) {

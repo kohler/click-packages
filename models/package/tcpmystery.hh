@@ -162,8 +162,8 @@ struct TCPMystery::MyLossInfo {
     uint32_t end_data_packetno;
     tcp_seq_t seq;
     tcp_seq_t top_seq;
-    struct timeval time;
-    struct timeval end_time;
+    Timestamp time;
+    Timestamp end_time;
 
     bool unparse(StringAccum &, const MyStream *, const MyConn *, bool include_aggregate, bool absolute_time = true, bool absolute_seq = true) const;
     void unparse_xml(StringAccum &, const String &tagname) const;
@@ -241,8 +241,8 @@ struct TCPMystery::Loss {
     uint32_t end_data_packetno;
     tcp_seq_t seq;
     tcp_seq_t top_seq;
-    struct timeval time;
-    struct timeval end_time;
+    Timestamp time;
+    Timestamp end_time;
 
     bool unparse(StringAccum &, const MStream *, const MyConn *, bool include_aggregate, bool absolute_time = true, bool absolute_seq = true) const;
     void unparse_xml(StringAccum &, const String &tagname) const;
@@ -269,7 +269,7 @@ struct TCPMystery::MStream {
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
 
-    struct timeval min_ack_latency; // minimum time between packet and ACK
+    Timestamp min_ack_latency;	// minimum time between packet and ACK
 
     TCPCollector::Pkt *acked_pkt_hint;	// hint to find_acked_pkt
 

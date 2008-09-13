@@ -61,7 +61,7 @@ PrintSeq::simple_action(Packet *p)
   }
   uint8_t *data = (uint8_t *) p->data() + _offset;
 
-  u_int32_t seq = 0;
+  uint32_t seq = 0;
   if (_bytes == 2) {
     seq = le16_to_cpu(*(uint16_t *) data);
   } else {

@@ -53,8 +53,7 @@ TXFeedbackStats::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 TXFeedbackStats::initialize(ErrorHandler *)
 {
-  _tau_tv.tv_sec = _tau / 1000;
-  _tau_tv.tv_usec = 1000 * (_tau % 1000);
+  _tau_tv = Timestamp::make_msec(_tau);
   return 0;
 }
 
@@ -104,7 +103,7 @@ TXFeedbackStats::simple_action(Packet *p)
 }
 
 void
-TXFeedbackStats::add_stat(const EtherAddress &dest, int sz, const timeval &when, 
+TXFeedbackStats::add_stat(const EtherAddress &dest, int sz, const Timestamp &when, 
 			  tx_result_t res, unsigned data_attempts, unsigned  rts_attempts)
 {
   StatQ *q = cleanup_map(dest);
@@ -119,9 +118,7 @@ TXFeedbackStats::add_stat(const EtherAddress &dest, int sz, const timeval &when,
 TXFeedbackStats::StatQ *
 TXFeedbackStats::cleanup_map(const EtherAddress &dest)
 {
-  struct timeval oldest;
-  click_gettimeofday(&oldest);
-  oldest -= _tau_tv;
+  Timestamp oldest = Timestamp::now() - _tau_tv;
 
 
   StatQ *q = _stat_map.findp(dest);

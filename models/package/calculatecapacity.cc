@@ -310,8 +310,8 @@ CalculateCapacity::StreamInfo::histogram()
 //     if(totcnt != pkt_cnt){
 // 	printf("missing %d packets: %d %d\n", pkt_cnt - totcnt,
 // 	       totcnt, pkt_cnt);
-// 	printf("  %ld.%06ld\n", intervals[j].interval.tv_sec,
-// 	       intervals[j].interval.tv_usec);
+// 	printf("  " PRITIMESTAMP "\n", intervals[j].interval.sec(),
+// 	       intervals[j].interval.subsec());
 // 	printf("  %lf %lf\n", curr, stepsize);
 //     }
 
@@ -369,9 +369,9 @@ CalculateCapacity::StreamInfo::fill_intervals()
     		&compare);
 
 //     for(unsigned int i=0; i < pkt_cnt; i++){
-// 	printf("%d %d %ld.%06ld %d\n", pkt_cnt, intervals[i].size+40,
-// 	       intervals[i].interval.tv_sec,
-// 	       intervals[i].interval.tv_usec,
+// 	printf("%d %d " PRITIMESTAMP " %d\n", pkt_cnt, intervals[i].size+40,
+// 	       intervals[i].interval.sec(),
+// 	       intervals[i].interval.subsec(),
 // 	       intervals[i].newack);
 //     }
 

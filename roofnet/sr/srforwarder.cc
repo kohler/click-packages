@@ -114,7 +114,7 @@ SRForwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
   int hops = r.size() - 1;
   unsigned extra = srpacket::len_wo_data(hops) + sizeof(click_ether);
   unsigned payload_len = p_in->length();
-  u_int16_t ether_type = htons(_et);
+  uint16_t ether_type = htons(_et);
 
   WritablePacket *p = p_in->push(extra);
 

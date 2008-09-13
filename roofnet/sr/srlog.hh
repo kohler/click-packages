@@ -52,12 +52,12 @@ class SRLog : public Element { public:
     char header[500];
     int rate;
     int retries;
-    u_int32_t flags;
+    uint32_t flags;
     
   };
   
   DEQueue<Fo> _p;
-  DEQueue<struct timeval> _t;
+  DEQueue<Timestamp> _t;
 
   bool _active;
 };

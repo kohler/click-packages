@@ -41,8 +41,7 @@ SRLog::simple_action(Packet *p_in)
   }
   Fo h;
   
-  struct timeval now;
-  click_gettimeofday(&now);
+  Timestamp now = Timestamp::now();
   struct click_wifi_extra *ceh = (struct click_wifi_extra *) p_in->user_anno();
   click_ether *eh = (click_ether *) p_in->data();
   

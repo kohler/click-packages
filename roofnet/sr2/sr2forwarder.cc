@@ -35,7 +35,6 @@ SR2Forwarder::SR2Forwarder()
      _et(0),
      _datas(0), 
      _databytes(0),
-     _link_table(0),
      _arp_table(0)
 {
 }
@@ -53,8 +52,6 @@ SR2Forwarder::configure (Vector<String> &conf, ErrorHandler *errh)
 			   "IP", 0, cpIPAddress, &_ip,
 			   "ETH", 0, cpEtherAddress, &_eth,
 			   "ARP", 0, cpElement, &_arp_table,
-			   /* below not required */
-			   "LT", 0, cpElement, &_link_table,
 			   cpEnd);
 	
 	if (!_et) 
@@ -69,9 +66,6 @@ SR2Forwarder::configure (Vector<String> &conf, ErrorHandler *errh)
 	if (_arp_table->cast("ARPTable") == 0) 
 		return errh->error("ARPTable element is not a ARPTable");
 	
-	if (_link_table && _link_table->cast("LinkTable") == 0) 
-		return errh->error("LinkTable element is not a LinkTable");
-	
 	if (res < 0) {
 		return res;
 	}
@@ -84,21 +78,6 @@ SR2Forwarder::initialize (ErrorHandler *)
 	return 0;
 }
 
-bool
-SR2Forwarder::update_link(IPAddress from, IPAddress to, 
-			 uint32_t seq, uint32_t age, uint32_t metric) 
-{
-	if (_link_table && !_link_table->update_link(from, to, seq, age, metric)) {
-		click_chatter("%{element} couldn't update link %s > %d > %s\n",
-			      this,
-			      from.unparse().c_str(),
-			      metric,
-			      to.unparse().c_str());
-		return false;
-	}
-	return true;
-}
-
 Packet *
 SR2Forwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
 {
@@ -106,7 +85,7 @@ SR2Forwarder::encap(Packet *p_in, Vector<IPAddress> r, int flags)
 	int hops = r.size() - 1;
 	unsigned extra = sr2packet::len_wo_data(hops) + sizeof(click_ether);
 	unsigned payload_len = p_in->length();
-	u_int16_t ether_type = htons(_et);
+	uint16_t ether_type = htons(_et);
 
 	WritablePacket *p = p_in->push(extra);
 	
@@ -224,22 +203,28 @@ SR2Forwarder::push(int port, Packet *p_in)
 }
 
 String
-SR2Forwarder::static_print_stats(Element *f, void *)
-{
-	SR2Forwarder *d = (SR2Forwarder *) f;
-	return d->print_stats();
-}
-
-String
 SR2Forwarder::print_stats()
 {
 	return String(_datas) + " datas sent\n" + String(_databytes) + " bytes of data sent\n";
 }
 
+enum { H_STATS };
+
+String
+SR2Forwarder::read_handler(Element *e, void *user_data)
+{
+    SR2Forwarder *sr2f = static_cast<SR2Forwarder *>(e);
+    switch (reinterpret_cast<uintptr_t>(user_data)) {
+    case H_STATS:
+	return sr2f->print_stats();
+    }
+    return String();
+}
+
 void
 SR2Forwarder::add_handlers()
 {
-	add_read_handler("stats", static_print_stats, 0);
+    add_read_handler("stats", read_handler, H_STATS);
 }
 
 CLICK_ENDDECLS

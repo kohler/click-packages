@@ -57,7 +57,6 @@ public:
     IPAddress _ip;
     int _packets;
     int _bytes;
-    struct timeval _last_packet;
   };
 
   typedef HashMap<IPAddress, IPAddressInfo> IPInfoTable;

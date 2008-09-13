@@ -130,10 +130,8 @@ void
 FragmentResender::run_timer (Timer *)
 {
   if (_debug) {
-    struct timeval  now;
-    click_gettimeofday(&now);
     StringAccum sa;
-    sa << now;
+    sa << Timestamp::now();
     sa << " ack_timeout";
     click_chatter("%{element} %s\n", 
 		  this,
@@ -190,10 +188,8 @@ FragmentResender::process_ack(Packet *p) {
   }
 
   if (_debug) {
-    struct timeval  now;
-    click_gettimeofday(&now);
     StringAccum sa;
-    sa << now;
+    sa << Timestamp::now();
     sa << " processing ack "
        << "[ " << min_packet_acked << ", " 
        << max_packet_acked << " ]";
@@ -311,10 +307,8 @@ FragmentResender::ack_request() {
   fh->flags = FRAG_ACKME;
   fh->ether_type = htons(_et);
   if (_debug) {
-    struct timeval  now;
-    click_gettimeofday(&now);
     StringAccum sa;
-    sa << now;
+    sa << Timestamp::now();
     sa << " ack_request "
        << " resend_index " << resend_index
        << " oustanding_size " << outstanding.size()
@@ -403,10 +397,8 @@ FragmentResender::do_resend() {
   fh->flags = FRAG_RESEND;
 
   if (_debug) {
-    struct timeval  now;
-    click_gettimeofday(&now);
     StringAccum sa;
-    sa << now;
+    sa << Timestamp::now();
     sa << " resend frags " << num_frags
        << " resend_index " << resend_index
        << " oustanding_size " << outstanding.size()
@@ -465,7 +457,7 @@ FragmentResender::pull(int port) {
   _packets.insert(fh->packet_num, PacketInfo());
   PacketInfo *nfo = _packets.findp(fh->packet_num);
   nfo->dst = dst;
-  click_gettimeofday(&nfo->last_tx);
+  nfo->last_tx.set_now();
 
   for (int x = 0; x < fh->num_frags; x++) {
     nfo->frag_status.push_back(0);
@@ -475,10 +467,8 @@ FragmentResender::pull(int port) {
   nfo->p = p->clone();
 
   if (_debug) {
-    struct timeval  now;
-    click_gettimeofday(&now);
     StringAccum sa;
-    sa << now;
+    sa << Timestamp::now();
     sa << " send packet  " << fh->packet_num;
     click_chatter("%{element} %s\n", 
 		  this,

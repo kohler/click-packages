@@ -84,8 +84,6 @@ String
 IPAddressCounter::stats() 
 {
   StringAccum sa;
-  struct timeval now;
-  click_gettimeofday(&now);
 
   for (IPIter iter = _table.begin(); iter.live(); iter++) {
     IPAddressInfo n = iter.value();

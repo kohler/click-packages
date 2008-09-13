@@ -28,7 +28,6 @@ class FragmentDupeFilter : public Element { public:
   struct DstInfo {
     EtherAddress src;
     DEQueue<struct fragid> frags;
-    struct timeval last;
     DstInfo() { }
     DstInfo(EtherAddress s) { src = s; }
     

@@ -40,12 +40,9 @@ MetricFlood::MetricFlood()
   MaxHops = 30;
 
   // Pick a starting sequence number that we have not used before.
-  struct timeval tv;
-  click_gettimeofday(&tv);
-  _seq = tv.tv_usec;
+  _seq = Timestamp::now().usec();
 
-  _query_wait.tv_sec = 5;
-  _query_wait.tv_usec = 0;
+  _query_wait.assign(5, 0);
 
 
   static unsigned char bcast_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };

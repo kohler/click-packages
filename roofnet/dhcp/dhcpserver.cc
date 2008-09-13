@@ -66,7 +66,7 @@ DHCPServer::configure( Vector<String> &conf, ErrorHandler *errh )
 			 cpEnd) < 0) {
 		return -1;
 	}
-	for (u_int32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
+	for (uint32_t x = ntohl(_start.addr()); x < ntohl(_end.addr()); x++) {
 		IPAddress ip = IPAddress(htonl(x));
 		//click_chatter("%s: inserting ip %s\n", __func__, ip.unparse().c_str());
 		_free.set(ip, ip);

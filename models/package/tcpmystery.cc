@@ -213,7 +213,7 @@ TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCol
 
     fprintf(f, "    <%s", tagname.c_str());
     //if (have_ack_latency)
-    //    fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+    //    fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     fprintf(f, ">\n");
     
     for (Pkt* k = s->pkt_head; k; k = k->next) {
@@ -625,7 +625,7 @@ TCPMystery::MStreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_laten
     }
     
     while (ackwindow_begin
-	   && (cur_ack->timestamp - ackwindow_begin->timestamp).tv_sec > 5) {
+	   && (cur_ack->timestamp - ackwindow_begin->timestamp).sec() > 5) {
 	if (ackwindow_begin->cumack_pkt
 	    && ackwindow_begin->timestamp - ackwindow_begin->cumack_pkt->timestamp <= running_min_ack_latency)
 	    refind_min_ack_latency = true;
@@ -633,19 +633,19 @@ TCPMystery::MStreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_laten
     }
 
     if (refind_min_ack_latency) {
-	running_min_ack_latency.tv_sec = 10000;	
+	running_min_ack_latency.set_sec(10000);	
 	ackwindow_end = ackwindow_begin;
     }
     
     while (ackwindow_end
-	   && (ackwindow_end->timestamp - cur_ack->timestamp).tv_sec < 5) {
+	   && (ackwindow_end->timestamp - cur_ack->timestamp).sec() < 5) {
 	if (ackwindow_end->cumack_pkt
 	    && ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp < running_min_ack_latency)
 	    running_min_ack_latency = ackwindow_end->timestamp - ackwindow_end->cumack_pkt->timestamp;
 	ackwindow_end = ackwindow_end->next;
     }
 
-    if (running_min_ack_latency.tv_sec >= 10000)
+    if (running_min_ack_latency.sec() >= 10000)
 	cur_min_ack_latency = min_ack_latency;
     else
 	cur_min_ack_latency = running_min_ack_latency;
@@ -1035,7 +1035,7 @@ TCPMystery::mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, 
 
     fprintf(f, "    <%s count='%u'", tagname.c_str(), mstream.nreordered);
     if (have_ack_latency)
-	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     if (mstream.nreordered == 0) {
 	fprintf(f, " />\n");
 	return;
@@ -1049,7 +1049,7 @@ TCPMystery::mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, 
 	if ((mk->flags & MPkt::F_REORDER)
 	    || (mk->caused_ack && next_mk && next_mk->caused_ack
 		&& mk->caused_ack->timestamp > next_mk->caused_ack->timestamp))
-	    fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
     }
     
     fprintf(f, "    </%s>\n", tagname.c_str());
@@ -1065,7 +1065,7 @@ TCPMystery::mystery_undelivered_xmltag(FILE *f, TCPCollector::StreamInfo &stream
 
     fprintf(f, "    <%s count='%u'", tagname.c_str(), mstream.nundelivered);
     if (have_ack_latency)
-	fprintf(f, " min='%ld.%06ld'", min_ack_latency.tv_sec, min_ack_latency.tv_usec);
+	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     if (mstream.nundelivered == 0) {
 	fprintf(f, " />\n");
 	return;
@@ -1076,7 +1076,7 @@ TCPMystery::mystery_undelivered_xmltag(FILE *f, TCPCollector::StreamInfo &stream
     for (Pkt *k = stream.pkt_head; k; k = k->next) {
 	MPkt *mk = my->mpkt(k);
 	if (!(mk->flags & MPkt::F_DELIVERED) && k->seq != k->end_seq)
-	    fprintf(f, "%ld.%06ld %u\n", k->timestamp.tv_sec, k->timestamp.tv_usec, k->end_seq);
+	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
     }
     
     fprintf(f, "    </%s>\n", tagname.c_str());
@@ -1123,11 +1123,11 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
 	
-	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='%ld.%06ld' duration='%ld.%06ld'",
+	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
-		_init_time.tv_sec, _init_time.tv_usec,
-		end_time.tv_sec, end_time.tv_usec);
+		_init_time.sec(), _init_time.subsec(),
+		end_time.sec(), end_time.subsec());
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).c_str());
 	fprintf(f, ">\n");

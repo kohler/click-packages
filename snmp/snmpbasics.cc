@@ -270,9 +270,8 @@ snmp_variable_storefunc(cp_value *v, Element *)
 uint32_t
 snmp_time_ticks_since(uint32_t j0)
 {
-  struct timeval tv;
-  click_gettimeofday(&tv);
-  return ((tv.tv_sec * 100) + (tv.tv_usec / 10000)) - j0;
+    Timestamp tv = Timestamp::now();
+    return ((tv.sec() * 100) + (tv.usec() / 10000)) - j0;
 }
 #endif
 

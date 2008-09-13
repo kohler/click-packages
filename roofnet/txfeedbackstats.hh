@@ -84,12 +84,12 @@ private:
   static String read_params(Element *, void *);
   
   struct stat_t {
-    struct timeval when;
+    Timestamp when;
     int sz;
     tx_result_t res;
     unsigned n_data; // number data transmissions
     unsigned n_rts;  // number rts transmissions
-    stat_t(const timeval &w, int s, tx_result_t r, unsigned nl, unsigned ns) :
+    stat_t(const Timestamp &w, int s, tx_result_t r, unsigned nl, unsigned ns) :
       when(w), sz(s), res(r), n_data(nl), n_rts(ns) { }
   };
 
@@ -98,7 +98,7 @@ private:
   typedef HashMap<EtherAddress, StatQ> StatMap;
   StatMap _stat_map;
 
-  void add_stat(const EtherAddress &, int, const timeval &, tx_result_t, unsigned, unsigned);
+  void add_stat(const EtherAddress &, int, const Timestamp &, tx_result_t, unsigned, unsigned);
   bool get_counts(const EtherAddress &, unsigned &, unsigned  &, unsigned &);
 
   StatQ *cleanup_map(const EtherAddress &);
@@ -106,7 +106,7 @@ private:
   String print_stats();
 
   unsigned _tau;
-  struct timeval _tau_tv;
+  Timestamp _tau_tv;
   unsigned _min_pkts;
 };
 

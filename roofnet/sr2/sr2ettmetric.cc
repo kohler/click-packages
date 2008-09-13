@@ -22,54 +22,13 @@
 #include <elements/wifi/linktable.hh>
 CLICK_DECLS 
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
-
 SR2ETTMetric::SR2ETTMetric()
-  : SR2LinkMetric(), 
-    _link_table(0)
+  : SR2LinkMetric()
 {
 }
 
 SR2ETTMetric::~SR2ETTMetric()
 {
-}
-
-void *
-SR2ETTMetric::cast(const char *n) 
-{
-  if (strcmp(n, "SR2ETTMetric") == 0)
-    return (SR2ETTMetric *) this;
-  else if (strcmp(n, "LinkMetric") == 0)
-    return (SR2LinkMetric *) this;
-  else
-    return 0;
-}
-
-int
-SR2ETTMetric::configure(Vector<String> &conf, ErrorHandler *errh)
-{
-  int res = cp_va_kparse(conf, this, errh,
-			 "LT", 0, cpElement, &_link_table, 
-			 cpEnd);
-  if (res < 0)
-    return res;
-  if (_link_table == 0) {
-    click_chatter("%{element}: no LTelement specified",
-		  this);
-  }
-  if (_link_table && _link_table->cast("LinkTable") == 0) {
-    return errh->error("LinkTable element is not a LinkTable");
-  }
-  return 0;
-}
-
-
-int 
-SR2ETTMetric::get_tx_rate(EtherAddress) 
-{
-
-  return 2;
 }
 
 void
@@ -88,7 +47,7 @@ SR2ETTMetric::update_link(IPAddress from, IPAddress to,
   }
 
 
-    int one_ack_fwd = 0;
+  int one_ack_fwd = 0;
   int one_ack_rev = 0;
   int six_ack_fwd = 0;
   int six_ack_rev = 0;
@@ -165,7 +124,6 @@ SR2ETTMetric::update_link(IPAddress from, IPAddress to,
       }
     }
   }
-  
 
   /* update linktable */
   if (fwd_metric && 
@@ -188,8 +146,7 @@ SR2ETTMetric::update_link(IPAddress from, IPAddress to,
   }
 }
 
-
-ELEMENT_PROVIDES(GridGenericMetric)
-ELEMENT_REQUIRES(bitrate)
 EXPORT_ELEMENT(SR2ETTMetric)
+ELEMENT_REQUIRES(bitrate)
+ELEMENT_REQUIRES(SR2LinkMetric)
 CLICK_ENDDECLS
