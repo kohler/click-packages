@@ -135,7 +135,7 @@ SetGateway::push_rev(Packet *p_in)
         return;
 
 	const click_tcp *tcph = p_in->tcp_header();
-	IPFlowID flowid = IPFlowID(p_in).rev();
+	IPFlowID flowid = IPFlowID(p_in).reverse();
 	FlowTableEntry *match = _flow_table.findp(flowid);
 	
 	if ((tcph->th_flags & TH_SYN) && (tcph->th_flags & TH_ACK)) {

@@ -486,7 +486,7 @@ int DHCPClient::write_handler(const String &data_in, Element *e, void *thunk, Er
     switch ((intptr_t) thunk) {
       case 0: {
 	  String data = data_in;
-	  String arg = cp_pop_spacevec(data);
+	  String arg = cp_shift_spacevec(data);
 	  bool lease_active;
 	  IPAddress my_ip, server_ip;
 	  uint32_t start_lease, end_lease;

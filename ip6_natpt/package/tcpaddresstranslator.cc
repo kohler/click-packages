@@ -381,7 +381,7 @@ TCPAddressTranslator::Mapping6::make_pair(int ip_p, const IP6FlowID
 			 Mapping6 *in_map, Mapping6 *out_map)
 {
   in_map->initialize(ip_p, inf, outf,0, false, out_map);
-  out_map->initialize(ip_p, outf.rev(),inf.rev(),1, true, in_map);
+  out_map->initialize(ip_p, outf.reverse(),inf.reverse(),1, true, in_map);
 }
 
 TCPAddressTranslator::Mapping6 *
@@ -416,7 +416,7 @@ TCPAddressTranslator::apply_create(IPAddress &ip_src, unsigned short
     if (forward && reverse) {
       Mapping6::make_pair(0,flow, flow,forward, reverse);
 
-      IP6FlowID reverse_flow = forward->flow_id().rev();
+      IP6FlowID reverse_flow = forward->flow_id().reverse();
       _tcp_map.set(flow, forward);
       _tcp_map.set(reverse_flow, reverse);
      return forward;
@@ -442,7 +442,7 @@ TCPAddressTranslator::apply_create(int ip_p, const IP6FlowID &flow)
     if (forward && reverse) {
       Mapping6::make_pair(0,flow, flow,forward, reverse);
 
-      IP6FlowID reverse_flow = forward->flow_id().rev();
+      IP6FlowID reverse_flow = forward->flow_id().reverse();
       _tcp_map.set(flow, forward);
       _tcp_map.set(reverse_flow, reverse);
      return forward;
@@ -500,8 +500,8 @@ TCPAddressTranslator::Mapping6::free_from_list(Map6 &map, bool notify)
 {
     // see also clear_map below
     Mapping6 *next = _free_next;
-    //map.remove(reverse()->flow_id().rev());
-    //map.remove(flow_id().rev());
+    //map.remove(reverse()->flow_id().reverse());
+    //map.remove(flow_id().reverse());
     delete reverse();
     delete this;
     return next;
@@ -611,7 +611,7 @@ String
 TCPAddressTranslator::Mapping6::s() const
 {
   StringAccum sa;
-  sa << reverse()->flow_id().rev().unparse() << " => " << flow_id().unparse()
+  sa << reverse()->flow_id().reverse().unparse() << " => " << flow_id().unparse()
      << " seq " << (_delta > 0 ? "+" : "") << _delta
      << " [" + String(output()) + "]";
   return sa.take_string();

@@ -137,8 +137,8 @@ SNMPTrapSource::configure(Vector<String> &conf, ErrorHandler *errh)
 
   int before = errh->nerrors();
   for (int i = 0; i < traps.size(); i++) {
-    ContextErrorHandler cerrh(errh, "", "TRAP " + String(i+1) + ": ");
-    add_trap(traps[i], &cerrh);
+      PrefixErrorHandler cerrh(errh, "TRAP " + String(i+1) + ": ");
+      add_trap(traps[i], &cerrh);
   }
   _offsets.push_back(_snmp_vars.size());
   return (errh->nerrors() == before ? 0 : -1);

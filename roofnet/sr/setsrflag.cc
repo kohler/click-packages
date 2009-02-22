@@ -43,7 +43,7 @@ SetSRFlag::configure(Vector<String> &conf, ErrorHandler* errh)
 
   for (int i = 0; i < conf.size(); i++) {
     String text = conf[i];
-    String word = cp_pop_spacevec(text);
+    String word = cp_shift_spacevec(text);
     if (word == "FLAG_SCHEDULE") {
       flags |= FLAG_SCHEDULE;
     } else if (word == "FLAG_ERROR") {

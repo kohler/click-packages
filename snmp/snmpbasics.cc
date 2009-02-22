@@ -384,7 +384,7 @@ SNMPOidInfo::static_initialize()
   
   SNMPOidInfo::well_known_oids = new SNMPOidInfo;
 
-  String config_string = String::stable_string(well_known_oids_config);
+  String config_string = String::make_stable(well_known_oids_config);
   Vector<String> conf;
   cp_argvec(config_string, conf);
   SNMPOidInfo::well_known_oids->configure(conf, errh);
