@@ -240,24 +240,10 @@ SNMPTrapSource::generate_trap(int trap)
     udph->uh_sum = 0;
 
     memcpy(udph + 1, ber.data(), ber.length());
-    
-    unsigned csum = ~click_in_cksum((unsigned char *)udph, ulen) & 0xFFFF;
-#ifdef __KERNEL__
-    udph->uh_sum = csum_tcpudp_magic(_src.addr(), _dst.addr(),
-				     ulen, IP_PROTO_UDP, csum);
-#else
-    unsigned short *words = (unsigned short *)&iph->ip_src;
-    csum += words[0];
-    csum += words[1];
-    csum += words[2];
-    csum += words[3];
-    csum += htons(IP_PROTO_UDP);
-    csum += htons(ulen);
-    while (csum >> 16)
-      csum = (csum & 0xFFFF) + (csum >> 16);
-    udph->uh_sum = ~csum & 0xFFFF;
-#endif
-    
+
+    unsigned csum = click_in_cksum((unsigned char *)udph, ulen);
+    udph->uh_sum = click_in_cksum_pseudohdr(csum, iph, ulen);
+
   } else
     memcpy(p->data(), ber.data(), ber.length());
 

@@ -215,13 +215,13 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
 }
 
 static void
-snmp_oid_parsefunc(cp_value *v, const String &arg,
+snmp_oid_parsefunc(cp_value *, const String &arg,
 		   ErrorHandler *errh, const char *argdesc,
 		   Element *context)
 {
-  PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
-  SNMPOid scrap;
-  cp_snmp_oid(arg, context, &scrap, &p_errh);
+    PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
+    SNMPOid scrap;
+    cp_snmp_oid(arg, context, &scrap, &p_errh);
 }
 
 static void
