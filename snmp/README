@@ -1,0 +1,8 @@
+Click SNMP elements
+===================
+
+This directory is an add-on package for the Click modular router,
+http://www.read.cs.ucla.edu/click/.  A prerequisite for building and using
+the SNMP package is building and installing a recent version of Click.  The
+elements are documented; after "make install", try "man SNMPTrapSource".
+For a documented example configuration, see conf/test-trap.click.
