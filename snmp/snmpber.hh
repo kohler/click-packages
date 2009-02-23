@@ -17,16 +17,16 @@ class SNMPBEREncoder { public:
     inline const unsigned char *data() const;
     inline int length() const;
     inline bool memory_error() const;
-  
+
     unsigned char *extend(int);
-  
+
     Status push_sequence(SNMPTag);
     inline Status push_sequence();
     Status push_long_sequence(SNMPTag);
     inline Status push_long_sequence();
     Status pop_sequence();
     Status abort_sequence();		// always returns ERR_INVALID
-  
+
     Status encode_snmp_oid(const SNMPOid &);
 
     Status encode_octet_string(SNMPTag, const unsigned char *, int);
@@ -36,31 +36,60 @@ class SNMPBEREncoder { public:
 
     Status encode_null();
 
-    inline Status encode_integer(SNMPTag, int);
-    inline Status encode_integer(SNMPTag, unsigned);
-    Status encode_integer(SNMPTag, long);
-    Status encode_integer(SNMPTag, unsigned long);
-    inline Status encode_integer(long);
-    inline Status encode_integer(unsigned long);
-    inline Status encode_integer(int);
-    inline Status encode_integer(unsigned);
-#ifdef HAVE_INT64_TYPES
-    Status encode_integer(SNMPTag, int64_t);
-    Status encode_integer(SNMPTag, uint64_t);
+    inline Status encode_integer(SNMPTag tag, int x) {
+	return encode_integer(tag, x, true);
+    }
+    inline Status encode_integer(SNMPTag tag, unsigned x) {
+	return encode_integer(tag, x, false);
+    }
+    inline Status encode_integer(SNMPTag tag, long x) {
+	return encode_integer(tag, x, true);
+    }
+    inline Status encode_integer(SNMPTag tag, unsigned long x) {
+	return encode_integer(tag, x, false);
+    }
+#if HAVE_INT64_TYPES && !HAVE_INT64_IS_LONG
+    inline Status encode_integer(SNMPTag tag, int64_t x) {
+	return encode_integer(tag, x, true);
+    }
+    inline Status encode_integer(SNMPTag tag, uint64_t x) {
+	return encode_integer(tag, x, false);
+    }
+#endif
+
+    inline Status encode_integer(int x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
+    inline Status encode_integer(unsigned x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
+    inline Status encode_integer(long x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
+    inline Status encode_integer(unsigned long x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
+#if HAVE_INT64_TYPES && !HAVE_INT64_IS_LONG
+    inline Status encode_integer(int64_t x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
+    inline Status encode_integer(uint64_t x) {
+	return encode_integer(SNMP_TAG_INTEGER, x);
+    }
 #endif
 
     Status encode_ip_address(IPAddress);
     Status encode_time_ticks(unsigned);
-  
+
     // SNMPBEREncoder &operator<<(SNMPBEREncoder &, const SNMPOid &);
     // SNMPBEREncoder &operator<<(SNMPBEREncoder &, const String &);
-  
+
     enum {
 	LEN_1_MAX = 0x7F,
 	LEN_2_MAX = 0xFF,
 	LEN_3_MAX = 0xFFFF
     };
-  
+
   private:
 
     StringAccum _sa;
@@ -71,7 +100,8 @@ class SNMPBEREncoder { public:
     static inline int calculate_len_len(int);
     static unsigned char *encode_len(unsigned char *, int);
     static void encode_len_by_len_len(unsigned char *, int, int);
-  
+    Status encode_integer(SNMPTag tag, String::uint_large_t x, bool as_signed);
+
 };
 
 
@@ -92,7 +122,7 @@ SNMPBEREncoder::memory_error() const
 {
     return _mem_err < 0;
 }
-  
+
 inline SNMPBEREncoder::Status
 SNMPBEREncoder::push_sequence()
 {
@@ -121,42 +151,6 @@ inline SNMPBEREncoder::Status
 SNMPBEREncoder::encode_octet_string(const String &str)
 {
   return encode_octet_string(str.data(), str.length());
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, int i)
-{
-  return encode_integer(tag, (long)i);
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, unsigned u)
-{
-  return encode_integer(tag, (unsigned long)u);
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(long i)
-{
-  return encode_integer(SNMP_TAG_INTEGER, i);
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(unsigned long u)
-{
-  return encode_integer(SNMP_TAG_INTEGER, u);
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(int i)
-{
-  return encode_integer(SNMP_TAG_INTEGER, i);
-}
-
-inline SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(unsigned u)
-{
-  return encode_integer(SNMP_TAG_INTEGER, u);
 }
 
 inline SNMPBEREncoder::Status

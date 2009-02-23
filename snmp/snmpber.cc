@@ -135,7 +135,7 @@ SNMPBEREncoder::encode_snmp_oid(const SNMPOid &oid)
 {
   if (oid.size() < 2 || oid[0] > 2 || oid[1] >= 40)
     return ERR_INVALID;
-  
+
   int len = 1;
   for (int i = 2; i < oid.size(); i++) {
     uint32_t component = oid[i];
@@ -204,7 +204,7 @@ SNMPBEREncoder::encode_octet_string(SNMPTag tag, const unsigned char *s, int len
   int len_len = calculate_len_len(len);
   if (len_len < 0)
     return (Status)len_len;
-  
+
   unsigned char *storage = (unsigned char *)_sa.extend(1 + len_len + len);
   if (!storage)
     return (_mem_err = ERR_MEM);
@@ -234,132 +234,34 @@ SNMPBEREncoder::encode_null()
 }
 
 SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, long value)
+SNMPBEREncoder::encode_integer(SNMPTag tag, String::uint_large_t x,
+			       bool as_signed)
 {
-  if (value >= 0)
-    return encode_integer(tag, (unsigned long)value);
-
-  int len;
-  if (value >= -0x80)
-    len = 3;
-  else if (value >= -0x8000)
-    len = 4;
-  else if (value >= -0x800000)
-    len = 5;
-  else
-    len = 6;
-  
-  unsigned char *storage = (unsigned char *)_sa.extend(len);
-  if (!storage)
-    return (_mem_err = ERR_MEM);
-
-  storage[0] = tag;
-  storage[1] = len - 2;
-
-  storage[len - 1] = (value & 0xFF);
-  if (value < -0x80) {
-    storage[len - 2] = ((value >> 8) & 0xFF);
-    if (value < -0x8000) {
-      storage[len - 3] = ((value >> 16) & 0xFF);
-      if (value < -0x800000)
-	storage[len - 4] = ((value >> 24) & 0xFF);
+    uint8_t flipper = 0;
+    if (as_signed && static_cast<String::int_large_t>(x) < 0) {
+	x = -x - 1;
+	flipper = 255;
     }
-  }
-
-  return ERR_OK;
-}
-
-SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, unsigned long value)
-{
-  int len;
-  if (value <= 0x7F)
-    len = 3;
-  else if (value <= 0x7FFF)
-    len = 4;
-  else if (value <= 0x7FFFFF)
-    len = 5;
-  else if (value <= 0x7FFFFFFF)
-    len = 6;
-  else
-    len = 7;
-  
-  unsigned char *storage = (unsigned char *)_sa.extend(len);
-  if (!storage)
-    return (_mem_err = ERR_MEM);
-
-  storage[0] = tag;
-  storage[1] = len - 2;
-
-  storage[len - 1] = (value & 0xFF);
-  if (value > 0x7F) {
-    storage[len - 2] = ((value >> 8) & 0xFF);
-    if (value > 0x7FFF) {
-      storage[len - 3] = ((value >> 16) & 0xFF);
-      if (value > 0x7FFFFF) {
-	storage[len - 4] = ((value >> 24) & 0xFF);
-	if (value > 0x7FFFFFFF)
-	  storage[len - 5] = 0;
-      }
-    }
-  }
-
-  return ERR_OK;
-}
-
-#if HAVE_INT64_TYPES
-
-SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, int64_t value)
-{
-    if (value >= 0)
-	return encode_integer(tag, (uint64_t)value);
 
     int len = 3;
-    uint64_t v = -value - 1;
-    while (v > 0x7F)
-	len++, v >>= 8;
-  
-    unsigned char *storage = (unsigned char *)_sa.extend(len);
+    String::uint_large_t x2 = x;
+    while (x2 > 0x7F)
+	len++, x2 >>= 8;
+
+    unsigned char *storage = (unsigned char *) _sa.extend(len);
     if (!storage)
 	return (_mem_err = ERR_MEM);
 
     storage[0] = tag;
     storage[1] = len - 2;
-    v = -value - 1;
-    storage[--len] = (v & 0xFF) ^ 0xFF;
-    while (v > 0x7F) {
-	v >>= 8;
-	storage[--len] = (v & 0xFF) ^ 0xFF;
+    storage[--len] = (x & 0xFF) ^ flipper;
+    while (x > 0x7F) {
+	x >>= 8;
+	storage[--len] = (x & 0xFF) ^ flipper;
     }
 
     return ERR_OK;
 }
-
-SNMPBEREncoder::Status
-SNMPBEREncoder::encode_integer(SNMPTag tag, uint64_t value)
-{
-    int len = 3;
-    uint64_t v = value;
-    while (v > 0x7F)
-	len++, v >>= 8;
-  
-    unsigned char *storage = (unsigned char *)_sa.extend(len);
-    if (!storage)
-	return (_mem_err = ERR_MEM);
-
-    storage[0] = tag;
-    storage[1] = len - 2;
-    storage[--len] = (value & 0xFF);
-    while (value > 0x7F) {
-	value >>= 8;
-	storage[--len] = (value & 0xFF);
-    }
-
-    return ERR_OK;
-}
-
-#endif
 
 ELEMENT_REQUIRES(SNMPBasics)
 ELEMENT_PROVIDES(SNMPBER)
