@@ -88,7 +88,7 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
     fprintf(f, " </stream>\n");
 }
 
-static int compare(const void *a, const void *b){
+static int compare(const void *a, const void *b, void *){
     struct CalculateCapacity::StreamInfo::IntervalStream *ac;
     struct CalculateCapacity::StreamInfo::IntervalStream *bc;
     double iratea, irateb;
@@ -108,7 +108,7 @@ static int compare(const void *a, const void *b){
     return 1;
 }
 
-static int compare_time(const void *a, const void *b){
+static int compare_time(const void *a, const void *b, void *){
     struct CalculateCapacity::StreamInfo::IntervalStream *ac;
     struct CalculateCapacity::StreamInfo::IntervalStream *bc;
 
