@@ -110,7 +110,7 @@ SNMPTrapSource::configure(Vector<String> &conf, ErrorHandler *errh)
   _udp_encap = true;
   _ip_ttl = 255;
   _active = true;
-  
+
   if (cp_va_kparse(conf, this, errh,
 		   "UDP", 0, cpBool, &_udp_encap,
 		   "TTL", 0, cpByte, &_ip_ttl,
@@ -165,14 +165,14 @@ SNMPTrapSource::generate_trap(int trap)
 {
   if (!_active)
     return 0;
-    
+
   SNMPBEREncoder ber;
 
   ber.push_long_sequence();
 
   ber.encode_integer(SNMP_VERSION_1);
   ber.encode_octet_string(_community);
-  
+
   ber.push_long_sequence(SNMP_TAG_V1_TRAP);
   ber.encode_snmp_oid(_enterprise);
   ber.encode_ip_address(_agent);
@@ -277,7 +277,7 @@ static int
 trap_write_handler(const String &, Element *e, void *thunk, ErrorHandler *errh)
 {
   SNMPTrapSource *ts = (SNMPTrapSource *)e;
-  int which = (int)thunk;
+  int which = reinterpret_cast<int>(thunk);
 
   int result = ts->generate_trap(which);
   if (result == -ENOMEM)
@@ -291,7 +291,7 @@ String
 SNMPTrapSource::read_handler(Element *e, void *thunk)
 {
   SNMPTrapSource *ts = (SNMPTrapSource *)e;
-  switch ((int)thunk) {
+  switch (reinterpret_cast<intptr_t>(thunk)) {
    case H_drops:	return String(ts->_drops.value());
    case H_enterprise:	return cp_unparse_snmp_oid(ts->_enterprise);
    case H_src:		return ts->_src.unparse();
@@ -306,7 +306,7 @@ SNMPTrapSource::read_handler(Element *e, void *thunk)
        sa << ts->_names[i] << '\n';
      return sa.take_string();
    }
-   
+
    default:	return "<error>";
   }
 }
@@ -316,26 +316,27 @@ SNMPTrapSource::write_handler(const String &str_in, Element *e, void *thunk, Err
 {
   SNMPTrapSource *ts = (SNMPTrapSource *)e;
   String str = cp_uncomment(str_in);
-  switch ((int)thunk) {
+  intptr_t which = reinterpret_cast<intptr_t>(thunk);
+  switch (which) {
 
    case H_src:
    case H_dst: {
      IPAddress a;
      if (!cp_ip_address(str, &a, e))
        return errh->error("expected IP address");
-     ((int)thunk == H_src ? ts->_src = a : ts->_dst = a);
+     (which == H_src ? ts->_src = a : ts->_dst = a);
      return 0;
    }
-   
+
    case H_sport:
    case H_dport: {
      int x;
      if (!cp_integer(str, &x) || x < 0 || x > 0xFFFF)
        return errh->error("expected port number");
-     ((int)thunk == H_sport ? ts->_sport = x : ts->_dport = x);
+     (which == H_sport ? ts->_sport = x : ts->_dport = x);
      return 0;
    }
-   
+
    case H_active: {
      bool x;
      if (!cp_bool(str, &x))
@@ -343,32 +344,32 @@ SNMPTrapSource::write_handler(const String &str_in, Element *e, void *thunk, Err
      ts->_active = x;
      return 0;
    }
-   
+
    default:
     return -EINVAL;
-    
+
   }
 }
 
 void
 SNMPTrapSource::add_handlers()
 {
-  add_read_handler("drops", read_handler, (void *)H_drops);
-  add_read_handler("enterprise", read_handler, (void *)H_enterprise);
-  add_read_handler("src", read_handler, (void *)H_src);
-  add_write_handler("src", write_handler, (void *)H_src);
-  add_read_handler("dst", read_handler, (void *)H_dst);
-  add_write_handler("dst", write_handler, (void *)H_dst);
-  add_read_handler("sport", read_handler, (void *)H_sport);
-  add_write_handler("sport", write_handler, (void *)H_sport);
-  add_read_handler("dport", read_handler, (void *)H_dport);
-  add_write_handler("dport", write_handler, (void *)H_dport);
-  add_read_handler("traps", read_handler, (void *)H_traps);
-  add_write_handler("active", write_handler, (void *)H_active, Handler::CHECKBOX);
-  add_read_handler("active", read_handler, (void *)H_active);
+  add_read_handler("drops", read_handler, H_drops);
+  add_read_handler("enterprise", read_handler, H_enterprise);
+  add_read_handler("src", read_handler, H_src);
+  add_write_handler("src", write_handler, H_src);
+  add_read_handler("dst", read_handler, H_dst);
+  add_write_handler("dst", write_handler, H_dst);
+  add_read_handler("sport", read_handler, H_sport);
+  add_write_handler("sport", write_handler, H_sport);
+  add_read_handler("dport", read_handler, H_dport);
+  add_write_handler("dport", write_handler, H_dport);
+  add_read_handler("traps", read_handler, H_traps);
+  add_write_handler("active", write_handler, H_active, Handler::CHECKBOX);
+  add_read_handler("active", read_handler, H_active);
 
   for (int i = 0; i < _names.size(); i++)
-      add_write_handler("send_" + _names[i], trap_write_handler, (void *)i, Handler::BUTTON);
+      add_write_handler("send_" + _names[i], trap_write_handler, i, Handler::BUTTON);
 }
 
 ELEMENT_REQUIRES(SNMPBasics SNMPBER SNMPVariableInfo)
