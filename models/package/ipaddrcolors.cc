@@ -492,7 +492,7 @@ write_batch(FILE *f, bool binary, uint32_t *buffer, int &pos,
 	    ErrorHandler *)
 {
     if (binary)
-	fwrite(buffer, sizeof(uint32_t), pos, f);
+	ignore_result(fwrite(buffer, sizeof(uint32_t), pos, f));
     else
 	for (int i = 0; i < pos; i += 2)
 	    if (buffer[i+1] == IPAddrColors::SUBTREECOLOR) {

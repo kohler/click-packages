@@ -1009,7 +1009,7 @@ TCPMystery::LossBlock::write_xml(FILE *f, const String &tagname) const
     StringAccum sa(n * 80);
     for (int i = 0; i < n; i++)
 	loss[i].unparse_xml(sa, tagname);
-    fwrite(sa.data(), 1, sa.length(), f);
+    ignore_result(fwrite(sa.data(), 1, sa.length(), f));
 }
 
 void
