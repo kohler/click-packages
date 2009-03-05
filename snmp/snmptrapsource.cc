@@ -277,7 +277,7 @@ static int
 trap_write_handler(const String &, Element *e, void *thunk, ErrorHandler *errh)
 {
   SNMPTrapSource *ts = (SNMPTrapSource *)e;
-  int which = reinterpret_cast<int>(thunk);
+  intptr_t which = reinterpret_cast<intptr_t>(thunk);
 
   int result = ts->generate_trap(which);
   if (result == -ENOMEM)
