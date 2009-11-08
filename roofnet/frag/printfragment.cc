@@ -83,8 +83,8 @@ PrintFragment::simple_action(Packet *p)
       return 0;
     }
 
-    min_frag = MIN(min_frag, f->packet_num);
-    max_frag = MAX(max_frag, f->packet_num);
+    min_frag = (min_frag < f->packet_num ? min_frag : f->packet_num);
+    max_frag = (max_frag > f->packet_num ? max_frag : f->packet_num);
     if (!print_foo) {
     sa << " " << (int) f->packet_num;
     sa << " " << (int) f->frag_num;

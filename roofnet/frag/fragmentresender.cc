@@ -157,8 +157,8 @@ FragmentResender::process_ack(Packet *p) {
     int frag = ack->get_frag(x);
     struct fragid ack = fragid(packet, frag);
 
-    min_packet_acked = MIN(packet, min_packet_acked);
-    max_packet_acked = MAX(packet, max_packet_acked);
+    min_packet_acked = (packet < min_packet_acked ? packet : min_packet_acked);
+    max_packet_acked = (packet > max_packet_acked ? packet : max_packet_acked);
 
     for (int y = 0; y < outstanding.size(); y++) {
       if (ack == outstanding[y]) {
@@ -374,8 +374,8 @@ FragmentResender::do_resend() {
       _packets.remove(packet);
       continue;
     }
-    min_packet_resent = MIN(packet, min_packet_resent);
-    max_packet_resent = MAX(packet, max_packet_resent);
+    min_packet_resent = (packet < min_packet_resent ? packet : min_packet_resent);
+    max_packet_resent = (packet > max_packet_resent ? packet : max_packet_resent);
     
     if (!header_done) {
       memcpy(fh, nfo->p->data(), sizeof(struct frag_header));

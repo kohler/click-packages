@@ -205,8 +205,8 @@ public:
       
       Timestamp since_start = now - start;
 
-      uint32_t ms_since_start = MAX(0, since_start.msecval());
-      uint32_t fake_tau = MIN(_tau, ms_since_start);
+      uint32_t ms_since_start = (since_start.msecval() > 0 ? since_start.msecval() : 0);
+      uint32_t fake_tau = (_tau < ms_since_start ? _tau : ms_since_start);
       assert(_probe_types.size());
       int num_expected = fake_tau / _period;
 
@@ -217,7 +217,7 @@ public:
 	num_expected = 1;
       }
 
-      return MIN(100, 100 * num / num_expected);
+      return (100 < 100 * num / num_expected ? 100 : 100 * num / num_expected);
 
     }
     int rev_rssi(int rate, int size) {
