@@ -10,7 +10,6 @@
 #include <click/ip6address.hh>
 #include <click/ipaddress.hh>
 #include <click/vector.hh>
-#include <click/elemfilter.hh>
 #include <clicknet/tcp.h>
 /*
 * TCPAddressTranslator (AddressTranslator)

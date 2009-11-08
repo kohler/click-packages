@@ -9,7 +9,6 @@
 #include <click/ip6address.hh>
 #include <click/ipaddress.hh>
 #include <click/router.hh>
-#include <click/elemfilter.hh>
 #include <click/confparse.hh>
 #include <click/error.hh>
 #include "elements/ip6/addresstranslator.hh"

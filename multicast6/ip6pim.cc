@@ -19,7 +19,6 @@
 #include <click/config.h>
 #include <clicknet/ip6.h>
 #include <click/router.hh>
-#include <click/elemfilter.hh>
 #include "ip6pim.hh"
 #include <click/error.hh>
 #include <click/packet_anno.hh>

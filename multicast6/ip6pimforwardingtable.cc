@@ -19,7 +19,6 @@
 #include <click/config.h>
 #include "ip6pimforwardingtable.hh"
 #include <click/ipaddress.hh>
-#include <click/elemfilter.hh>
 #include <click/router.hh>
 #include <click/error.hh>
 #include <click/ip6address.hh>

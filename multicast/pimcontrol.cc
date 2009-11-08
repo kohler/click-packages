@@ -18,7 +18,6 @@
 
 #include <click/config.h>
 #include <click/router.hh>
-#include <click/elemfilter.hh>
 #include <click/confparse.hh>
 #include "pimcontrol.hh"
 #include <click/error.hh>

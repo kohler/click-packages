@@ -11,13 +11,13 @@
  * distribution.
  */
 
-#include <click/config.h>  
+#include <click/config.h>
 #include "ftpportmapper6.hh"
 #include <clicknet/ip.h>
 #include <clicknet/ip6.h>
 #include <clicknet/tcp.h>
 #include <click/router.hh>
-#include <click/elemfilter.hh>
+#include <click/routervisitor.hh>
 #include <click/confparse.hh>
 #include <click/error.hh>
 CLICK_DECLS
@@ -55,16 +55,10 @@ int
 FTPPortMapper6::initialize(ErrorHandler *errh)
 {
   // make sure that _control_rewriter is downstream
-  CastElementFilter filter("TCPAddressTranslator");
-  Vector<Element *> downstream;
-  router()->downstream_elements(this, 0, &filter, downstream);
-  filter.filter(downstream);
-  for (int i = 0; i < downstream.size(); i++)
-    if (downstream[i] == _tcp_a)
-      goto found_tcp_a;
-  errh->warning("TCPAddressTranslator `%s' is not downstream", _tcp_a->declaration().c_str());
-
- found_tcp_a:
+  ElementCastTracker filter(router(), "TCPAddressTranslator");
+  router()->visit_downstream(this, 0, &filter);
+  if (!filter.contains(_tcp_a))
+      errh->warning("TCPAddressTranslator %<%s%> is not downstream", _tcp_a->declaration().c_str());
   return 0;
 }
 

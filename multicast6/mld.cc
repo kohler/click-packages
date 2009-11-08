@@ -18,7 +18,6 @@
 
 #include <click/config.h>
 #include <click/router.hh>
-#include <click/elemfilter.hh>
 #include "mld.hh"
 #include "ip6multicasttable.hh"
 #include <click/error.hh>
