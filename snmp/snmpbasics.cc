@@ -59,7 +59,7 @@ cp_snmp_identifier(const String &str, String *result)
   // (because there is an underscore).
   StringAccum sa;
   int last = 0;
-  
+
   for (int i = 0; i < len; i++) {
     if (isalnum(data[i]))
       /* nada */;
@@ -74,7 +74,7 @@ cp_snmp_identifier(const String &str, String *result)
     } else
       return false;
   }
-  
+
   if (last > 0) {
     sa << str.substring(last, len - last);
     *result = sa.take_string();
@@ -126,7 +126,7 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
 
   if (!errh)
     errh = ErrorHandler::silent_handler();
-  
+
   const char *data = arg.data();
   int len = arg.length();
   int pos = 0;
@@ -134,7 +134,7 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
 
   // loop over components
   while (pos < len) {
-    
+
     // find component
     int first = pos;
     bool all_digits = true;
@@ -321,12 +321,12 @@ snmp_tag_format(SNMPTag tag)
    case SNMP_TAG_COUNTER64:
     return SNMP_FMT_INTEGER64;
 #endif
-    
+
    case SNMP_TAG_OCTET_STRING:
    case SNMP_TAG_DISPLAYSTRING:
    case SNMP_TAG_OPAQUE:
     return SNMP_FMT_OCTET_STRING;
-    
+
    case SNMP_TAG_NULL:
     return SNMP_FMT_NULL;
 
@@ -338,7 +338,7 @@ snmp_tag_format(SNMPTag tag)
 
    default:
     return SNMP_FMT_INVALID;
-    
+
   }
 }
 
@@ -377,11 +377,11 @@ void
 SNMPOidInfo::static_initialize()
 {
   ErrorHandler *errh = ErrorHandler::default_handler();
-  
+
   cp_register_argtype(cpSNMPIdentifier, "SNMP identifier", 0, snmp_identifier_parsefunc, snmp_identifier_storefunc);
   cp_register_argtype(cpSNMPOid, "SNMP object ID", 0, snmp_oid_parsefunc, snmp_oid_storefunc);
   cp_register_argtype(cpSNMPVariable, "SNMP variable object ID", 0, snmp_variable_parsefunc, snmp_variable_storefunc);
-  
+
   SNMPOidInfo::well_known_oids = new SNMPOidInfo;
 
   String config_string = String::make_stable(well_known_oids_config);

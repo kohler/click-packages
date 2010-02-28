@@ -437,6 +437,8 @@ trw_packet_utils.hh
 
 ./snmp:
 Makefile.in
+README
+conf
 configure
 configure.ac
 snmpbasics.cc
@@ -451,6 +453,9 @@ snmptrapsource.cc
 snmptrapsource.hh
 snmpvarinfo.cc
 snmpvarinfo.hh
+
+./snmp/conf:
+test-trap.click
 
 ./unibo_qos:
 Makefile.in
