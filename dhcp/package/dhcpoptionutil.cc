@@ -70,9 +70,9 @@ const uint8_t *fetch(Packet *p, int want_option, int expected_length)
 uint32_t rand_exp_backoff(uint32_t backoff_center)
 {
     uint32_t dice = click_random();
-    if (dice <= RAND_MAX / 3)
+    if (dice <= CLICK_RAND_MAX / 3)
 	return backoff_center - 1;
-    else if (dice <= (RAND_MAX / 3) * 2)
+    else if (dice <= (CLICK_RAND_MAX / 3) * 2)
 	return backoff_center;
     else
 	return backoff_center + 1;
