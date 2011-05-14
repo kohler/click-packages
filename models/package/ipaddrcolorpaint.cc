@@ -18,7 +18,7 @@
 
 #include <click/config.h>
 #include "ipaddrcolorpaint.hh"
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/error.hh>
 #include <click/packet_anno.hh>
 
@@ -34,10 +34,10 @@ int
 IPAddrColorPaint::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     _careful = false;
-    if (cp_va_kparse(conf, this, errh,
-		     "FILENAME", cpkP+cpkM, cpFilename, &_filename,
-		     "CAREFUL", 0, cpBool, &_careful,
-		     cpEnd) < 0)
+    if (Args(conf, this, errh)
+	.read_mp("FILENAME", FilenameArg(), _filename)
+	.read("CAREFUL", _careful)
+	.complete() < 0)
 	return -1;
     return 0;
 }

@@ -4,7 +4,7 @@
 #include <click/error.hh>
 #include <click/hashtable.hh>
 #include <click/straccum.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ip.h>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
@@ -600,18 +600,15 @@ CalculateCapacity::~CalculateCapacity()
 int
 CalculateCapacity::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    Element *af_element = 0;
-    if (cp_va_kparse(conf, this, errh,
-		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
-		     "SOURCE", 0, cpElement, &_packet_source,
-		     "NOTIFIER", 0, cpElement, &af_element,
-		     cpEnd) < 0)
+    AggregateIPFlows *af = 0;
+    if (Args(conf, this, errh)
+	.read_p("TRACEINFO", FilenameArg(), _traceinfo_filename)
+	.read("SOURCE", _packet_source)
+	.read("NOTIFIER", ElementCastArg("AggregateIPFlows"), af)
+	.complete() < 0)
         return -1;
 
-    AggregateIPFlows *af = 0;
-    if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
-	return errh->error("NOTIFIER must be an AggregateIPFlows element");
-    else if (af)
+    if (af)
 	af->add_listener(this);
 
     return 0;

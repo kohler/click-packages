@@ -20,7 +20,7 @@
 
 #include <click/config.h>
 #include "multiq.hh"
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/straccum.hh>
 #include <click/error.hh>
 #include <float.h>
@@ -329,20 +329,16 @@ MultiQ::~MultiQ()
 int
 MultiQ::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    Element *e = 0;
+    TCPCollector *tcpc = 0;
     bool raw_timestamp = false;
-    if (cp_va_kparse(conf, this, errh,
-		     "TCPCOLLECTOR", 0, cpElement, &e,
-		     "RAW_TIMESTAMP", 0, cpBool, &raw_timestamp,
-		     "MIN_SCALE", 0, cpDouble, &MIN_SCALE,
-		     cpEnd) < 0)
+    if (Args(conf, this, errh)
+	.read("TCPCOLLECTOR", ElementCastArg("TCPCollector"), tcpc)
+	.read("RAW_TIMESTAMP", raw_timestamp)
+	.read("MIN_SCALE", MIN_SCALE)
+	.complete() < 0)
 	return -1;
-    if (e) {
-	TCPCollector *tcpc = (TCPCollector *)e->cast("TCPCollector");
-	if (!tcpc)
-	    return errh->error("'%s' not a TCPCollector element", e->declaration().c_str());
+    if (tcpc)
 	tcpc->add_stream_xmltag("multiq_capacity", multiqcapacity_xmltag, this);
-    }
     _thru_last = (raw_timestamp ? -2. : -1.);
     return 0;
 }

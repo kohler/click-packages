@@ -20,7 +20,7 @@
 #include <click/config.h>
 #include "inferipaddrcolors.hh"
 #include <click/handlercall.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/error.hh>
 #include <click/router.hh>
 #include <click/integers.hh>
@@ -39,10 +39,10 @@ InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
     bool active = true;
     String seed_filename;
 
-    if (cp_va_kparse(conf, this, errh,
-		     "ACTIVE", 0, cpBool, &active,
-		     "SEED", 0, cpFilename, &seed_filename,
-		     cpEnd) < 0)
+    if (Args(conf, this, errh)
+	.read("ACTIVE", active)
+	.read("SEED", FilenameArg(), seed_filename)
+	.complete() < 0)
 	return -1;
 
     _active = active;
@@ -163,7 +163,7 @@ String
 InferIPAddrColors::read_handler(Element *e, void *thunk)
 {
     InferIPAddrColors *ac = static_cast<InferIPAddrColors *>(e);
-    switch ((int)thunk) {
+    switch ((uintptr_t)thunk) {
       case AC_ACTIVE:
 	return cp_unparse_bool(ac->_active) + "\n";
       case AC_NCOLORS:
@@ -179,7 +179,7 @@ InferIPAddrColors::write_handler(const String &data, Element *e, void *thunk, Er
 {
     InferIPAddrColors *ac = static_cast<InferIPAddrColors *>(e);
     String s = cp_uncomment(data);
-    switch ((int)thunk) {
+    switch ((uintptr_t)thunk) {
       case AC_ACTIVE: {
 	  bool val;
 	  if (!cp_bool(s, &val))

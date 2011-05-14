@@ -4,7 +4,7 @@
 #include <click/error.hh>
 #include <click/hashtable.hh>
 #include <click/straccum.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ip.h>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
@@ -1109,35 +1109,24 @@ CalculateFlows::~CalculateFlows()
 int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
-    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false, window_probe = false, packets = false, reordered = false;
-    if (cp_va_kparse(conf, this, errh,
-		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
-		     "SOURCE", 0, cpElement, &_packet_source,
-		     "NOTIFIER", 0, cpElement, &af_element,
-		     "SUMMARYDUMP", 0, cpElement, &tipsd_element,
-		     "FLOWDUMPS", 0, cpElement, &tipfd_element,
-		     "ACKLATENCY", 0, cpBool, &acklatency,
-		     "ACKCAUSALITY", 0, cpBool, &ackcausality,
-		     "FULLRCVWINDOW", 0, cpBool, &full_rcv_window,
-		     "WINDOWPROBE", 0, cpBool, &window_probe,
-		     "UNDELIVERED", 0, cpBool, &undelivered,
-		     "REORDERED", 0, cpBool, &reordered,
-		     "PACKET", 0, cpBool, &packets,
-		     "IP_ID", 0, cpBool, &ip_id,
-		     cpEnd) < 0)
-        return -1;
-
     AggregateIPFlows *af = 0;
-    if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
-	return errh->error("NOTIFIER must be an AggregateIPFlows element");
-    else if (af)
-	af->add_listener(this);
-
-    if (tipfd_element && !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
-	return errh->error("FLOWDUMPS must be a ToIPFlowDumps element");
-    if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
-	return errh->error("SUMMARYDUMP must be a ToIPSummaryDump element");
+    bool acklatency = false, ackcausality = false, ip_id = true, full_rcv_window = false, undelivered = false, window_probe = false, packets = false, reordered = false;
+    if (Args(conf, this, errh)
+	.read_p("TRACEINFO", FilenameArg(), _traceinfo_filename)
+	.read("SOURCE", _packet_source)
+	.read("NOTIFIER", ElementCastArg("AggregateIPFlows"), af)
+	.read("SUMMARYDUMP", ElementCastArg("ToIPSummaryDump"), _tipsd)
+	.read("FLOWDUMPS", ElementCastArg("ToIPFlowDumps"), _tipfd)
+	.read("ACKLATENCY", acklatency)
+	.read("ACKCAUSALITY", ackcausality)
+	.read("FULLRCVWINDOW", full_rcv_window)
+	.read("WINDOWPROBE", window_probe)
+	.read("UNDELIVERED", undelivered)
+	.read("REORDERED", reordered)
+	.read("PACKET", packets)
+	.read("IP_ID", ip_id)
+	.complete() < 0)
+        return -1;
 
     _ip_id = ip_id;
     _write_flags = (acklatency ? WR_ACKLATENCY : 0)
@@ -1284,10 +1273,11 @@ CalculateFlows::write_handler(const String &s, Element *e, void *thunk, ErrorHan
       case H_SAVE: {
 	  String what, filename;
 	  uint32_t aggregate;
-	  if (cp_va_space_kparse(s, cf, errh,
-				 "TYPE", cpkP+cpkM, cpWord, &what,
-				 "AGGREGATE", cpkP+cpkM, cpUnsigned, &aggregate,
-				 "FILENAME", cpkP+cpkM, cpFilename, &filename, cpEnd) < 0)
+	  if (Args(cf, errh).push_back_words(s)
+	      .read_mp("TYPE", WordArg(), what)
+	      .read_mp("AGGREGATE", aggregate)
+	      .read_mp("FILENAME", FilenameArg(), filename)
+	      .complete() < 0)
 	      return -1;
 	  if (what == "undelivered_packetno")
 	      return cf->save(SAVE_UNDELIVERED_PACKETNO, aggregate, 0, filename, errh);

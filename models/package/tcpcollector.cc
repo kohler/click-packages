@@ -4,7 +4,7 @@
 #include <click/error.hh>
 #include <click/hashtable.hh>
 #include <click/straccum.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ip.h>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
@@ -766,31 +766,28 @@ TCPCollector::add_conn_attachment(AttachmentManager* a, unsigned space)
 int
 TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    Element *af_element = 0;
+    AggregateIPFlows *af = 0;
     bool ip_id = true;
 #if TCPCOLLECTOR_XML
     bool full_rcv_window = false, window_probe = false, packets = false, interarrival = false;
 #endif
-    if (cp_va_kparse(conf, this, errh,
+    if (Args(conf, this, errh)
 #if TCPCOLLECTOR_XML
-		     "TRACEINFO", cpkP, cpFilename, &_traceinfo_filename,
+	.read_p("TRACEINFO", FilenameArg(), _traceinfo_filename)
 #endif
-		     "NOTIFIER", 0, cpElement, &af_element,
-		     "SOURCE", 0, cpElement, &_packet_source,
-		     "IP_ID", 0, cpBool, &ip_id,
+	.read("NOTIFIER", ElementCastArg("AggregateIPFlows"), af)
+	.read("SOURCE", _packet_source)
+	.read("IP_ID", ip_id)
 #if TCPCOLLECTOR_XML
-		     "FULLRCVWINDOW", 0, cpBool, &full_rcv_window,
-		     "WINDOWPROBE", 0, cpBool, &window_probe,
-		     "INTERARRIVAL", 0, cpBool, &interarrival,
-		     "PACKET", 0, cpBool, &packets,
+	.read("FULLRCVWINDOW", full_rcv_window)
+	.read("WINDOWPROBE", window_probe)
+	.read("INTERARRIVAL", interarrival)
+	.read("PACKET", packets)
 #endif
-		     cpEnd) < 0)
+	.complete() < 0)
         return -1;
 
-    AggregateIPFlows *af = 0;
-    if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
-	return errh->error("NOTIFIER must be an AggregateIPFlows element");
-    else if (af)
+    if (af)
 	af->add_listener(this);
 
     _ip_id = ip_id;

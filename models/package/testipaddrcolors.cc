@@ -20,7 +20,7 @@
 #include <click/config.h>
 #include "testipaddrcolors.hh"
 #include <click/handlercall.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/error.hh>
 #include <click/integers.hh>
 #include <click/straccum.hh>
@@ -37,10 +37,10 @@ int
 TestIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     bool verbose = false;
-    if (cp_va_kparse(conf, this, errh,
-		     "FILENAME", cpkP+cpkM, cpFilename, &_filename,
-		     "VERBOSE", 0, cpBool, &verbose,
-		     cpEnd) < 0)
+    if (Args(conf, this, errh)
+	.read_mp("FILENAME", FilenameArg(), _filename)
+	.read("VERBOSE", verbose)
+	.complete() < 0)
 	return -1;
     _verbose = verbose;
     return 0;
@@ -117,7 +117,7 @@ String
 TestIPAddrColors::read_handler(Element *e, void *thunk)
 {
     TestIPAddrColors *c = static_cast<TestIPAddrColors *>(e);
-    switch ((int)thunk) {
+    switch ((uintptr_t)thunk) {
       case AC_COUNT:
 	return String(c->_npackets) + "\n";
       case AC_ERROR_COUNT:
