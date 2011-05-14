@@ -103,11 +103,11 @@ class SNMPVariableInfo : public Element { public:
   int initialize(ErrorHandler *);
   int add_info(const String &, const String &prefix, ErrorHandler *);
 
-  static SNMPVariable query(const SNMPOid &, Element *);
-  static bool int_value(SNMPVariable, Element *, int *);
-  static bool unsigned_value(SNMPVariable, Element *, unsigned *);
-  static bool encode_binding(SNMPVariable, SNMPBEREncoder &, Element *);
-  static SNMPVariableInfo *find_element(Element *);
+  static SNMPVariable query(const SNMPOid &, const Element *context);
+  static bool int_value(SNMPVariable, const Element *context, int *);
+  static bool unsigned_value(SNMPVariable, const Element *context, unsigned *);
+  static bool encode_binding(SNMPVariable, SNMPBEREncoder &, const Element *context);
+  static SNMPVariableInfo *find_element(const Element *context);
 
  private:
 

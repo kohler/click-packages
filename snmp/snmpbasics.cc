@@ -44,7 +44,7 @@ snmp_oid_eq(const SNMPOid &a, const SNMPOid &b, int sz)
 // XXX case insensitive ??
 
 bool
-cp_snmp_identifier(const String &str, String *result)
+SNMPIdentifierArg::parse(const String &str, String &result, const ArgContext &)
 {
   // make sure identifier has correct syntax
   const char *data = str.data();
@@ -77,33 +77,17 @@ cp_snmp_identifier(const String &str, String *result)
 
   if (last > 0) {
     sa << str.substring(last, len - last);
-    *result = sa.take_string();
+    result = sa.take_string();
   } else
-    *result = str;
+    result = str;
   return true;
-}
-
-static void
-snmp_identifier_parsefunc(cp_value *v, const String &arg,
-			  ErrorHandler *errh, const char *argdesc,
-			  Element *)
-{
-  if (!cp_snmp_identifier(arg, &v->v_string))
-    errh->error("%s (%s) is invalid SNMP identifier", argdesc, v->argtype->description);
-}
-
-static void
-snmp_identifier_storefunc(cp_value *v, Element *)
-{
-  String *storage = (String *)v->store;
-  *storage = v->v_string;
 }
 
 
 // PARSING SNMP OIDS
 
 String
-cp_unparse_snmp_oid(const SNMPOid &oid)
+SNMPOidArg::unparse(const SNMPOid &oid)
 {
   StringAccum sa;
   for (int i = 0; i < oid.size(); i++) {
@@ -114,23 +98,21 @@ cp_unparse_snmp_oid(const SNMPOid &oid)
 }
 
 bool
-cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHandler *errh)
+SNMPOidArg::parse(const String &arg, SNMPOid &result, const ArgContext &args)
 {
   // set up context information
-  SNMPOidInfo *snmp_oid_context = SNMPOidInfo::find_element(context);
+  SNMPOidInfo *snmp_oid_context = SNMPOidInfo::find_element(args.context());
   String snmp_oid_context_prefix;
   if (snmp_oid_context) {
-    int slash = context->name().find_right('/');
-    snmp_oid_context_prefix = context->name().substring(0, (slash >= 0 ? slash : 0));
+    String name = args.context()->name();
+    int slash = name.find_right('/');
+    snmp_oid_context_prefix = name.substring(0, (slash >= 0 ? slash : 0));
   }
-
-  if (!errh)
-    errh = ErrorHandler::silent_handler();
 
   const char *data = arg.data();
   int len = arg.length();
   int pos = 0;
-  SNMPOid result;
+  SNMPOid storage;
 
   // loop over components
   while (pos < len) {
@@ -149,7 +131,7 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
 
     // avoid empty components
     if (pos == first) {
-      errh->error("empty component in SNMP object ID");
+      args.error("empty component in SNMP object ID");
       return false;
     }
 
@@ -158,10 +140,10 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
       int value;
       (void) cp_integer(arg.substring(first, pos - first), &value);
       if (cp_errno == CPE_OVERFLOW) {
-	errh->error("number too large in SNMP object ID");
+	args.error("number too large in SNMP object ID");
 	return false;
       }
-      result.push_back(value);
+      storage.push_back(value);
       // skip over '.', but only if it is not last character
       if (pos < len - 1)
 	pos++;
@@ -172,8 +154,8 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
     String identifier;
     if (all_alnum && isalpha(data[first]))
       identifier = arg.substring(first, pos - first);
-    else if (!cp_snmp_identifier(arg.substring(first, pos - first), &identifier)) {
-      errh->error("'%s' has bad SNMP identifier syntax", arg.substring(first, pos - first).c_str());
+    else if (!SNMPIdentifierArg::parse(arg.substring(first, pos - first), identifier)) {
+      args.error("%<%s%> has bad SNMP identifier syntax", arg.substring(first, pos - first).c_str());
       return false;
     }
 
@@ -184,24 +166,24 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
     else if (SNMPOidInfo::well_known_oids->query(identifier, snmp_oid_context_prefix, &identifier_value))
       /* OK */;
     else {
-      errh->error("unknown object ID '%s'", identifier.c_str());
+      args.error("unknown object ID %<%s%>", identifier.c_str());
       return false;
     }
 
     // compare identifier value against existing values
-    if (identifier_value.size() < result.size()) {
-      errh->error("SNMP object ID '%s' (%s) too short for context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
+    if (identifier_value.size() < storage.size()) {
+      args.error("SNMP object ID %<%s%> (%s) too short for context (%s)", identifier.c_str(), unparse(identifier_value).c_str(), unparse(storage).c_str());
       return false;
     }
-    for (int i = 0; i < result.size(); i++)
-      if (identifier_value[i] != result[i]) {
-	errh->error("SNMP object ID '%s' (%s) conflicts with context (%s)", identifier.c_str(), cp_unparse_snmp_oid(identifier_value).c_str(), cp_unparse_snmp_oid(result).c_str());
+    for (int i = 0; i < storage.size(); i++)
+      if (identifier_value[i] != storage[i]) {
+	args.error("SNMP object ID %<%s%> (%s) conflicts with context (%s)", identifier.c_str(), unparse(identifier_value).c_str(), unparse(storage).c_str());
 	return false;
       }
 
     // OK; append identifier value
-    for (int i = result.size(); i < identifier_value.size(); i++)
-      result.push_back(identifier_value[i]);
+    for (int i = storage.size(); i < identifier_value.size(); i++)
+      storage.push_back(identifier_value[i]);
 
     // skip over '.', but only if it is not last character
     if (pos < len - 1)
@@ -209,58 +191,25 @@ cp_snmp_oid(const String &arg, Element *context, SNMPOid *store_result, ErrorHan
   }
 
   // Success!
-  //errh->message("%s = %s", String(arg).c_str(), cp_unparse_snmp_oid(result).c_str());
-  store_result->swap(result);
+  //args.message("%s = %s", String(arg).c_str(), unparse(storage).c_str());
+  result.swap(storage);
   return true;
-}
-
-static void
-snmp_oid_parsefunc(cp_value *, const String &arg,
-		   ErrorHandler *errh, const char *argdesc,
-		   Element *context)
-{
-    PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
-    SNMPOid scrap;
-    cp_snmp_oid(arg, context, &scrap, &p_errh);
-}
-
-static void
-snmp_oid_storefunc(cp_value *v, Element *context)
-{
-  SNMPOid *storage = (SNMPOid *)v->store;
-  cp_snmp_oid(v->v_string, context, storage);
 }
 
 
 bool
-cp_snmp_variable(const String &arg, Element *context, int *result, ErrorHandler *errh)
+SNMPVariableArg::parse(const String &arg, int &result, const ArgContext &args)
 {
   SNMPOid oid;
-  if (!cp_snmp_oid(arg, context, &oid, errh))
+  if (!SNMPOidArg::parse(arg, oid, args))
     return false;
-  int var = SNMPVariableInfo::query(oid, context);
+  int var = SNMPVariableInfo::query(oid, args.context());
   if (var < 0) {
-    errh->error("SNMP object ID '%s' is not a variable", cp_unparse_snmp_oid(oid).c_str());
+    args.error("SNMP object ID %<%s%> is not a variable", SNMPOidArg::unparse(oid).c_str());
     return false;
   }
-  *result = var;
+  result = var;
   return true;
-}
-
-static void
-snmp_variable_parsefunc(cp_value *v, const String &arg,
-			ErrorHandler *errh, const char *argdesc,
-			Element *context)
-{
-  PrefixErrorHandler p_errh(errh, String(argdesc) + ": ");
-  cp_snmp_variable(arg, context, &v->v.i, &p_errh);
-}
-
-static void
-snmp_variable_storefunc(cp_value *v, Element *)
-{
-  int *storage = (int *)v->store;
-  *storage = v->v.i;
 }
 
 
@@ -378,10 +327,6 @@ SNMPOidInfo::static_initialize()
 {
   ErrorHandler *errh = ErrorHandler::default_handler();
 
-  cp_register_argtype(cpSNMPIdentifier, "SNMP identifier", 0, snmp_identifier_parsefunc, snmp_identifier_storefunc);
-  cp_register_argtype(cpSNMPOid, "SNMP object ID", 0, snmp_oid_parsefunc, snmp_oid_storefunc);
-  cp_register_argtype(cpSNMPVariable, "SNMP variable object ID", 0, snmp_variable_parsefunc, snmp_variable_storefunc);
-
   SNMPOidInfo::well_known_oids = new SNMPOidInfo;
 
   String config_string = String::make_stable(well_known_oids_config);
@@ -393,9 +338,6 @@ SNMPOidInfo::static_initialize()
 void
 SNMPOidInfo::static_cleanup()
 {
-    cp_unregister_argtype(cpSNMPIdentifier);
-    cp_unregister_argtype(cpSNMPOid);
-    cp_unregister_argtype(cpSNMPVariable);
     delete SNMPOidInfo::well_known_oids;
     SNMPOidInfo::well_known_oids = 0;
 }

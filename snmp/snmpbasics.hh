@@ -1,7 +1,7 @@
 #ifndef CLICK_SNMPBASICS_HH
 #define CLICK_SNMPBASICS_HH
 #include <click/element.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 
 typedef Vector<uint32_t> SNMPOid;
 bool snmp_oid_eq(const SNMPOid &, const SNMPOid &, int);
@@ -12,16 +12,18 @@ bool operator>=(const SNMPOid &, const SNMPOid &);
 bool operator<(const SNMPOid &, const SNMPOid &);
 bool operator>(const SNMPOid &, const SNMPOid &);
 
-bool cp_snmp_identifier(const String &, String *);
-bool cp_snmp_oid(const String &, Element *context, SNMPOid *, ErrorHandler * = 0);
-bool cp_snmp_variable(const String &, Element *context, int *, ErrorHandler * = 0);
+struct SNMPIdentifierArg {
+    static bool parse(const String &str, String &result, const ArgContext &args = blank_args);
+};
 
-String cp_unparse_snmp_oid(const SNMPOid &);
+struct SNMPOidArg {
+    static bool parse(const String &str, SNMPOid &result, const ArgContext &args);
+    static String unparse(const SNMPOid &oid);
+};
 
-extern CpVaParseCmd
-  cpSNMPIdentifier,
-  cpSNMPOid,
-  cpSNMPVariable;
+struct SNMPVariableArg {
+    static bool parse(const String &str, int &result, const ArgContext &args);
+};
 
 uint32_t snmp_time_ticks_since(uint32_t);
 

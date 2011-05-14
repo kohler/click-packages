@@ -125,7 +125,7 @@ class SNMPOidInfo : public Element { public:
   int configure(Vector<String> &, ErrorHandler *);
   int add_info(const String &arg, const String &prefix, ErrorHandler *);
 
-  static SNMPOidInfo *find_element(Element *);
+  static SNMPOidInfo *find_element(const Element *context);
   bool query(const String &identifier, String context, SNMPOid *) const;
 
   static SNMPOidInfo *well_known_oids;

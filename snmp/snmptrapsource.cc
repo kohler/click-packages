@@ -90,9 +90,10 @@ SNMPTrapSource::add_trap(const String &str, ErrorHandler *errh)
   _names.push_back(name);
   _offsets.push_back(_snmp_vars.size());
   _trap_types.push_back(trap_type);
+  ArgContext args(this, errh);
   for (int j = first_var; j < words.size(); j++)
-    if (!cp_snmp_variable(words[j], this, &snmp_var, errh))
-      errh->error("'%s' is not an SNMP variable", words[j].c_str());
+    if (!SNMPVariableArg::parse(words[j], snmp_var, args))
+      errh->error("%<%s%> is not an SNMP variable", words[j].c_str());
     else
       _snmp_vars.push_back(snmp_var);
 
@@ -111,18 +112,18 @@ SNMPTrapSource::configure(Vector<String> &conf, ErrorHandler *errh)
   _ip_ttl = 255;
   _active = true;
 
-  if (cp_va_kparse(conf, this, errh,
-		   "UDP", 0, cpBool, &_udp_encap,
-		   "TTL", 0, cpByte, &_ip_ttl,
-		   "SRC", 0, cpIPAddress, &_src,
-		   "SPORT", 0, cpUDPPort, &_sport,
-		   "DST", 0, cpIPAddress, &_dst,
-		   "DPORT", 0, cpUDPPort, &_dport,
-		   "COMMUNITY", 0, cpString, &_community,
-		   "ENTERPRISE", cpkM, cpSNMPOid, &_enterprise,
-		   "TRAP", 0, cpArguments, &traps,
-		   "ACTIVE", 0, cpBool, &_active,
-		   cpEnd) < 0)
+  if (Args(conf, this, errh)
+      .read("UDP", _udp_encap)
+      .read("TTL", _ip_ttl)
+      .read("SRC", _src)
+      .read("SPORT", IPPortArg(IP_PROTO_UDP), _sport)
+      .read("DST", _dst)
+      .read("DPORT", IPPortArg(IP_PROTO_UDP), _dport)
+      .read("COMMUNITY", _community)
+      .read_m("ENTERPRISE", SNMPOidArg(), _enterprise)
+      .read_all_with("TRAP", AnyArg(), traps)
+      .read("ACTIVE", _active)
+      .complete() < 0)
     return -1;
 
   if (_udp_encap && (!_src || !_dst))
@@ -156,7 +157,7 @@ SNMPTrapSource::initialize(ErrorHandler *)
 void
 SNMPTrapSource::cleanup(CleanupStage)
 {
-  for (int i = _head; i != _tail; i = next_i(i))
+  for (unsigned i = _head; i != _tail; i = next_i(i))
     _queue[i]->kill();
 }
 
@@ -248,7 +249,7 @@ SNMPTrapSource::generate_trap(int trap)
     memcpy(p->data(), ber.data(), ber.length());
 
   // enqueue packet on Queue; drop packets at head
-  int next = next_i(_tail);
+  unsigned next = next_i(_tail);
   if (next == _head) {
     _drops++;
     p->kill();
@@ -293,7 +294,7 @@ SNMPTrapSource::read_handler(Element *e, void *thunk)
   SNMPTrapSource *ts = (SNMPTrapSource *)e;
   switch (reinterpret_cast<intptr_t>(thunk)) {
    case H_drops:	return String(ts->_drops.value());
-   case H_enterprise:	return cp_unparse_snmp_oid(ts->_enterprise);
+   case H_enterprise:	return SNMPOidArg::unparse(ts->_enterprise);
    case H_src:		return ts->_src.unparse();
    case H_dst:		return ts->_dst.unparse();
    case H_sport:	return String(ts->_sport);
