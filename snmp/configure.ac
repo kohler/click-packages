@@ -72,7 +72,7 @@ AC_ARG_ENABLE(linuxmodule, [  --enable-linuxmodule    enable Linux kernel driver
     [BUILD_LINUXMODULE=`onezero $enableval`],
     [BUILD_LINUXMODULE=$CLICK_HAVE_LINUXMODULE_DRIVER])
 AC_ARG_ENABLE(bsdmodule, [  --enable-bsdmodule      enable FreeBSD kernel driver
-                          [[Default drivers are those Click supports.]]], 
+                          [[Default drivers are those Click supports.]]],
     [BUILD_BSDMODULE=`onezero $enableval`],
     [BUILD_BSDMODULE=$CLICK_HAVE_BSDMODULE_DRIVER])
 

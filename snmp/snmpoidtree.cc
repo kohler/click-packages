@@ -72,10 +72,10 @@ SNMPOidTree::find_node(const SNMPOid &oid) const
 {
   if (_nnodes == 0 || oid.size() == 0)
     return 0;
-  
+
   Node *np = root_node();
   int pos = 0;
-  
+
   while (np && pos < oid.size()) {
     if (pos)
       np = np->child;
@@ -84,7 +84,7 @@ SNMPOidTree::find_node(const SNMPOid &oid) const
       np = np->sibling;
     pos++;
   }
-  
+
   return np;
 }
 
@@ -95,11 +95,11 @@ SNMPOidTree::find_prefix(const SNMPOid &oid, int *prefix_len) const
     if (prefix_len) *prefix_len = 0;
     return -1;
   }
-  
+
   Node *np = root_node();
   Node *prev = 0;
   int pos = 0;
-  
+
   while (pos < oid.size()) {
     if (pos)
       np = np->child;
@@ -125,10 +125,10 @@ SNMPOidTree::force_node(const SNMPOid &oid)
     return 0;
   if (_nnodes == 0 && !alloc_node(oid[0], 0, 0))
     return 0;
-  
+
   Node *np = root_node();
   int pos = 0;
-  
+
   while (pos < oid.size()) {
     if (pos) {
       if (np->child)
@@ -152,7 +152,7 @@ SNMPOidTree::force_node(const SNMPOid &oid)
       return 0;
     pos++;
   }
-  
+
   return np;
 }
 

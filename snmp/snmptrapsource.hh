@@ -140,7 +140,7 @@ class SNMPTrapSource : public Element, public Storage { public:
 
   SNMPTrapSource();
   ~SNMPTrapSource();
-  
+
   const char *class_name() const	{ return "SNMPTrapSource"; }
   const char *port_count() const	{ return PORTS_0_1; }
   void *cast(const char *);
@@ -153,13 +153,13 @@ class SNMPTrapSource : public Element, public Storage { public:
 
   int generate_trap(int);
   bool run_task(Task *);
-  
+
  private:
 
   static const int QSIZE = 15;
   Packet *_queue[QSIZE+1];
   uatomic32_t _drops;
-  
+
   IPAddress _src;
   IPAddress _dst;
   IPAddress _agent;
@@ -168,7 +168,7 @@ class SNMPTrapSource : public Element, public Storage { public:
   String _community;
   SNMPOid _enterprise;
   uatomic32_t _jiffies0;
-  
+
   bool _udp_encap;
   unsigned char _ip_ttl;
   uatomic32_t _id;
@@ -186,7 +186,7 @@ class SNMPTrapSource : public Element, public Storage { public:
   enum { H_drops, H_enterprise, H_src, H_dst, H_sport, H_dport, H_traps, H_active };
   static String read_handler(Element *, void *);
   static int write_handler(const String &, Element *, void *, ErrorHandler *);
-  
+
 };
 
 #endif

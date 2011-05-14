@@ -84,7 +84,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
 	return 0;
     }
   }
-  
+
   int prev_map = _map.get(new_identifier);
 
   if (prev_map >= 0) {
@@ -112,7 +112,7 @@ SNMPOidInfo::add_info(const String &arg, const String &prefix, ErrorHandler *err
     else
       _next[prev_map] = _context.size() - 1;
   }
-  
+
   return 0;
 }
 

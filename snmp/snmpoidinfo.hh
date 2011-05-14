@@ -61,7 +61,7 @@ identifier's OID must match the accumulated OID where they overlap.  For
 example, say the following definitions are in effect:
 
    iso        corresponds to   1
-   internet   corresponds to   1.3.6.1 
+   internet   corresponds to   1.3.6.1
 
 Then these OID representations are valid:
 
@@ -87,13 +87,13 @@ with SNMPOidInfo, and you may not redefine them in any scope.
   dod			1.3.6
   internet		1.3.6.1
   joint-iso-ccitt	2
-  
+
   mgmt			internet.2	1.3.6.1.2
   experimental		internet.3	1.3.6.1.3
   private		internet.4	1.3.6.1.4
   enterprises		internet.4.1	1.3.6.1.4.1
   snmpv2		internet.6	1.3.6.1.6
-  
+
   mib			mgmt.1		1.3.6.1.2.1
   mib-2			mgmt.1		1.3.6.1.2.1
   system		mib-2.1		1.3.6.1.2.1.1
@@ -112,7 +112,7 @@ with SNMPOidInfo, and you may not redefine them in any scope.
 SNMPVariableInfo */
 
 class SNMPOidInfo : public Element { public:
-  
+
   SNMPOidInfo();
   ~SNMPOidInfo();
 
@@ -129,7 +129,7 @@ class SNMPOidInfo : public Element { public:
   bool query(const String &identifier, String context, SNMPOid *) const;
 
   static SNMPOidInfo *well_known_oids;
-  
+
  private:
 
   HashTable<String, int> _map;
@@ -141,7 +141,7 @@ class SNMPOidInfo : public Element { public:
 
   void extract_tree_oid(int, SNMPOid *) const;
   int find_tree_ptr(const SNMPOid &oid);
-  
+
 };
 
 

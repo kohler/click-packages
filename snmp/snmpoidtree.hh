@@ -39,10 +39,10 @@ class SNMPOidTree { public:
 
   SNMPOidTree(const SNMPOidTree &);
   SNMPOidTree &operator=(const SNMPOidTree &);
-  
+
   Node *root_node() const;
   Node *alloc_node(uint32_t, Node *, Node *);
-  
+
 };
 
 inline SNMPOidTree::Node *

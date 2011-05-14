@@ -90,12 +90,12 @@ elements, for example.
 SNMPOidInfo, SNMPTrapSource */
 
 typedef int SNMPVariable;
-  
+
 class SNMPVariableInfo : public Element { public:
 
   SNMPVariableInfo();
   ~SNMPVariableInfo();
-  
+
   const char *class_name() const	{ return "SNMPVariableInfo"; }
 
   int configure_phase() const	{ return CONFIGURE_PHASE_SNMP_VARINFO; }
@@ -108,7 +108,7 @@ class SNMPVariableInfo : public Element { public:
   static bool unsigned_value(SNMPVariable, Element *, unsigned *);
   static bool encode_binding(SNMPVariable, SNMPBEREncoder &, Element *);
   static SNMPVariableInfo *find_element(Element *);
-  
+
  private:
 
   SNMPOidTree _tree;
@@ -122,7 +122,7 @@ class SNMPVariableInfo : public Element { public:
   int do_configure(Vector<String> &, bool, ErrorHandler *);
   int add_info(const String &, const String &prefix, ErrorHandler *, bool);
   int set_variable_handler(int, const String &, ErrorHandler *);
-  
+
 };
 
 inline int

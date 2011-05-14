@@ -110,7 +110,7 @@ SNMPVariableInfo::do_configure(Vector<String> &conf, bool full, ErrorHandler *er
   int last_slash = name().find_right('/');
   String prefix = name().substring(0, (last_slash >= 0 ? last_slash : 0));
   int before = errh->nerrors();
-  
+
   // put everything in the first SNMPVariableInfo
   SNMPVariableInfo *svi = find_element(this);
   if (!svi) {
@@ -218,11 +218,11 @@ SNMPVariableInfo::encode_binding(SNMPVariable var, SNMPBEREncoder &ber, Element 
      ber.encode_octet_string(str);
      break;
    }
-   
+
    case SNMP_TAG_NULL:
     ber.encode_null();
     break;
-    
+
    case SNMP_TAG_INTEGER: {
      int i;
      if (!cp_integer(cp_uncomment(str), &i))
@@ -238,7 +238,7 @@ SNMPVariableInfo::encode_binding(SNMPVariable var, SNMPBEREncoder &ber, Element 
      ber.encode_snmp_oid(oid);
      break;
    }
-   
+
    case SNMP_TAG_IPADDRESS: {
      IPAddress ipa;
      if (!cp_ip_address(cp_uncomment(str), &ipa, context))
@@ -246,7 +246,7 @@ SNMPVariableInfo::encode_binding(SNMPVariable var, SNMPBEREncoder &ber, Element 
      ber.encode_octet_string(SNMP_TAG_IPADDRESS, ipa.data(), 4);
      break;
    }
-   
+
    case SNMP_TAG_COUNTER:
    case SNMP_TAG_GAUGE:
    case SNMP_TAG_TIMETICKS: { /* XXX - TimeTicks */
