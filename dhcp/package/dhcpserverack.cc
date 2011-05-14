@@ -1,7 +1,7 @@
 /*
  * checkdhcpmsg.{cc,hh} -- respond to a dhcp request
  * Lih Chen
- * 
+ *
  * Copyright (c) 2004 Regents of the University of California
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -18,7 +18,7 @@
 #include <click/config.h>
 
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 
 #include "dhcpserverack.hh"
 #include "dhcp_common.hh"
@@ -37,29 +37,20 @@ DHCPServerACKorNAK::~DHCPServerACKorNAK()
 {
 }
 
-int 
-DHCPServerACKorNAK::initialize(ErrorHandler *)
-{
-	return 0;
-}
-
-int 
+int
 DHCPServerACKorNAK::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-	if(cp_va_kparse(conf, this, errh,
-			"LEASES", cpkP+cpkM, cpElement, &_leases,
-			cpEnd) < 0) {
-		return -1;
-	}
-	return 0;
+    return Args(conf, this, errh)
+	.read_mp("LEASES", ElementCastArg("DHCPLeaseTable"), _leases)
+	.complete();
 }
 
-void 
+void
 DHCPServerACKorNAK::push(int, Packet *p)
 {
 	click_ether *eh = (click_ether *) p->data();
-	dhcpMessage *req_msg 
-		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
+	dhcpMessage *req_msg
+		= (dhcpMessage*)(p->data() + sizeof(click_ether) +
 				 sizeof(click_udp) + sizeof(click_ip));
 	Packet *q = 0;
 	IPAddress ciaddr = IPAddress(req_msg->ciaddr);

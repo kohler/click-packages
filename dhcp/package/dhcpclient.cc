@@ -4,13 +4,13 @@
 #include "dhcpoptionutil.hh"
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/error.hh>
 #include <click/straccum.hh>
 #include <click/handlercall.hh>
 #include <clicknet/ether.h>
 CLICK_DECLS
-#define DEBUG 
+#define DEBUG
 
 DHCPClient::DHCPClient()
 //default parameter
@@ -45,15 +45,19 @@ DHCPClient::initialize(ErrorHandler *errh)
     return 0;
 }
 
-int 
+int
 DHCPClient::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    return cp_va_kparse(conf, this, errh,
-			"ETH", cpkP+cpkM, cpEthernetAddress, &_ethAddr,
-			"IP", 0, cpIPAddress, &_my_ip,
-			"IPADDR", 0, cpIPAddress, &_my_ip, // deprecated
-			"LEASE_CALL", 0, cpHandlerCallPtrWrite, &_lease_call,
-			cpEnd);
+    HandlerCall lease_call;
+    if (Args(conf, this, errh)
+	.read_mp("ETH", _ethAddr)
+	.read_mp("IP", _my_ip)
+	.read("IPADDR", _my_ip) // deprecated
+	.read("LEASE_CALL", HandlerCallArg(HandlerCall::writable), lease_call)
+	.complete() < 0)
+	return -1;
+    _lease_call = (lease_call ? new HandlerCall(lease_call) : 0);
+    return 0;
 }
 
 void DHCPClient::cleanup(CleanupStage)
@@ -493,17 +497,17 @@ int DHCPClient::write_handler(const String &data_in, Element *e, void *thunk, Er
 	  if (!cp_bool(arg, &lease_active))
 	      return errh->error("syntax error in lease format");
 	  else if (!lease_active
-		   && cp_va_space_kparse(data, dc, errh,
-					 "IP", cpkP, cpIPAddress, &my_ip,
-					 cpEnd) < 0)
+		   && Args(dc, errh).push_back_words(data)
+			.read_p("IP", my_ip)
+			.complete() < 0)
 	      return -1;
 	  else if (lease_active
-		   && cp_va_space_kparse(data, dc, errh,
-					 "IP", cpkP+cpkM, cpIPAddress, &my_ip,
-					 "SERVERIP", cpkP+cpkM, cpIPAddress, &server_ip,
-					 "START", cpkP+cpkM, cpSeconds, &start_lease,
-					 "END", cpkP+cpkM, cpSeconds, &end_lease,
-					 cpEnd) < 0)
+		   && Args(dc, errh).push_back_words(data)
+		   .read_mp("IP", my_ip)
+		   .read_mp("SERVERIP", server_ip)
+		   .read_mp("START", SecondsArg(), start_lease)
+		   .read_mp("END", SecondsArg(), end_lease)
+		   .complete() < 0)
 	      return -1;
 	  if (!lease_active) {
 	      dc->_lease_duration = 0;

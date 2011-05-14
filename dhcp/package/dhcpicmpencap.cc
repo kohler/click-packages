@@ -4,7 +4,7 @@
 #include "dhcpicmpencap.hh"
 
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
 #include <clicknet/icmp.h>
@@ -19,24 +19,25 @@ DHCP_ICMP_Encap::DHCP_ICMP_Encap()
 
 DHCP_ICMP_Encap::~DHCP_ICMP_Encap()
 {
-  delete _src_ip_h;
-  delete _dst_ip_h;
+    delete _src_ip_h;
+    delete _dst_ip_h;
 }
 
 int
 DHCP_ICMP_Encap::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if( cp_va_kparse(conf, this, errh,
-		   "SRC_CALL", cpkP+cpkM, cpHandlerCallPtrRead, &_src_ip_h,
-		   "DST_CALL", cpkP+cpkM, cpHandlerCallPtrRead, &_dst_ip_h,
-		   cpEnd ) < 0 )
-  {
-    return -1;
-  }
-  return 0;
+    HandlerCall srch, dsth;
+    if (Args(conf, this, errh)
+	.read_mp("SRC_CALL", HandlerCallArg(HandlerCall::readable), srch)
+	.read_mp("DST_CALL", HandlerCallArg(HandlerCall::readable), dsth)
+	.complete() < 0)
+	return -1;
+    _src_ip_h = new HandlerCall(srch);
+    _dst_ip_h = new HandlerCall(dsth);
+    return 0;
 }
 
-int 
+int
 DHCP_ICMP_Encap::initialize(ErrorHandler *errh)
 {
   if( _src_ip_h->initialize_read(this, errh) < 0 )

@@ -1,7 +1,7 @@
 /*
  * checkdhcpmsg.{cc,hh} -- respond to a dhcp discover
  * Lih Chen
- * 
+ *
  * Copyright (c) 2004 Regents of the University of California
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -18,7 +18,7 @@
 #include <click/config.h>
 
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ip.h>
 #include <clicknet/ether.h>
 #include <clicknet/udp.h>
@@ -42,16 +42,13 @@ DHCPServerOffer::~DHCPServerOffer()
 int
 DHCPServerOffer::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  if (cp_va_kparse(conf, this, errh,
-		   "LEASES", cpkP+cpkM, cpElement, &_leases,
-		   cpEnd) < 0 ) {
-	  return -1;
-  }
-  return 0;
+    return Args(conf, this, errh)
+	.read_mp("LEASES", ElementCastArg("DHCPLeaseTable"), _leases)
+	.complete();
 }
 
 
-void 
+void
 DHCPServerOffer::push(int, Packet *p)
 {
 

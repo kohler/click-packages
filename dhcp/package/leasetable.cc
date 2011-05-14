@@ -17,7 +17,7 @@
 
 #include <click/config.h>
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
@@ -35,14 +35,13 @@ DHCPLeaseTable::~DHCPLeaseTable()
 int
 DHCPLeaseTable::configure( Vector<String> &conf, ErrorHandler *errh )
 {
-  if (cp_va_kparse(conf, this, errh,
-		   "ETH", cpkP+cpkM, cpEthernetAddress, &_eth, 
-		   "IP", cpkP+cpkM, cpIPAddress, &_ip,
-		   "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
-		   cpEnd) < 0 ) {
-	  return -1;
-  }
-  return 0;
+    if (Args(conf, this, errh)
+	.read_mp("ETH", _eth)
+	.read_mp("IP", _ip)
+	.read_mp("MASK", _subnet)
+	.complete() < 0)
+	return -1;
+    return 0;
 }
 
 void *

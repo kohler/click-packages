@@ -1,7 +1,7 @@
 #include <click/config.h>
 
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <clicknet/ether.h>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
@@ -21,29 +21,19 @@ DHCPServerRelease::~DHCPServerRelease()
 int
 DHCPServerRelease::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-	if (cp_va_kparse(conf, this, errh,
-			 "LEASES", cpkP+cpkM, cpElement, &_leases,
-			 cpEnd) < 0 ) {
-		return -1;
-	}
-	return 0;
-}
-
-
-int 
-DHCPServerRelease::initialize(ErrorHandler *)
-{
-  return 0;
+    return Args(conf, this, errh)
+	.read_mp("LEASES", ElementCastArg("DHCPLeaseTable"), _leases)
+	.complete();
 }
 
 void
 DHCPServerRelease::push(int, Packet *p)
 {
-	dhcpMessage *release_msg 
-		= (dhcpMessage*)(p->data() + sizeof(click_ether) + 
+	dhcpMessage *release_msg
+		= (dhcpMessage*)(p->data() + sizeof(click_ether) +
 				 sizeof(click_udp) + sizeof(click_ip));
 	EtherAddress eth(release_msg->chaddr);
-	
+
 	const uint8_t *opt = DHCPOptionUtil::fetch(p, DHO_DHCP_SERVER_IDENTIFIER, 4);
 	IPAddress incoming_server_id(opt);
 	IPAddress server_id = _leases->_ip;

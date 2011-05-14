@@ -17,7 +17,7 @@ DHCPClient(ETH [, I<keywords>])
 
 The core of the DHCP Client. The state machine resides in this element.
 
-=d 
+=d
 
 DHCPClient has at least 2 outgoing ports. Port 0 is designated for all
 broadcast packets. Port 1 is designated for all unicast packets. Invalid
@@ -81,22 +81,22 @@ class DHCPClient : public Element
 public:
     DHCPClient();
     ~DHCPClient();
-  
+
     const char *class_name() const { return "DHCPClient"; }
     const char *port_count() const { return "1/2-3"; }
     const char *processing() const { return PUSH; }
-  
+
     void push(int port, Packet *p);
-  
+
     int initialize(ErrorHandler *);
     void add_handlers();
     int configure(Vector<String> &conf, ErrorHandler *errh);
     void cleanup(CleanupStage);
 
     void run_timer(Timer *);
-  
+
     String unparse_lease() const;
-  
+
   void enter_init_state();
   void enter_init_reboot_state();
   void enter_rebooting_state();
@@ -107,7 +107,7 @@ public:
   void send_dhcp_lease();
 
 private:
-  
+
   Packet* make_discovery();
   Packet* make_request(Packet *p);
   Packet* make_request_with_ciaddr();
@@ -139,11 +139,11 @@ private:
     Timer _timers[NTIMERS];
 
     int32_t _curr_backoff;
-  
-    dhcp_client_state_t _state; 
+
+    dhcp_client_state_t _state;
     uint32_t _curr_xid;
-  
-    // lease info 
+
+    // lease info
     EtherAddress _ethAddr;
     IPAddress _my_ip;
     IPAddress _server_ip;
@@ -158,13 +158,13 @@ private:
     Packet *_best_offer;
 
     HandlerCall *_lease_call;
-    
+
     WritablePacket *make_bootrequest(int mtype, uint32_t ciaddr, uint32_t xid);
     void choose_offer();
     void save_lease(Packet *p);
     static String read_handler(Element *, void *);
     static int write_handler(const String &, Element *, void *, ErrorHandler *);
-    
+
 };
 
 CLICK_ENDDECLS

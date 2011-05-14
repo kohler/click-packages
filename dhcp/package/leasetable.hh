@@ -37,14 +37,14 @@ class Lease {
  */
 class DHCPLeaseTable : public Element {
 public:
-  DHCPLeaseTable();  
+  DHCPLeaseTable();
   ~DHCPLeaseTable();
   const char* class_name() const { return "DHCPLeaseTable"; }
   void* cast(const char*);
   int configure( Vector<String> &conf, ErrorHandler *errh );
   virtual Lease *lookup(IPAddress ip);
   virtual Lease *rev_lookup(EtherAddress eth);
-  
+
   virtual void remove(EtherAddress eth);
   virtual Lease *new_lease_any(EtherAddress) {
 	click_chatter("%{element}::%s: %s\n", this, __FILE__, __func__);
@@ -69,7 +69,7 @@ public:
 
   static String read_handler(Element *e, void *thunk);
   void add_handlers();
-  
+
 };
 
 CLICK_ENDDECLS

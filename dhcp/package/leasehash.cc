@@ -17,7 +17,7 @@
 
 #include <click/config.h>
 #include <click/error.hh>
-#include <click/confparse.hh>
+#include <click/args.hh>
 #include <click/etheraddress.hh>
 #include <clicknet/ip.h>
 #include <clicknet/udp.h>
@@ -79,14 +79,13 @@ LeaseHash::new_lease(EtherAddress eth, IPAddress)
 int
 LeaseHash::configure( Vector<String> &conf, ErrorHandler *errh )
 {
-	if (cp_va_kparse(conf, this, errh,
-			 "ETH", cpkP+cpkM, cpEthernetAddress, &_eth, 
-			 "MASK", cpkP+cpkM, cpIPAddress, &_subnet,
-			 cpEnd) < 0) {
-		return -1;
-	}
-	_ip = hash(_eth);
-	return 0;
+    if (Args(conf, this, errh)
+	.read_mp("ETH", _eth)
+	.read_mp("MASK", _subnet)
+	.complete() < 0)
+	return -1;
+    _ip = hash(_eth);
+    return 0;
 }
 
 
