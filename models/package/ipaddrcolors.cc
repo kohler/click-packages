@@ -78,12 +78,12 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
 
     if (n->color != NULLCOLOR && n->child[0] && nnz_ptr)
 	(*nnz_ptr)++;
-    
+
     if (n->child[0] && n->child[1]) {
 	int swivel = ffs_msb(n->child[0]->aggregate ^ n->child[1]->aggregate);
 	if (swivel <= last_swivel)
 	    return errh->error("%x: bad swivel %d <= %d (%x-%x)", n->aggregate, swivel, last_swivel, n->child[0]->aggregate, n->child[1]->aggregate);
-	
+
 	uint32_t mask = (swivel == 1 ? 0 : 0xFFFFFFFFU << (33 - swivel));
 	if ((n->child[0]->aggregate & mask) != (n->aggregate & mask))
 	    return errh->error("%x: left child doesn't match upper bits (swivel %d)", n->aggregate, swivel);
@@ -110,9 +110,9 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
 	color_t subcolor = (n->color == NULLCOLOR ? above_color : n->color);
 	(void) node_ok(n->child[0], swivel, nnz_ptr, subcolor, errh);
 	(void) node_ok(n->child[1], swivel, nnz_ptr, subcolor, errh);
-	
+
 	return 0;
-	
+
     } else if (n->child[0] || n->child[1])
 	return errh->error("%x: only one live child", n->aggregate);
 
@@ -122,7 +122,7 @@ IPAddrColors::node_ok(Node *n, int last_swivel, uint32_t *nnz_ptr,
     else if (n->color <= MAXCOLOR && n->color < _n_fixed_colors
 	     && above_color < _n_fixed_colors && n->color != above_color)
 	return errh->error("%x: an ancestor said children colored %d, but this child colored %d", n->aggregate, above_color, n->color);
-    
+
     else
 	return 0;
 }
@@ -147,7 +147,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
      * algo: create two nodes, the two peers.  leave orig node as
      * the parent of the two new ones.
      */
-    
+
     Node *down[2];
     if (!(down[0] = new_node()))
 	return 0;
@@ -162,7 +162,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
     int bitvalue;
     // mask masks off all bits before swivel
     uint32_t mask;
-    
+
     // We might be asked to make a peer for this node even for the same
     // aggregate if F_COLORSUBTREE is true. Requires rigamarole.
     if (swivel == 0) {
@@ -174,7 +174,7 @@ IPAddrColors::make_peer(uint32_t a, Node *n)
 	bitvalue = (a >> (32 - swivel)) & 1;
 	mask = (swivel == 1 ? 0 : (0xFFFFFFFFU << (33 - swivel)));
     }
-    
+
     down[bitvalue]->aggregate = a;
     down[bitvalue]->color = NULLCOLOR;
     down[bitvalue]->flags = 0;
@@ -206,7 +206,7 @@ IPAddrColors::find_node(uint32_t a)
     // straight outta tcpdpriv
     Node *n = _root;
     color_t parent_color = NULLCOLOR;
-    
+
     while (n) {
 	if (n->flags & F_COLORSUBTREE)
 	    parent_color = n->color;
@@ -272,7 +272,7 @@ IPAddrColors::set_color_subtree(uint32_t a, int prefix, color_t color)
     // split the tree properly
     if (prefix && (!find_node(a) || !find_node(a ^ (1U << (32 - prefix)))))
 	return -1;
-	
+
     uint32_t mask = (prefix == 0 ? 0 : 0xFFFFFFFFU << (32 - prefix));
     assert((a & ~mask) == 0);
 
@@ -334,7 +334,7 @@ IPAddrColors::clear(ErrorHandler *errh)
 {
     if (_root)
 	node_clear(_root);
-    
+
     if (!(_root = new_node())) {
 	if (errh)
 	    errh->error("out of memory!");
@@ -344,7 +344,7 @@ IPAddrColors::clear(ErrorHandler *errh)
     _root->color = NULLCOLOR;
     _root->flags = 0;
     _root->child[0] = _root->child[1] = 0;
-    
+
     _next_color = 0;
     _color_mapping.resize(0);
     _compacted = true;
@@ -370,7 +370,7 @@ IPAddrColors::compact_colors()
     // do nothing if already compact
     if (_compacted)
 	return;
-    
+
     // resolve color pointer chains
     for (color_t c = 0; c < _next_color; c++) {
 	color_t cc = c;
@@ -533,7 +533,7 @@ IPAddrColors::write_file(String where, bool binary, ErrorHandler *errh)
 {
     compact_colors();
     ok(errh);
-    
+
     FILE *f;
     if (where == "-")
 	f = stdout;
@@ -552,7 +552,7 @@ IPAddrColors::write_file(String where, bool binary, ErrorHandler *errh)
 	binary = false;
 #endif
     }
-    
+
     uint32_t buf[1024];
     int pos = 0;
     write_nodes(_root, f, binary, buf, pos, 1024, 0, errh);
@@ -622,7 +622,7 @@ IPAddrColors::read_file(FILE *f, ErrorHandler *errh)
     // initialize if necessary
     if (_blocks.size() == 0 && clear(errh) < 0)
 	return -1;
-    
+
     char s[BUFSIZ];
     uint32_t u0, u1, u2, u3, prefix, value;
 

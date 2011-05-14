@@ -81,7 +81,7 @@ this:
 
    <?xml version='1.0' standalone='yes'?>
    <trace file='<stdin>'>
-   
+
    <flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909' duration='131.647561' filepos='24'>
      <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' mtu='430' sentsackok='yes'>
        <multiq_capacity type='ack' scale='25.3' time='1313.299' bandwidth='9.454' commonbandwidth='10.000' commontype='10bT' bandwidth52='0.317' commonbandwidth52='0.317' commontype52='?' />
@@ -92,14 +92,14 @@ this:
        <multiq_capacity type='data' scale='74.0' time='691.101' bandwidth='17.364' commonbandwidth='17.364' commontype='?' bandwidth52='0.602' commonbandwidth52='0.602' commontype52='?' />
      </stream>
    </flow>
-   
+
    <flow aggregate='2' src='203.167.213.81' sport='23568' dst='192.150.187.11' dport='80' begin='1028686953.640701' duration='45.544054' filepos='346485'>
      <stream dir='0' ndata='3' nack='63' beginseq='3453338283' seqlen='486' mtu='524' sentsackok='yes'>
      </stream>
      <stream dir='1' ndata='110' nack='1' beginseq='3034663568' seqlen='159102' mtu='1500'>
      </stream>
    </flow>
-   
+
    </trace>
 
 The second flow has no C<E<lt>multiq_capacityE<gt>> annotations because it was
@@ -200,14 +200,14 @@ class MultiQ : public Element { public:
     double GAP_SIGNIFICANCE;
     double GAP_MIN_POINTS;
     double MODES_SIMILAR;
-    
+
     class Histogram;
-    
+
   private:
 
     Vector<double> _thru_interarrivals;
     double _thru_last;
-    
+
     enum { NBANDWIDTH_SPEC = 10 };
     static const BandwidthSpec bandwidth_spec[NBANDWIDTH_SPEC];
 
@@ -215,12 +215,12 @@ class MultiQ : public Element { public:
     double adjust_max_scale(MultiQType, const double *begin, const double *end, double tallest_mode_min_scale) const;
     void create_capacities(MultiQType, const double *begin, const double *end, Vector<Capacity> &) const;
     void filter_capacities(Vector<Capacity> &) const;
-    
+
     bool significant_flow(const TCPCollector::Stream* stream, const TCPCollector::Conn* conn) const;
 
     static String read_capacities(Element *, void *);
     static void multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
-    
+
 };
 
 class MultiQ::Histogram { public:
@@ -234,7 +234,7 @@ class MultiQ::Histogram { public:
 
     int size() const			{ return _count.size(); }
     int nitems() const			{ return _nitems; }
-    
+
     double pos(int i) const		{ return _left + i*_bin_width; }
     double pos(double i) const		{ return _left + i*_bin_width; }
     // For results identical to the current multiQ, set mode_pos(i) == pos(i)
@@ -243,16 +243,16 @@ class MultiQ::Histogram { public:
     inline double prob(int bin) const;
     inline double kde_prob(int bin) const;
     inline double kde_sig_prob(int bin) const;
-    
+
   private:
 
     double _left;
     double _bin_width;
     double _kde_width;
-    
+
     Vector<count_t> _count;
     int _nitems;
-    
+
 };
 
 inline double

@@ -38,10 +38,10 @@ is false.
 InferIPAddrColors, TestIPAddrColors */
 
 class IPAddrColorPaint : public Element, public IPAddrColors { public:
-  
+
     IPAddrColorPaint();
     ~IPAddrColorPaint();
-  
+
     const char *class_name() const	{ return "IPAddrColorPaint"; }
     const char *port_count() const	{ return "1/1-2"; }
     const char *processing() const	{ return "a/ah"; }

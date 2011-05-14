@@ -57,10 +57,10 @@ bad-color-pair errors, and large colors (nonprimary colors).
 InferIPAddrColors, IPAddrColorPaint */
 
 class TestIPAddrColors : public Element, public IPAddrColors { public:
-  
+
     TestIPAddrColors();
     ~TestIPAddrColors();
-  
+
     const char *class_name() const	{ return "TestIPAddrColors"; }
     const char *port_count() const	{ return PORTS_1_1; }
     const char *processing() const	{ return AGNOSTIC; }
@@ -84,7 +84,7 @@ class TestIPAddrColors : public Element, public IPAddrColors { public:
     bool _verbose;
 
     static String read_handler(Element *, void *);
-    
+
 };
 
 #endif

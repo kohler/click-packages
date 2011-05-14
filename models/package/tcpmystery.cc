@@ -86,7 +86,7 @@ TCPMystery::clear_mypkts(Stream* s, Conn* c)
 
 
 // Want to develop ack latencies for exactly those packets where the ack
-// latency is definitely correct. 
+// latency is definitely correct.
 
 void
 TCPMystery::find_true_caused_acks(Stream* datas, Conn* c)
@@ -95,7 +95,7 @@ TCPMystery::find_true_caused_acks(Stream* datas, Conn* c)
 	return;
     mystream(datas, c)->flags |= MyStream::F_TRUEACKCAUSATION;
     clear_mypkts(datas, c);
-    
+
     Stream* acks = c->ack_stream(datas);
     Pkt* ackk = acks->pkt_head;
 
@@ -135,7 +135,7 @@ TCPMystery::calculate_semirtt(Stream* s, Conn* c)
 	return;
     ms->flags |= MyStream::F_SEMIRTT;
     find_true_caused_acks(s, c);
-    
+
     ms->semirtt_syn = 0;
     ms->semirtt_min = DBL_MAX;
     ms->semirtt_max = 0;
@@ -168,7 +168,7 @@ TCPMystery::find_delivered(Stream* datas, Conn* c)
 	return;
     mystream(datas, c)->flags |= MyStream::F_DELIVERED;
     find_true_caused_acks(datas, c);
-    
+
     Stream* acks = c->ack_stream(datas);
 
     Pkt* k_time = datas->pkt_head;
@@ -180,7 +180,7 @@ TCPMystery::find_delivered(Stream* datas, Conn* c)
 	// skip duplicate acks on the first pass
 	if (ackk->ack == last_ack && !ackk->sack)
 	    continue;
-	
+
 	// The region of interest is bounded on the right by k_time, the first
 	// packet received at or after ackk
 	while (k_time->next && k_time->next->timestamp <= ackk->timestamp)
@@ -215,7 +215,7 @@ TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCol
     //if (have_ack_latency)
     //    fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     fprintf(f, ">\n");
-    
+
     for (Pkt* k = s->pkt_head; k; k = k->next) {
 	MyPkt* mk = my->mypkt(k);
 	if (Pkt* ackk = mk->caused_ack) {
@@ -223,7 +223,7 @@ TCPMystery::mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* s, TCPCol
 	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp.sec(), k->timestamp.subsec(), ackk->max_ack(), latency.sec(), latency.subsec());
 	}
     }
-    
+
     fprintf(f, "    </%s>\n", tagname.c_str());
 }
 
@@ -270,7 +270,7 @@ TCPMystery::mystery_undelivered_xmltag(FILE* f, TCPCollector::Stream* s, TCPColl
     my->find_delivered(s, c);
 
     fprintf(f, "    <%s", tagname.c_str());
-    
+
     bool any = false;
     for (Pkt* k = s->pkt_head; k; k = k->next)
 	if (k->seq != k->end_seq && !(my->mypkt(k)->flags & MyPkt::F_DELIVERED)) {
@@ -313,12 +313,12 @@ void
 TCPMystery::find_loss_events(Stream* s, Conn* c)
 {
     for (Pkt* k = s->pkt_head; k; k = k->next) {
-	
+
 	MyPkt* mk = mypkt(k);
 	mk->flags = 0;
 	mk->caused_ack = 0;
 	mk->rexmit = 0;
-	
+
 	// skip pure acks, packets with new data, and network duplicates
 	if (k->seq == k->end_seq
 	    || (k->flags & (Pkt::F_NEW | Pkt::F_DUPLICATE)))
@@ -343,7 +343,7 @@ TCPMystery::find_loss_events(Stream* s, Conn* c)
 		    mk->rexmit = x;
 		}
 	    }
-	    
+
 	} else {
 	    // If !F_DUPDATA, then the data in this packet was not seen
 	    // earlier in the connection.  But it's not F_NEW, so newer data
@@ -369,7 +369,7 @@ TCPMystery::find_loss_events(Stream* s, Conn* c)
 		}
 	    }
 	}
-	
+
 	// we have identified retransmissions already.
 	if (mk->flags & MyPkt::F_REXMIT) {
 	    // ignore retransmission of something from an old loss event
@@ -452,7 +452,7 @@ TCPMystery::MStreamInfo::update_counters(const Pkt *np, const click_tcp *tcph)
     total_seq += np->end_seq - np->seq;
     if (np->end_seq - np->seq == 0)
 	ack_packets++;
-    
+
     // SYN processing
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != np->seq)
@@ -488,7 +488,7 @@ TCPMystery::MStreamInfo::options(Pkt *, const click_tcp *tcph, int transport_len
 {
     // option processing; ignore timestamp
     int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
-    if (hlen > 20 
+    if (hlen > 20
 	&& (hlen != 32
 	    || *(reinterpret_cast<const uint32_t *>(tcph + 1)) != htonl(0x0101080A))) {
 	const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
@@ -523,12 +523,12 @@ TCPMystery::MStreamInfo::find_acked_pkt(const Pkt *ackk, Pkt *search_hint) const
     // part of a reordered block
 
     tcp_seq_t ack = ackk->ack;
-    
+
     // move search_hint forward to right edge
     while (search_hint && !(SEQ_GEQ(search_hint->seq, ack)
 			    && !(search_hint->flags & Pkt::F_NONORDERED)))
 	search_hint = search_hint->next;
-    
+
     // move backwards to left edge
     Pkt *possible = 0;
     int possible_goodness = -1;
@@ -623,7 +623,7 @@ TCPMystery::MStreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_laten
 	refind_min_ack_latency = true;
 	ackwindow_begin = cur_ack;
     }
-    
+
     while (ackwindow_begin
 	   && (cur_ack->timestamp - ackwindow_begin->timestamp).sec() > 5) {
 	if (ackwindow_begin->cumack_pkt
@@ -633,10 +633,10 @@ TCPMystery::MStreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_laten
     }
 
     if (refind_min_ack_latency) {
-	running_min_ack_latency.set_sec(10000);	
+	running_min_ack_latency.set_sec(10000);
 	ackwindow_end = ackwindow_begin;
     }
-    
+
     while (ackwindow_end
 	   && (ackwindow_end->timestamp - cur_ack->timestamp).sec() < 5) {
 	if (ackwindow_end->cumack_pkt
@@ -684,7 +684,7 @@ TCPMystery::MStreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_se
 	if (numacksexpected > numacks)
 	    k = k->next;
     }
-    
+
     // Only set k_cumack to the new value if acks were not reordered.
     if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
 	k_cumack = k;
@@ -697,7 +697,7 @@ TCPMystery::MStreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_se
     if (k && ackk->prev && SEQ_GT(ackk->ack, ackk->prev->ack)
 	&& SEQ_GT(k->end_seq, ackk->ack))
 	k = k->next;
-    
+
     // Handle reordering: skip packets that are in a hole.
     if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE)) {
 	// Don't shift forward if the next ack acks this packet (that would be
@@ -727,7 +727,7 @@ TCPMystery::MStreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp_se
 	if (new_k && ackk->timestamp - new_k->timestamp <= 0.5 * (ackk->timestamp - k->timestamp) && SEQ_LEQ(new_k->end_seq, k->end_seq))
 	    k = new_k;
     }
-    
+
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
@@ -747,10 +747,10 @@ bool
 TCPMystery::MStreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const
 {
     //click_chatter("mark_delivered at %{timestamp}: %u  CA %{timestamp}:%u  TH %{timestamp}:%u  %{timestamp}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
-    
+
     // update current RTT
     Timestamp cur_min_ack_latency = min_ack_latency;
-    
+
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
 	k_time = k_time->next;
@@ -781,7 +781,7 @@ TCPMystery::MStreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k
 			&& SEQ_LEQ(kk->seq, k->seq)
 			&& SEQ_GEQ(kk->end_seq, k->end_seq))
 			goto not_delivered;
-		
+
 		// otherwise, this puppy was delivered
 		k->flags |= Pkt::F_DELIVERED;
 
@@ -816,7 +816,7 @@ TCPMystery::MStreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k
 #endif
 	}
     }
-    
+
     // finally, move k_cumack forward
     if (!k_cumack)
 	k_cumack = pkt_head;
@@ -946,7 +946,7 @@ TCPMystery::MStreamInfo::output_loss(ConnInfo *conn, TCPMystery *cf)
     if (!loss_trail || loss_trail->n == LossBlock::CAPACITY)
 	loss_trail = new LossBlock(loss_trail);
     loss_trail->loss[loss_trail->n++] = loss;
-    
+
     // clear loss
     loss.type = NO_LOSS;
 }
@@ -961,7 +961,7 @@ TCPMystery::MConnInfo::MConnInfo()
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     _flowid = IPFlowID(p);
-    
+
     // set initial timestamp
     if (p->timestamp_anno())
 	_init_time = p->timestamp_anno() - Timestamp::epsilon();
@@ -1040,9 +1040,9 @@ TCPMystery::mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, 
 	fprintf(f, " />\n");
 	return;
     }
-    
+
     fprintf(f, ">\n");
-    
+
     for (Pkt *k = stream.pkt_head; k; k = k->next) {
 	MPkt *mk = my->mpkt(k);
 	MPkt *next_mk = (k->next ? my->mpkt(k->next) : 0);
@@ -1051,7 +1051,7 @@ TCPMystery::mystery_reordered_xmltag(FILE *f, TCPCollector::StreamInfo &stream, 
 		&& mk->caused_ack->timestamp > next_mk->caused_ack->timestamp))
 	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
     }
-    
+
     fprintf(f, "    </%s>\n", tagname.c_str());
 }
 
@@ -1070,15 +1070,15 @@ TCPMystery::mystery_undelivered_xmltag(FILE *f, TCPCollector::StreamInfo &stream
 	fprintf(f, " />\n");
 	return;
     }
-    
+
     fprintf(f, ">\n");
-    
+
     for (Pkt *k = stream.pkt_head; k; k = k->next) {
 	MPkt *mk = my->mpkt(k);
 	if (!(mk->flags & MPkt::F_DELIVERED) && k->seq != k->end_seq)
 	    fprintf(f, PRITIMESTAMP " %u\n", k->timestamp.sec(), k->timestamp.subsec(), k->end_seq);
     }
-    
+
     fprintf(f, "    </%s>\n", tagname.c_str());
 }
 
@@ -1122,7 +1122,7 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
-	
+
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
@@ -1136,10 +1136,10 @@ TCPMystery::MConnInfo::kill(TCPMystery *cf)
 	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
 	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt.sec(), min_rtt.subsec());
 	}
-	
+
 	_stream[0].write_xml(this, f, cf->write_flags());
 	_stream[1].write_xml(this, f, cf->write_flags());
-	
+
 	fprintf(f, "</flow>\n");
     }
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
@@ -1153,7 +1153,7 @@ TCPMystery::MConnInfo::create_pkt(const Packet *p, TCPMystery *parent)
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
-    
+
     // set TCP sequence number offsets on first Pkt
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
@@ -1226,7 +1226,7 @@ TCPMystery::MConnInfo::post_update_state(const Packet *p, Pkt *k, TCPMystery *cf
 	    for (Pkt *prev = k->prev; prev && SEQ_LT(k->ack, prev->ack); prev = prev->prev)
 		prev->flags |= Pkt::F_ACK_NONORDERED | Pkt::F_ACK_REORDER;
 	}
-	
+
 	// find acked packet
 	if (!k->prev || k->ack != k->prev->ack)
 	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k, ack_stream.acked_pkt_hint)) {
@@ -1237,7 +1237,7 @@ TCPMystery::MConnInfo::post_update_state(const Packet *p, Pkt *k, TCPMystery *cf
 		    ack_stream.min_ack_latency = latency;
 		}
 	}
-	    
+
 	// check whether this acknowledges something in the last loss event;
 	// if so, we should output the loss event
 	if (ack_stream.loss.type != NO_LOSS
@@ -1268,7 +1268,7 @@ TCPMystery::MConnInfo::handle_packet(const Packet *p, TCPMystery *parent)
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
     _clean = false;
-    
+
     // update timestamp and sequence number offsets at beginning of connection
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
@@ -1297,7 +1297,7 @@ TCPMystery::~TCPMystery()
     delete _filepos_h;
 }
 
-int 
+int
 TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
@@ -1318,13 +1318,13 @@ TCPMystery::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "IP_ID", 0, cpBool, &ip_id,
 		     cpEnd) < 0)
         return -1;
-    
+
     AggregateIPFlows *af = 0;
     if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
 	return errh->error("NOTIFIER must be an AggregateIPFlows element");
     else if (af)
 	af->add_listener(this);
-    
+
     if (tipfd_element && !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("FLOWDUMPS must be a ToIPFlowDumps element");
     if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
@@ -1413,7 +1413,7 @@ TCPMystery::save(int, uint32_t aggregate, int direction, const String &filename,
     ConnInfo *loss = _conn_map.find(aggregate);
     if (!loss)
 	return errh->error("no '%u' aggregate", aggregate);
-    
+
     FILE *f;
     if (!filename || filename == "-")
 	f = stdout;

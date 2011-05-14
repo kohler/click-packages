@@ -50,7 +50,7 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     if (np->seq == np->end_seq)
 	// NB pure acks will not include IP ID check for network duplicates
 	return;
-    
+
     // exit if there is any new data
     if (SEQ_GT(np->end_seq, max_seq)) {
 	np->flags |= Pkt::F_NEW;
@@ -67,7 +67,7 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
     for (x = np->prev; x; x = x->prev) {
 
 	sequence++;
-	
+
 	if ((x->flags & Pkt::F_NEW)
 	    && SEQ_LEQ(x->end_seq, np->seq)) {
 	    // 'x' is the first packet whose newest data is as old or older
@@ -87,16 +87,16 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 		    np->flags |= Pkt::F_REXMIT;
 		}
 	    }
-	    
+
 	    break;
 
 	} else if (np->seq == np->end_seq) {
 	    // ignore pure acks
-	
+
 	} else if (np->seq == x->seq) {
 	    // this packet overlaps with our data
 	    np->flags |= Pkt::F_REXMIT;
-	    
+
 	    if (np->ip_id
 		&& np->ip_id == x->ip_id
 		&& np->end_seq == x->end_seq) {
@@ -118,7 +118,7 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    }
 	    if (!rexmit)
 		rexmit = x;
-	    
+
 	} else if ((SEQ_LEQ(x->seq, np->seq) && SEQ_LT(np->seq, x->end_seq))
 		   || (SEQ_LT(x->seq, np->end_seq) && SEQ_LEQ(np->end_seq, x->end_seq))) {
 	    // partial retransmission. There might be a more relevant
@@ -127,7 +127,7 @@ CalculateFlows::StreamInfo::categorize(Pkt *np, ConnInfo *conn, CalculateFlows *
 	    rexmit = x;
 	}
     }
-    
+
     // we have identified retransmissions already.
     if (np->flags & Pkt::F_REXMIT) {
 	// ignore retransmission of something from an old loss event
@@ -184,7 +184,7 @@ CalculateFlows::StreamInfo::update_counters(const Pkt *np, const click_tcp *tcph
     total_seq += np->end_seq - np->seq;
     if (np->end_seq - np->seq == 0)
 	ack_packets++;
-    
+
     // SYN processing
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != np->seq)
@@ -220,7 +220,7 @@ CalculateFlows::StreamInfo::options(Pkt *, const click_tcp *tcph, int transport_
 {
     // option processing; ignore timestamp
     int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
-    if (hlen > 20 
+    if (hlen > 20
 	&& (hlen != 32
 	    || *(reinterpret_cast<const uint32_t *>(tcph + 1)) != htonl(0x0101080A))) {
 	const uint8_t *oa = reinterpret_cast<const uint8_t *>(tcph);
@@ -255,12 +255,12 @@ CalculateFlows::StreamInfo::find_acked_pkt(const Pkt *ackk, Pkt *search_hint) co
     // part of a reordered block
 
     tcp_seq_t ack = ackk->ack;
-    
+
     // move search_hint forward to right edge
     while (search_hint && !(SEQ_GEQ(search_hint->seq, ack)
 			    && !(search_hint->flags & Pkt::F_NONORDERED)))
 	search_hint = search_hint->next;
-    
+
     // move backwards to left edge
     Pkt *possible = 0;
     int possible_goodness = -1;
@@ -355,7 +355,7 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_la
 	refind_min_ack_latency = true;
 	ackwindow_begin = cur_ack;
     }
-    
+
     while (ackwindow_begin
 	   && (cur_ack->timestamp - ackwindow_begin->timestamp).sec() > 5) {
 	if (ackwindow_begin->cumack_pkt
@@ -365,10 +365,10 @@ CalculateFlows::StreamInfo::update_cur_min_ack_latency(Timestamp &cur_min_ack_la
     }
 
     if (refind_min_ack_latency) {
-	running_min_ack_latency.set_sec(10000);	
+	running_min_ack_latency.set_sec(10000);
 	ackwindow_end = ackwindow_begin;
     }
-    
+
     while (ackwindow_end
 	   && (ackwindow_end->timestamp - cur_ack->timestamp).sec() < 5) {
 	if (ackwindow_end->cumack_pkt
@@ -416,7 +416,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	if (numacksexpected > numacks)
 	    k = k->next;
     }
-    
+
     // Only set k_cumack to the new value if acks were not reordered.
     if (!k || !(ackk->flags & Pkt::F_ACK_NONORDERED))
 	k_cumack = k;
@@ -429,7 +429,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
     if (k && ackk->prev && SEQ_GT(ackk->ack, ackk->prev->ack)
 	&& SEQ_GT(k->end_seq, ackk->ack))
 	k = k->next;
-    
+
     // Handle reordering: skip packets that are in a hole.
     if (k && ackk->ack == k->seq && !(k->flags & Pkt::F_WINDOW_PROBE)) {
 	// Don't shift forward if the next ack acks this packet (that would be
@@ -459,7 +459,7 @@ CalculateFlows::StreamInfo::find_ack_cause2(const Pkt *ackk, Pkt *&k_cumack, tcp
 	if (new_k && ackk->timestamp - new_k->timestamp <= 0.5 * (ackk->timestamp - k->timestamp) && SEQ_LEQ(new_k->end_seq, k->end_seq))
 	    k = new_k;
     }
-    
+
     if (k && ackk->timestamp - k->timestamp >= 0.8 * min_ack_latency) {
 	if (SEQ_GT(k->end_seq, max_ack) && !(ackk->flags & Pkt::F_ACK_REORDER))
 	    max_ack = k->end_seq;
@@ -479,10 +479,10 @@ bool
 CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt *&k_time, tcp_seq_t prev_ackno, int prev_ndupack) const
 {
     //click_chatter("mark_delivered at %{timestamp}: %u  CA %{timestamp}:%u  TH %{timestamp}:%u  %{timestamp}", &ackk->timestamp, ackk->ack, (k_cumack ? &k_cumack->timestamp : 0), (k_cumack ? k_cumack->end_seq : 0), (k_time ? &k_time->timestamp : 0), (k_time ? k_time->end_seq : 0), &min_ack_latency);
-    
+
     // update current RTT
     Timestamp cur_min_ack_latency = min_ack_latency;
-    
+
     // move k_time forward
     while (k_time && ackk->timestamp - k_time->timestamp >= 0.8 * cur_min_ack_latency)
 	k_time = k_time->next;
@@ -513,7 +513,7 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 			&& SEQ_LEQ(kk->seq, k->seq)
 			&& SEQ_GEQ(kk->end_seq, k->end_seq))
 			goto not_delivered;
-		
+
 		// otherwise, this puppy was delivered
 		k->flags |= Pkt::F_DELIVERED;
 
@@ -548,7 +548,7 @@ CalculateFlows::StreamInfo::mark_delivered(const Pkt *ackk, Pkt *&k_cumack, Pkt 
 #endif
 	}
     }
-    
+
     // finally, move k_cumack forward
     if (!k_cumack)
 	k_cumack = pkt_head;
@@ -678,7 +678,7 @@ CalculateFlows::StreamInfo::output_loss(ConnInfo *conn, CalculateFlows *cf)
     if (!loss_trail || loss_trail->n == LossBlock::CAPACITY)
 	loss_trail = new LossBlock(loss_trail);
     loss_trail->loss[loss_trail->n++] = loss;
-    
+
     // clear loss
     loss.type = NO_LOSS;
 }
@@ -693,7 +693,7 @@ CalculateFlows::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepos_c
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     _flowid = IPFlowID(p);
-    
+
     // set initial timestamp
     if (p->timestamp_anno())
 	_init_time = p->timestamp_anno() - Timestamp::epsilon();
@@ -770,7 +770,7 @@ CalculateFlows::StreamInfo::write_ack_latency_xml(ConnInfo *conn, FILE *f) const
 		hint = k;
 	    }
 	}
-    
+
     fprintf(f, "    </acklatency>\n");
 }
 
@@ -781,14 +781,14 @@ CalculateFlows::StreamInfo::write_ack_causality_xml(ConnInfo *, FILE *f) const
     if (have_ack_latency)
 	fprintf(f, " min='" PRITIMESTAMP "'", min_ack_latency.sec(), min_ack_latency.subsec());
     fprintf(f, ">\n");
-    
+
     for (Pkt *k = pkt_head; k; k = k->next)
 	if (k->caused_ack) {
 	    Pkt *ack = k->caused_ack;
 	    Timestamp latency = ack->timestamp - k->timestamp;
 	    fprintf(f, PRITIMESTAMP " %u " PRITIMESTAMP "\n", k->timestamp.sec(), k->timestamp.subsec(), ack->ack, latency.sec(), latency.subsec());
 	}
-    
+
     fprintf(f, "    </ackcausality>\n");
 }
 
@@ -931,7 +931,7 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
-	
+
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
@@ -945,10 +945,10 @@ CalculateFlows::ConnInfo::kill(CalculateFlows *cf)
 	    Timestamp min_rtt = _stream[0].min_ack_latency + _stream[1].min_ack_latency;
 	    fprintf(f, "  <rtt source='minacklatency' value='" PRITIMESTAMP "' />\n", min_rtt.sec(), min_rtt.subsec());
 	}
-	
+
 	_stream[0].write_xml(this, f, cf->write_flags());
 	_stream[1].write_xml(this, f, cf->write_flags());
-	
+
 	fprintf(f, "</flow>\n");
     }
     cf->free_pkt_list(_stream[0].pkt_head, _stream[0].pkt_tail);
@@ -962,7 +962,7 @@ CalculateFlows::ConnInfo::create_pkt(const Packet *p, CalculateFlows *parent)
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
-    
+
     // set TCP sequence number offsets on first Pkt
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
@@ -1035,7 +1035,7 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 	    for (Pkt *prev = k->prev; prev && SEQ_LT(k->ack, prev->ack); prev = prev->prev)
 		prev->flags |= Pkt::F_ACK_NONORDERED | Pkt::F_ACK_REORDER;
 	}
-	
+
 	// find acked packet
 	if (!k->prev || k->ack != k->prev->ack)
 	    if (Pkt *acked_pkt = ack_stream.find_acked_pkt(k, ack_stream.acked_pkt_hint)) {
@@ -1046,7 +1046,7 @@ CalculateFlows::ConnInfo::post_update_state(const Packet *p, Pkt *k, CalculateFl
 		    ack_stream.min_ack_latency = latency;
 		}
 	}
-	    
+
 	// check whether this acknowledges something in the last loss event;
 	// if so, we should output the loss event
 	if (ack_stream.loss.type != NO_LOSS
@@ -1077,7 +1077,7 @@ CalculateFlows::ConnInfo::handle_packet(const Packet *p, CalculateFlows *parent)
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
     _clean = false;
-    
+
     // update timestamp and sequence number offsets at beginning of connection
     if (Pkt *k = create_pkt(p, parent)) {
 	int direction = (PAINT_ANNO(p) & 1);
@@ -1106,7 +1106,7 @@ CalculateFlows::~CalculateFlows()
     delete _filepos_h;
 }
 
-int 
+int
 CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0, *tipfd_element = 0, *tipsd_element = 0;
@@ -1127,13 +1127,13 @@ CalculateFlows::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "IP_ID", 0, cpBool, &ip_id,
 		     cpEnd) < 0)
         return -1;
-    
+
     AggregateIPFlows *af = 0;
     if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
 	return errh->error("NOTIFIER must be an AggregateIPFlows element");
     else if (af)
 	af->add_listener(this);
-    
+
     if (tipfd_element && !(_tipfd = (ToIPFlowDumps *)(tipfd_element->cast("ToIPFlowDumps"))))
 	return errh->error("FLOWDUMPS must be a ToIPFlowDumps element");
     if (tipsd_element && !(_tipsd = (ToIPSummaryDump *)(tipfd_element->cast("ToIPSummaryDump"))))
@@ -1234,7 +1234,7 @@ CalculateFlows::simple_action(Packet *p)
     }
 }
 
-void 
+void
 CalculateFlows::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)
@@ -1253,7 +1253,7 @@ CalculateFlows::save(int, uint32_t aggregate, int direction, const String &filen
     ConnInfo *loss = _conn_map.get(aggregate);
     if (!loss)
 	return errh->error("no '%u' aggregate", aggregate);
-    
+
     FILE *f;
     if (!filename || filename == "-")
 	f = stdout;

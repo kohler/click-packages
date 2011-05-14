@@ -43,7 +43,7 @@ CalculateCapacity::ConnInfo::ConnInfo(const Packet *p, const HandlerCall *filepo
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     _flowid = IPFlowID(p);
-    
+
     // set initial timestamp
     if (p->timestamp_anno())
 	_init_time = p->timestamp_anno() - Timestamp::epsilon();
@@ -74,7 +74,7 @@ CalculateCapacity::StreamInfo::write_xml(FILE *f) const
 		p->acknone, p->ackone, p->acktwo, p->ackmore);
 	fprintf(f, " />\n");
     }
-    
+
     fprintf(f,"    <interarrival>\n");
     for(unsigned int i=0; i < pkt_cnt; i++){
 	fprintf(f, "%d " PRITIMESTAMP " %d " PRITIMESTAMP "\n", intervals[i].size,
@@ -95,7 +95,7 @@ static int compare(const void *a, const void *b, void *){
 
     ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
     bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
-    
+
     iratea = ac->interval.doubleval() / ((ac->size)*8.0);
     irateb = bc->interval.doubleval() / ((bc->size)*8.0);
 
@@ -114,7 +114,7 @@ static int compare_time(const void *a, const void *b, void *){
 
     ac = (CalculateCapacity::StreamInfo::IntervalStream *)a;
     bc = (CalculateCapacity::StreamInfo::IntervalStream *)b;
-    
+
     if(ac->time < bc->time) return -1;
     if(ac->time == bc->time) return 0;
     return 1;
@@ -135,7 +135,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 
     logs = new double[pkt_cnt];
     slopes = new double[pkt_cnt];
-    
+
     //printf("pktcnt %d\n", pkt_cnt);
     for(j = 0, n = 0; j < pkt_cnt; j++){
 	struct IntervalStream *i = intervals + j;
@@ -166,7 +166,7 @@ CalculateCapacity::StreamInfo::findpeaks()
     double peakstart = 0.2 * expectedslope;
     double peakend = 0.5 * expectedslope;
     bool inpeak = false;
-    
+
     peak = new Peak;
 
     for(j = 0; j < n; j++){
@@ -189,7 +189,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	    }
 	} else {
 	    if(slopes[j] < peakstart){
-		uint32_t k=j;		
+		uint32_t k=j;
 		//new peak here
 		inpeak = true;
 		peak->area = 1;
@@ -201,7 +201,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	    } else {
 		//nothing
 	    }
-	    
+
 	}
     }
     if(inpeak){
@@ -252,7 +252,7 @@ CalculateCapacity::StreamInfo::findpeaks()
 	}
 	if(cnt == 0){
 	    printf("empty peak %d\n", peak->area);
-	} 
+	}
 	if(cnt != p->area){
 	    //printf("missing %d peak packets %d %d\n", p->area - cnt, p->area, cnt);
 	}
@@ -274,7 +274,7 @@ CalculateCapacity::StreamInfo::histogram()
     double curr; // in seconds
     const double factor=1.009;
     const uint32_t howmany = 1000;
-    
+
     uint32_t j=0;
     uint32_t totcnt=0;
     uint32_t usedcnt=0;
@@ -286,14 +286,14 @@ CalculateCapacity::StreamInfo::histogram()
 
     curr = 1.0e-6;
     stepsize = 1.0e-6;
-    
+
     for(i=0; i < howmany; i++){
 	stepsize *= factor;
 	curr += stepsize;
 	cutoff[i] = curr;
 	hist[i] = 0;
 	valid[i] = 1;
-	
+
 	while(j < pkt_cnt &&
 	      intervals[j].interval.doubleval() < curr){
 	    if(mss == intervals[j].size ||
@@ -322,12 +322,12 @@ CalculateCapacity::StreamInfo::histogram()
 }
 
 void
-CalculateCapacity::StreamInfo::fill_intervals() 
+CalculateCapacity::StreamInfo::fill_intervals()
 {
     uint32_t i=0;
     Pkt *cp;
     intervals = new IntervalStream[pkt_cnt];
-    
+
     for(cp = pkt_head, i=0; cp != NULL && i < pkt_cnt; i++, cp=cp->next){
 	intervals[i].size = cp->last_seq - cp->seq + cp->hsize;
 	if(intervals[i].size > 1500){
@@ -335,7 +335,7 @@ CalculateCapacity::StreamInfo::fill_intervals()
 		   intervals[i].size,
 		   cp->last_seq, cp->seq);
 	}
-	
+
 
 	if(cp->flags & TH_ACK && cp->prev && cp->prev->flags & TH_ACK &&
 	   cp->ack > cp->prev->ack){
@@ -358,7 +358,7 @@ CalculateCapacity::StreamInfo::fill_intervals()
 
 	intervals[i].interval = cp->timestamp -
 	    (cp->prev ? cp->prev->timestamp : cp->timestamp);
-	
+
     }
 
     if(i < pkt_cnt){
@@ -406,7 +406,7 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 		j--;
 		break;
 	    }
-	    
+
 	    assert(intervals[j].time >= start);
 	}
 	if(j >= pkt_cnt-1)
@@ -427,21 +427,21 @@ CalculateCapacity::StreamInfo::fill_shortrate()
 	    datastart = intervals[j].time;//start;
 	    dbytes = databytes;
 	}
-	
+
 // 	if(ackbytes > 0){
 // 	    printf("ack bytes: %d\n", ackbytes);
 // 	}
-	
+
 	    //printf("data bytes: %d\nack bytes: %d\n", databytes, ackbytes);
     }
-    
+
     datarate *= 8;
     ackrate *= 8;
 
     click_qsort(intervals, pkt_cnt, sizeof(struct IntervalStream),
     		&compare);
 
-        
+
 }
 
 
@@ -452,7 +452,7 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	Timestamp end_time = (_stream[0].pkt_tail ? _stream[0].pkt_tail->timestamp : _init_time);
 	if (_stream[1].pkt_tail && _stream[1].pkt_tail->timestamp > end_time)
 	    end_time = _stream[1].pkt_tail->timestamp;
-	
+
 	fprintf(f, "<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 		_aggregate, _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
 		_flowid.daddr().unparse().c_str(), ntohs(_flowid.dport()),
@@ -461,7 +461,7 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 	if (_filepos)
 	    fprintf(f, " filepos='%s'", String(_filepos).c_str());
 	fprintf(f, ">\n");
-	
+
 	_stream[0].fill_intervals();
 	_stream[0].fill_shortrate();
 	_stream[0].histogram();
@@ -502,7 +502,7 @@ CalculateCapacity::ConnInfo::kill(CalculateCapacity *cf)
 		"dtime='" PRITIMESTAMP "' atime='" PRITIMESTAMP "' db='%d' ab='%d' />\n",
 		drate, arate, bigger, dtime.sec(), dtime.subsec(),
 		atime.sec(), atime.subsec(), dbytes, abytes);
-	
+
 
 	_stream[0].write_xml(f);
 	_stream[1].write_xml(f);
@@ -519,7 +519,7 @@ CalculateCapacity::ConnInfo::create_pkt(const Packet *p, CalculateCapacity *pare
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && AGGREGATE_ANNO(p) == _aggregate);
-    
+
     // set TCP sequence number offsets on first Pkt
     const click_tcp *tcph = p->tcp_header();
     int direction = (PAINT_ANNO(p) & 1);
@@ -571,7 +571,7 @@ CalculateCapacity::ConnInfo::handle_packet(const Packet *p, CalculateCapacity *p
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && AGGREGATE_ANNO(p) == _aggregate);
-    
+
     // update timestamp and sequence number offsets at beginning of connection
     //if (Pkt *k = create_pkt(p, parent)) {
 	//int direction = (PAINT_ANNO(p) & 1);
@@ -597,7 +597,7 @@ CalculateCapacity::~CalculateCapacity()
     delete _filepos_h;
 }
 
-int 
+int
 CalculateCapacity::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0;
@@ -607,13 +607,13 @@ CalculateCapacity::configure(Vector<String> &conf, ErrorHandler *errh)
 		     "NOTIFIER", 0, cpElement, &af_element,
 		     cpEnd) < 0)
         return -1;
-    
+
     AggregateIPFlows *af = 0;
     if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
 	return errh->error("NOTIFIER must be an AggregateIPFlows element");
     else if (af)
 	af->add_listener(this);
-    
+
     return 0;
 }
 
@@ -696,7 +696,7 @@ CalculateCapacity::simple_action(Packet *p)
     }
 }
 
-void 
+void
 CalculateCapacity::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)

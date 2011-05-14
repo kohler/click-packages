@@ -11,7 +11,7 @@ class TCPScoreboard { public:
 
     inline tcp_seq_t cumack() const	{ return _cumack; }
     bool contains(tcp_seq_t seq, tcp_seq_t end_seq) const;
-    
+
     inline void clear(tcp_seq_t cumack = 0);
     void add(tcp_seq_t seq, tcp_seq_t end_seq);
     inline void add_cumack(tcp_seq_t cumack);

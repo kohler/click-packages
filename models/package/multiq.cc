@@ -64,7 +64,7 @@ MultiQ::Capacity::Capacity(MultiQType type, double scale_, double ntt_)
 	bandwidth = 1500*8 / ntt, bandwidth52 = 52*8 / ntt;
     else
 	bandwidth = 1552*8 / ntt, bandwidth52 = 52*8 / ntt;
-    
+
     if (const BandwidthSpec *bw = closest_common_bandwidth(bandwidth)) {
 	common_bandwidth = bw->bandwidth;
 	common_bandwidth_name = bw->name;
@@ -108,7 +108,7 @@ MultiQ::modes2ntt(MultiQType type, const Histogram &h, const Vector<int> &modes)
     const int *modes_begin = modes.begin();
     if (type == MQ_ACK)
 	last_x = h.mode_pos(*modes_begin), modes_begin++;
-    
+
     for (const int *m = modes_begin; m < modes.end(); m++) {
 	double x = h.mode_pos(*m);
 	if (x >= 0) {
@@ -122,10 +122,10 @@ MultiQ::modes2ntt(MultiQType type, const Histogram &h, const Vector<int> &modes)
 
     if (gaps.size() == 0)
 	return -1;
-    
+
     std::sort(gaps.begin(), gaps.end());
     assert(gaps.back() < INTERARRIVAL_CUTOFF);
-    
+
     Histogram gap_h;
     gap_h.make_kde_sorted(gaps.begin(), gaps.end(), 0.4*min_gap);
 
@@ -144,7 +144,7 @@ double
 MultiQ::adjust_max_scale(MultiQType type, const double *begin, const double *end, double tallest_mode_min_scale) const
 {
     double next_scale = tallest_mode_min_scale / 2.;
-    
+
     Histogram hh;
     hh.make_kde_sorted(begin, end, next_scale);
 
@@ -155,7 +155,7 @@ MultiQ::adjust_max_scale(MultiQType type, const double *begin, const double *end
     int *next_modes_start = next_modes.begin();
     if (type == MQ_ACK && next_modes_start < next_modes.end())
 	next_modes_start++;
-    
+
     int *tallest_ptr = std::max_element(next_modes_start, next_modes.end(), ModeProbCompar(hh));
     double tallest_mode_next_scale = (tallest_ptr < next_modes.end() ? hh.mode_pos(*tallest_ptr) : -1);
 
@@ -177,12 +177,12 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
     bool max_scale_adjusted = false;
     int last_nmodes = INT_MAX;
     double last_ntt = 0;
-    
+
     for (double scale = MIN_SCALE; scale < max_scale; ) {
-	// compute kernel PDF 
+	// compute kernel PDF
 	Histogram h;
 	h.make_kde_sorted(begin, end, scale);
-	
+
 	// find modes
 	Vector<int> modes;
 	h.modes(SIGNIFICANCE, MIN_POINTS, modes);
@@ -192,7 +192,7 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
 	    scale *= SCALE_STEP_NOMODES;
 	    continue;
 	}
-	
+
 	// clean up tiny modes
 	{
 	    int max_prob_mode = *std::max_element(modes.begin(), modes.end(), ModeProbCompar(h));
@@ -204,11 +204,11 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
 		int max_prob_mode2 = max_prob_mode;
 		if (type == MQ_ACK && max_prob_mode == modes[0] && modes.size() > 1)
 		    max_prob_mode2 = *std::max_element(modes.begin() + 1, modes.end(), ModeProbCompar(h));
-		
+
 		max_scale = adjust_max_scale(type, begin, end, h.mode_pos(max_prob_mode2));
 		max_scale_adjusted = true;
 	    }
-	    
+
 	    double threshold = 0.01 * h.prob(max_prob_mode);
 	    int *out = modes.begin();
 	    for (int *x = modes.begin(); x < modes.end(); x++)
@@ -221,7 +221,7 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
 	if (modes.size() > last_nmodes) {
 	    // skip if number of modes is increasing (odd behavior)
 	    scale *= SCALE_STEP;
-	    
+
 	} else if (modes.size() == 1) {
 	    // output this final mode, if it's significantly different from
 	    // last capacity mode
@@ -233,7 +233,7 @@ MultiQ::create_capacities(MultiQType type, const double *begin, const double *en
 	} else if (modes.size() == 2 && scale < MAX_SCALE/4) {
 	    // try and resolve two modes into one if at a smallish scale
 	    scale *= SCALE_STEP;
-	    
+
 	} else if (modes.size() == 2) {
 	    // end if two modes at a large scale
 	    // output a heuristic combination of the modes
@@ -361,10 +361,10 @@ void
 MultiQ::multiqcapacity_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk)
 {
     MultiQ *mq = static_cast<MultiQ *>(thunk);
-    
+
     bool significant = mq->significant_flow(stream, conn);
     bool ack_significant = (!significant && mq->significant_flow(conn->ack_stream(stream), conn));
-    
+
     if (significant || ack_significant) {
 	// collect interarrivals
 	Vector<double> interarrivals;
@@ -405,7 +405,7 @@ MultiQ::read_capacities(Element *e, void *thunk)
     MultiQ *mq = static_cast<MultiQ *>(e);
     StringAccum sa;
     sa << "    w     NTT (us)  1500-BW    40-BW (1500-BW) (40-BW)\n";
-    
+
     Vector<Capacity> capacities;
     mq->run(thunk ? MQ_ACK : MQ_DATA, mq->_thru_interarrivals, capacities);
 
@@ -413,10 +413,10 @@ MultiQ::read_capacities(Element *e, void *thunk)
 	sa.snprintf(1024, "%6.1f %9.3f  %8.3f %8.3f %8.3f %8.3f\n",
 		    c->scale, c->ntt, c->bandwidth, c->bandwidth52,
 		    c->common_bandwidth, c->common_bandwidth52);
-    
+
     return sa.take_string();
 }
-	    
+
 void
 MultiQ::add_handlers()
 {
@@ -454,16 +454,16 @@ MultiQ::Histogram::make_kde_sorted(const double *cur_lo, const double *end, cons
     int nbins = (int)((end[-1] + width + 1.5*dx - _left) / dx) + 3;
     _bin_width = dx;		// k->dx
     _kde_width = width;		// k->wmin
-    
+
     _nitems = end - cur_lo;
     const double *cur_hi = cur_lo;
 
     // first bin is always empty
     _count.assign(1, 0);
-    
+
     for (int i = 1; i < nbins; i++) {
 	double binpos = mode_pos(i);
-	
+
 	while (cur_lo < end && *cur_lo < binpos - width)
 	    cur_lo++;
 	while (cur_hi < end && *cur_hi < binpos + width)
@@ -576,7 +576,7 @@ Histogram::data_epsilon(const double *cur, const double *end)
     while (cur < end) {
 	/* A value small relative to *cur */
 	double cur_epsilon = (DBL_EPSILON * 2) * fabs(*cur);
-	
+
 	double sep = 0;
 	const double *first = cur;
 

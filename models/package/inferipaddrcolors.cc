@@ -38,13 +38,13 @@ InferIPAddrColors::configure(const Vector<String> &conf, ErrorHandler *errh)
 {
     bool active = true;
     String seed_filename;
-    
+
     if (cp_va_kparse(conf, this, errh,
 		     "ACTIVE", 0, cpBool, &active,
 		     "SEED", 0, cpFilename, &seed_filename,
 		     cpEnd) < 0)
 	return -1;
-    
+
     _active = active;
     if (seed_filename && read_file(seed_filename, errh) < 0)
 	return -1;

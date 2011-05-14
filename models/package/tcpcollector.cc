@@ -69,7 +69,7 @@ TCPCollector::Stream::process_data(Pkt* k, const Packet* p, Conn* conn)
 {
     assert(p->ip_header()->ip_p == IP_PROTO_TCP
 	   && IP_FIRSTFRAG(p->ip_header()));
-    
+
     const click_ip *iph = p->ip_header();
     const click_tcp *tcph = p->tcp_header();
 
@@ -91,7 +91,7 @@ TCPCollector::Stream::process_data(Pkt* k, const Packet* p, Conn* conn)
     total_seq += k->end_seq - k->seq;
     if (k->end_seq - k->seq == 0)
 	ack_packets++;
-    
+
     // SYN processing
     if (tcph->th_flags & TH_SYN) {
 	if (have_syn && syn_seq != k->seq)
@@ -131,7 +131,7 @@ TCPCollector::Stream::process_options(const click_tcp* tcph, int transport_lengt
 {
     // option processing; ignore timestamp
     int hlen = ((int)(tcph->th_off << 2) < transport_length ? tcph->th_off << 2 : transport_length);
-    if (hlen > (int) sizeof(click_tcp) 
+    if (hlen > (int) sizeof(click_tcp)
 	&& (hlen != 32
 	    || *(reinterpret_cast<const uint32_t *>(tcph + 1)) != htonl(0x0101080A))) {
 	const uint8_t* opt = reinterpret_cast<const uint8_t*>(tcph + 1);
@@ -244,14 +244,14 @@ TCPCollector::Stream::attach_packet(Pkt* k)
 	pkt_tail = pkt_tail->next = k;
     else
 	pkt_head = pkt_tail = k;
-    
+
     if (k->seq == k->end_seq)
 	// exit if this is a pure ack
 	// NB pure acks will not include IP ID check for network duplicates
 	return;
     else
 	pkt_data_tail = k;
-    
+
     // exit if there is any new data
     if (SEQ_GT(k->end_seq, max_seq)) {
 	k->flags |= Pkt::F_NEW;
@@ -271,7 +271,7 @@ TCPCollector::Stream::attach_packet(Pkt* k)
 
 	} else if (x->seq == x->end_seq) {
 	    // ignore pure acks
-	    
+
 	} else if (k->seq == x->seq && k->end_seq == x->end_seq
 		   && k->ip_id && k->ip_id == x->ip_id) {
 	    // network duplicate
@@ -286,7 +286,7 @@ TCPCollector::Stream::attach_packet(Pkt* k)
 	    break;
 	}
     }
-    
+
     // intervening packets are in a non-ordered event
     for (x = (x ? x->next : pkt_head); x; x = x->next)
 	x->flags |= Pkt::F_NONORDERED;
@@ -329,7 +329,7 @@ TCPCollector::Conn::handle_packet(const Packet *p, TCPCollector *parent)
     Pkt *k = parent->new_pkt();
     if (!k)			// out of memory
 	return;
-    
+
     stream->process_data(k, p, this);
     ack_stream->process_ack(k, p, stream);
 
@@ -386,7 +386,7 @@ TCPCollector::Conn::Conn(const Packet* p, const HandlerCall* filepos_call, bool 
 	   && IP_FIRSTFRAG(p->ip_header())
 	   && p->transport_length() >= (int)sizeof(click_udp));
     _flowid = IPFlowID(p);
-    
+
     // set initial timestamp
     if (p->timestamp_anno())
 	_init_time = p->timestamp_anno() - Timestamp::epsilon();
@@ -584,7 +584,7 @@ void
 TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
 {
     Timestamp duration = this->duration();
-    
+
     fprintf(f, "\n<flow aggregate='%u' src='%s' sport='%d' dst='%s' dport='%d' begin='" PRITIMESTAMP "' duration='" PRITIMESTAMP "'",
 	    _aggregate,
 	    _flowid.saddr().unparse().c_str(), ntohs(_flowid.sport()),
@@ -598,15 +598,15 @@ TCPCollector::Conn::write_xml(FILE *f, const TCPCollector *owner)
     for (const XMLHook *x = owner->_conn_xmlattr.begin(); x < owner->_conn_xmlattr.end(); x++)
 	if (String value = x->hook.connection(this, x->name, x->thunk))
 	    fprintf(f, " %s='%s'", x->name.c_str(), xmlprotect(value).c_str());
-    
+
     fprintf(f, ">\n");
 
     for (const XMLHook *x = owner->_conn_xmltag.begin(); x < owner->_conn_xmltag.end(); x++)
 	x->hook.connectiontag(f, this, x->name, x->thunk);
-    
+
     _stream[0]->write_xml(f, this, owner);
     _stream[1]->write_xml(f, this, owner);
-    
+
     fprintf(f, "</flow>\n");
 }
 
@@ -763,7 +763,7 @@ TCPCollector::add_conn_attachment(AttachmentManager* a, unsigned space)
     return off;
 }
 
-int 
+int
 TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     Element *af_element = 0;
@@ -786,7 +786,7 @@ TCPCollector::configure(Vector<String> &conf, ErrorHandler *errh)
 #endif
 		     cpEnd) < 0)
         return -1;
-    
+
     AggregateIPFlows *af = 0;
     if (af_element && !(af = (AggregateIPFlows *)(af_element->cast("AggregateIPFlows"))))
 	return errh->error("NOTIFIER must be an AggregateIPFlows element");
@@ -819,7 +819,7 @@ TCPCollector::initialize(ErrorHandler *errh)
 	_traceinfo_file = stdout;
     else if (!(_traceinfo_file = fopen(_traceinfo_filename.c_str(), "w")))
 	return errh->error("%s: %s", _traceinfo_filename.c_str(), strerror(errno));
-    
+
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "<?xml version='1.0' standalone='yes'?>\n\
 <trace");
@@ -844,7 +844,7 @@ TCPCollector::cleanup(CleanupStage)
     for (ConnMap::iterator iter = _conn_map.begin(); iter.live(); iter++)
 	kill_conn(iter.value());
     _conn_map.clear();
-    
+
 #if TCPCOLLECTOR_XML
     if (_traceinfo_file) {
 	fprintf(_traceinfo_file, "\n</trace>\n");
@@ -872,7 +872,7 @@ TCPCollector::simple_action(Packet *p)
     }
 }
 
-void 
+void
 TCPCollector::aggregate_notify(uint32_t aggregate, AggregateEvent event, const Packet *)
 {
     if (event == DELETE_AGG)

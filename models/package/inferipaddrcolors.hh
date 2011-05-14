@@ -157,10 +157,10 @@ C<$packed_le>.
 IPAddrColorPaint, TestIPAddrColors */
 
 class InferIPAddrColors : public Element, public IPAddrColors { public:
-  
+
     InferIPAddrColors();
     ~InferIPAddrColors();
-  
+
     const char *class_name() const	{ return "InferIPAddrColors"; }
     const char *port_count() const	{ return PORTS_1_1; }
     const char *processing() const	{ return AGNOSTIC; }
@@ -177,12 +177,12 @@ class InferIPAddrColors : public Element, public IPAddrColors { public:
   private:
 
     bool _active : 1;
-    
+
     static String read_handler(Element *, void *);
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
     static void write_nodes(Node*, FILE*, bool, uint32_t*, int&, int, ErrorHandler*);
     static int write_file_handler(const String &, Element *, void *, ErrorHandler*);
-    
+
 };
 
 #endif

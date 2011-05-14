@@ -148,11 +148,11 @@ class CalculateFlows : public Element, public AggregateListener { public:
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();
-    
+
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
-    
+
     Packet *simple_action(Packet *);
-    
+
     struct StreamInfo;
     class ConnInfo;
     struct LossInfo;
@@ -171,11 +171,11 @@ class CalculateFlows : public Element, public AggregateListener { public:
 
     enum { SAVE_UNDELIVERED_PACKETNO };
     int save(int what, uint32_t aggregate, int direction, const String &filename, ErrorHandler *);
-    
+
     typedef HashTable<unsigned, ConnInfo *> ConnMap;
-    
+
   private:
-    
+
     ConnMap _conn_map;
 
     ToIPFlowDumps *_tipfd;
@@ -184,7 +184,7 @@ class CalculateFlows : public Element, public AggregateListener { public:
     HandlerCall *_filepos_h;
 
     bool _ip_id : 1;
-    
+
     Pkt *_free_pkt;
     Vector<Pkt *> _pkt_bank;
 
@@ -197,9 +197,9 @@ class CalculateFlows : public Element, public AggregateListener { public:
     inline void free_pkt_list(Pkt *, Pkt *);
 
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
-    
+
     friend class ConnInfo;
-    
+
 };
 
 struct CalculateFlows::Pkt {
@@ -230,7 +230,7 @@ struct CalculateFlows::Pkt {
 
 	F_FILLS_RCV_WINDOW = 0x400, // packet filled receive window
 	F_WINDOW_PROBE = 0x800,	// packet was a window probe
-	
+
 	F_DELIVERED = 0x10000,	// do we think the packet was delivered?
     };
     int flags;			// packet flags
@@ -275,10 +275,10 @@ struct CalculateFlows::StreamInfo {
     bool sent_window_probe : 1;	// have we ever sent a window probe?
     bool sent_sackok : 1;	// did we send SACKOK on the SYN?
     bool time_confusion : 1;	// was there timestamp confusion?
-    
+
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
-    
+
     tcp_seq_t syn_seq;		// sequence number of SYN, if any
     tcp_seq_t fin_seq;		// sequence number of FIN, if any
 
@@ -289,11 +289,11 @@ struct CalculateFlows::StreamInfo {
 				// loss event completed
     tcp_seq_t max_loss_seq;	// maximum sequence number seen in any loss
 				// event
-    
+
     uint32_t total_packets;	// total number of packets seen (incl. rexmits)
     uint32_t ack_packets;	// total number of pure acks seen
     uint32_t total_seq;		// total sequence space seen (incl. rexmits)
-    
+
     uint32_t loss_events;	// number of loss events
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
@@ -312,7 +312,7 @@ struct CalculateFlows::StreamInfo {
     // information about the most recent loss event
     LossInfo loss;		// most recent loss event
     LossBlock *loss_trail;	// previous loss events
-    
+
     StreamInfo();
     ~StreamInfo();
 
@@ -320,7 +320,7 @@ struct CalculateFlows::StreamInfo {
     void register_loss_event(Pkt *startk, Pkt *endk, ConnInfo *, CalculateFlows *);
     void update_counters(const Pkt *np, const click_tcp *);
     void options(Pkt *np, const click_tcp *, int transport_length, const ConnInfo *);
-    
+
     Pkt *find_acked_pkt(const Pkt *ackk, Pkt *search_hint = 0) const;
 #if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
@@ -345,7 +345,7 @@ struct CalculateFlows::StreamInfo {
 };
 
 class CalculateFlows::ConnInfo {  public:
-    
+
     ConnInfo(const Packet *, const HandlerCall *);
     void kill(CalculateFlows *);
 
@@ -355,13 +355,13 @@ class CalculateFlows::ConnInfo {  public:
     const StreamInfo *stream(int i) const { assert(i==0||i==1); return &_stream[i]; }
 
     void handle_packet(const Packet *, CalculateFlows *);
-    
+
     Pkt *create_pkt(const Packet *, CalculateFlows *);
     void calculate_loss_events(Pkt *, unsigned dir, CalculateFlows *);
     void post_update_state(const Packet *, Pkt *, CalculateFlows *);
 
     void finish(CalculateFlows *);
-    
+
   private:
 
     uint32_t _aggregate;	// aggregate number
@@ -371,7 +371,7 @@ class CalculateFlows::ConnInfo {  public:
     bool _finished : 1;		// have we finished the flow?
     bool _clean : 1;		// have packets been added since we finished?
     StreamInfo _stream[2];
-    
+
 };
 
 inline uint32_t

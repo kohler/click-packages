@@ -131,7 +131,7 @@ output to the XML traceinfo file buffer, if appropriate).
 =h flush write-only
 
 Flush TCPCollector's XML traceinfo file buffer.
-   
+
 =a
 
 AggregateIPFlows, MultiQ */
@@ -149,9 +149,9 @@ class TCPCollector : public Element, public AggregateListener { public:
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();
-    
+
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
-    
+
     Packet *simple_action(Packet *);
 
     struct Pkt;
@@ -179,14 +179,14 @@ class TCPCollector : public Element, public AggregateListener { public:
     int add_pkt_attachment(unsigned size);
     int add_stream_attachment(AttachmentManager*, unsigned size);
     int add_conn_attachment(AttachmentManager*, unsigned size);
-    
+
     typedef HashTable<unsigned, Conn *> ConnMap;
-    
+
   private:
-    
+
     ConnMap _conn_map;
     Pkt* _free_pkt;
-    
+
     int _pkt_size;
     Vector<char*> _pktbuf_bank;
 
@@ -225,7 +225,7 @@ class TCPCollector : public Element, public AggregateListener { public:
     Vector<XMLHook> _conn_xmltag;
     Vector<XMLHook> _stream_xmlattr;
     Vector<XMLHook> _stream_xmltag;
-    
+
     int add_xmlattr(Vector<XMLHook> &, const XMLHook &);
 #endif
 
@@ -233,7 +233,7 @@ class TCPCollector : public Element, public AggregateListener { public:
     uint32_t _memusage;
     uint32_t _max_memusage;
 #endif
-    
+
     int add_space(unsigned space, int &size);
 
     Pkt* new_pkt();
@@ -247,9 +247,9 @@ class TCPCollector : public Element, public AggregateListener { public:
     static String read_handler(Element *, void *);
 #endif
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
-    
+
     friend class Conn;
-    
+
 };
 
 struct TCPCollector::Pkt {
@@ -293,7 +293,7 @@ struct TCPCollector::SACKBuf {
 };
 
 struct TCPCollector::Stream {
-    
+
     unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
     bool have_syn : 1;		// have we seen a SYN?
@@ -304,10 +304,10 @@ struct TCPCollector::Stream {
     bool sent_window_probe : 1;	// have we ever sent a window probe?
     bool sent_sackok : 1;	// did we send SACKOK on the SYN?
     bool time_confusion : 1;	// was there timestamp confusion?
-    
+
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
-    
+
     tcp_seq_t syn_seq;		// sequence number of SYN, if any
     tcp_seq_t fin_seq;		// sequence number of FIN, if any
 
@@ -317,7 +317,7 @@ struct TCPCollector::Stream {
     uint32_t total_packets;	// total number of packets seen (incl. rexmits)
     uint32_t ack_packets;	// total number of pure acks seen
     uint32_t total_seq;		// total sequence space seen (incl. rexmits)
-    
+
     tcp_seq_t end_rcv_window;	// end of receive window
     int rcv_window_scale;	// window scaling option
 
@@ -345,7 +345,7 @@ struct TCPCollector::Stream {
 };
 
 class TCPCollector::Conn {  public:
-    
+
     Conn(const Packet*, const HandlerCall*, bool ip_id, Stream*, Stream*);
     ~Conn();
 
@@ -359,14 +359,14 @@ class TCPCollector::Conn {  public:
 
     void handle_packet(const Packet *, TCPCollector *);
     uint32_t* allocate_sack(int);
-    
+
 #if TCPCOLLECTOR_XML
     void write_xml(FILE*, const TCPCollector *);
 #endif
 #if TCPCOLLECTOR_MEMSTATS
     uint32_t sack_memusage() const;
 #endif
-    
+
   private:
 
     uint32_t _aggregate;	// aggregate number

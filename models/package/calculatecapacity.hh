@@ -85,11 +85,11 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     int initialize(ErrorHandler *);
     void cleanup(CleanupStage);
     void add_handlers();
-    
+
     void aggregate_notify(uint32_t, AggregateEvent, const Packet *packet);
-    
+
     Packet *simple_action(Packet *);
-    
+
     struct StreamInfo;
     class ConnInfo;
     struct Pkt;
@@ -99,9 +99,9 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     HandlerCall *filepos_h() const	{ return _filepos_h; }
 
     typedef HashTable<unsigned, ConnInfo *> ConnMap;
-    
+
   private:
-    
+
     ConnMap _conn_map;
 
     FILE *_traceinfo_file;
@@ -118,9 +118,9 @@ class CalculateCapacity : public Element, public AggregateListener { public:
     inline void free_pkt_list(Pkt *, Pkt *);
 
     static int write_handler(const String &, Element *, void *, ErrorHandler*);
-    
+
     friend class ConnInfo;
-    
+
 };
 
 struct CalculateCapacity::Pkt {
@@ -136,17 +136,17 @@ struct CalculateCapacity::Pkt {
     int flags;			// packet flags
 };
 
-struct CalculateCapacity::StreamInfo { 
+struct CalculateCapacity::StreamInfo {
     unsigned direction : 1;	// our direction
     bool have_init_seq : 1;	// have we seen a sequence number yet?
 
     tcp_seq_t init_seq;		// first absolute sequence number seen, if any
 				// all other sequence numbers are relative
-    
+
     Pkt *pkt_head;		// first packet record
     Pkt *pkt_tail;		// last packet record
     uint32_t pkt_cnt;           // how many in this stream
-    
+
     uint32_t mss;               //largest single packet here
     uint32_t rmss;              // mss in reverse direction
 
@@ -178,7 +178,7 @@ struct CalculateCapacity::StreamInfo {
     void fill_shortrate();
     void histogram();
     void write_xml(FILE *) const;
-    
+
 };
 
 struct CalculateCapacity::StreamInfo::IntervalStream {
@@ -202,7 +202,7 @@ struct CalculateCapacity::StreamInfo::Peak {
 
 
 class CalculateCapacity::ConnInfo {  public:
-    
+
     ConnInfo(const Packet *, const HandlerCall *);
     void kill(CalculateCapacity *);
 
@@ -210,9 +210,9 @@ class CalculateCapacity::ConnInfo {  public:
     const Timestamp &init_time() const	{ return _init_time; }
 
     void handle_packet(const Packet *, CalculateCapacity *);
-    
+
     Pkt *create_pkt(const Packet *, CalculateCapacity *);
-    
+
   private:
 
     uint32_t _aggregate;	// aggregate number
@@ -220,7 +220,7 @@ class CalculateCapacity::ConnInfo {  public:
     Timestamp _init_time;	// first time seen in stream
     String _filepos;		// file position of first packet
     StreamInfo _stream[2];
-    
+
 };
 
 inline uint32_t

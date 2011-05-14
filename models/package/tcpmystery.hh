@@ -102,20 +102,20 @@ class TCPMystery : public Element, public TCPCollector::AttachmentManager { publ
     typedef TCPCollector::Pkt Pkt;
     typedef TCPCollector::Stream Stream;
     typedef TCPCollector::Conn Conn;
-    
+
     struct MyLossInfo;
     struct MyLossBlock;
     struct MyStream;
     struct MyConn;
     struct MyPkt;
     enum MyLossType { NO_LOSS, LOSS, POSSIBLE_LOSS, FALSE_LOSS };
-    
+
     inline MyPkt* mypkt(Pkt*) const;
     inline MyStream* mystream(Stream*, Conn*) const;
     inline MyConn* myconn(Conn*) const;
 
     void new_conn_hook(Conn*, unsigned);
-    
+
   private:
 
     TCPCollector *_tcpc;
@@ -126,7 +126,7 @@ class TCPMystery : public Element, public TCPCollector::AttachmentManager { publ
     void find_true_caused_acks(Stream*, Conn*);
     void calculate_semirtt(Stream*, Conn*);
     void find_delivered(Stream*, Conn*);
-    
+
     static void mystery_rtt_xmltag(FILE* f, TCPCollector::Conn* conn, const String& tagname, void* thunk);
     static void mystery_semirtt_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
     static void mystery_ackcausation_xmltag(FILE* f, TCPCollector::Stream* stream, TCPCollector::Conn* conn, const String& tagname, void* thunk);
@@ -134,16 +134,16 @@ class TCPMystery : public Element, public TCPCollector::AttachmentManager { publ
 
     void find_min_ack_latency(Stream*, Conn*);
     void find_loss_events(Stream*, Conn*);
-    
+
     static void mystery_loss_xmltag(FILE *f, TCPCollector::Stream &stream, TCPCollector::Conn &conn, const String &tagname, void *thunk);
     static void mystery_reordered_xmltag(FILE *f, TCPCollector::Stream &stream, TCPCollector::Conn &conn, const String &tagname, void *thunk);
-    
+
 };
 
 
 struct TCPMystery::MyPkt {
     enum Flags {
-	F_TRUE_CAUSED_ACK = 0x1, // packet's caused ack is definitely true 
+	F_TRUE_CAUSED_ACK = 0x1, // packet's caused ack is definitely true
 	F_REXMIT = 0x2,		// packet contains some retransmitted data
 	F_FULL_REXMIT = 0x4,	// retransmitted data corresponds exactly
 				// to an earlier packet
@@ -259,12 +259,12 @@ struct TCPMystery::LossBlock {
 
 struct TCPMystery::MStream {
     bool have_ack_latency : 1;	// have we seen an ACK match?
-    
+
     tcp_seq_t max_live_seq;	// maximum sequence number seen since last
 				// loss event completed
     tcp_seq_t max_loss_seq;	// maximum sequence number seen in any loss
 				// event
-    
+
     uint32_t loss_events;	// number of loss events
     uint32_t false_loss_events;	// number of false loss events
     tcp_seq_t event_id;		// changes on each loss event
@@ -275,11 +275,11 @@ struct TCPMystery::MStream {
 
     uint32_t nreordered;
     uint32_t nundelivered;
-    
+
     // information about the most recent loss event
     Loss loss;		// most recent loss event
     LossBlock *loss_trail;	// previous loss events
-    
+
     MStream();
     ~MStream();
 
@@ -287,7 +287,7 @@ struct TCPMystery::MStream {
     void register_loss_event(TCPCollector::Pkt *startk, TCPCollector::Pkt *endk, TCPCollector::Conn *, TCPMystery *);
     void update_counters(const TCPCollector::Pkt *np, const click_tcp *);
     void options(TCPCollector::Pkt *np, const click_tcp *, int transport_length, const TCPCollector::Conn *);
-    
+
     TCPCollector::Pkt *find_acked_pkt(const TCPCollector::Pkt *ackk, TCPCollector::Pkt *search_hint = 0) const;
 #if 0
     Pkt *find_ack_cause(const Pkt *ackk, Pkt *search_hint = 0) const;
@@ -305,7 +305,7 @@ struct TCPMystery::MStream {
 };
 
 class TCPMystery::MyConn {  public:
-    
+
     MyConn();
     void kill(TCPMystery *);
 
@@ -315,14 +315,14 @@ class TCPMystery::MyConn {  public:
     void finish_ackcausation(TCPMystery *);
     void finish_rtt(TCPMystery *);
     void finish_undelivered(TCPMystery *);
-    
+
   private:
 
     bool _cleared : 1;
     bool _have_ackcausation : 1;
     bool _have_undelivered : 1;
     MyStream _stream[2];
-    
+
 };
 #endif
 
