@@ -20,6 +20,9 @@ all install clean distclean:
 	for d in $(SUBDIRS); do { cd $$d; $(MAKE) $@ || exit 1; cd ..; }; done
 	if click-buildtool provides ip6; then for d in $(IP6_SUBDIRS); do { cd $$d; $(MAKE) $@ || exit 1; cd ..; }; done; fi
 
+recheck:
+	for d in $(SUBDIRS) $(IP6_SUBDIRS); do { cd $$d; ./config.status --recheck; ./config.status; cd ..; }; done
+
 dist: distdir
 	tar czf $(distdir).tar.gz $(distdir)
 	-rm -rf $(distdir)
@@ -47,6 +50,6 @@ distdir:
 
 .PHONY: all always elemlist elemlists \
 	bsdmodule exopc linuxmodule ns tools userlevel \
-	clean distclean dist distdir \
+	clean distclean dist distdir recheck \
 	install install-doc install-man install-local install-include install-local-include \
 	uninstall uninstall-local uninstall-local-include
