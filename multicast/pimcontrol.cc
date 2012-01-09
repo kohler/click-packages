@@ -168,7 +168,7 @@ PIMControl::generatejoin(IPAddress group, IPAddress source, bool join)
   
   q->set_ip_header(nip, nip->ip_hl << 2);
   q->set_dst_ip_anno((IPAddress(htonl(source))));
-  q->timestamp_anno().set_now();
+  q->timestamp_anno().assign_now();
   SET_FIX_IP_SRC_ANNO(q, true);
 
   output(1).push(q); 
@@ -245,7 +245,7 @@ PIMControl::generate_hello()
 
   q->set_ip_header(nip, nip->ip_hl << 2);
   q->set_dst_ip_anno(IPAddress(nip->ip_dst));
-  q->timestamp_anno().set_now();
+  q->timestamp_anno().assign_now();
   SET_FIX_IP_SRC_ANNO(q, true);
 
   output(1).push(q);

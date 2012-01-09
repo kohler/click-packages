@@ -424,7 +424,7 @@ IGMP::query(IPAddress group, IPAddress source)
   nip->ip_len = htons(q->length());
   nip->ip_sum = click_in_cksum((unsigned char *)nip, nip->ip_hl << 2);
   q->set_dst_ip_anno(IPAddress(nip->ip_dst));
-  q->timestamp_anno().set_now();
+  q->timestamp_anno().assign_now();
   SET_FIX_IP_SRC_ANNO(q, true);
 
   // calculate checksum like described in RFC 1071

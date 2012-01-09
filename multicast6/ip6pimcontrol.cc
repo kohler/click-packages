@@ -147,7 +147,7 @@ IP6PIMControl::generatejoinprune(IP6Address group, IP6Address source, bool join)
  
   q->set_ip6_header(nip, 40); // (XXXX)
 
-  q->timestamp_anno().set_now();
+  q->timestamp_anno().assign_now();
   //  SET_FIX_IP6_SRC_ANNO(q, true);
 
   output(0).push(q);
@@ -201,7 +201,7 @@ IP6PIMControl::generate_hello()
 
   //  q->set_ip_header(nip, nip->ip_hl << 2);
   SET_DST_IP6_ANNO(q, IP6Address(nip->ip6_dst));
-  // q->timestamp_anno().set_now();
+  // q->timestamp_anno().assign_now();
   //  SET_FIX_IP_SRC_ANNO(q, true);
 
   output(0).push(q);
