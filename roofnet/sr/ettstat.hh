@@ -5,7 +5,7 @@
 =c
 ETTStat([I<KEYWORDS>])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Track broadcast loss rates at different bitrates.
 

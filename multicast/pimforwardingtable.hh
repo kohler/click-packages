@@ -7,8 +7,7 @@ CLICK_DECLS
 =c
 PIMForwardingTable()
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 Takes care of arriving multicast traffic. Streams are duplicated and forwarded to neighbouring routers which are connected to Rendezvous Point or Source Path Trees.

@@ -9,7 +9,7 @@ CLICK_DECLS
 
 SnoopDHCPReplies
 
-=s Wifi
+=s Roofnet
 
 Turns 802.11 packets into ethernet packets.
 

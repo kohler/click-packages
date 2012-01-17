@@ -6,7 +6,7 @@
 
 IPAddressCounter()
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Count traffic for individual ip addresses.
 

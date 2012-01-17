@@ -7,7 +7,7 @@ CLICK_DECLS
 =c
 StripSRHeader()
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Strips outermost SR header
 

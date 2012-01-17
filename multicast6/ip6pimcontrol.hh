@@ -9,8 +9,7 @@
 =c
 IP6PIMControl(IP6PIMForwardingTable)
 
-=s
-IPv6 Multicast
+=s IPv6 Multicast
 
 =d
 Handles the PIM protocol, i.e. generation of Hello-messages and detection of connected PIM routers.

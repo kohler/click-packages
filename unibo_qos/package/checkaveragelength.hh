@@ -6,7 +6,7 @@
 /*
  * =c
  * CheckAverageLength(MINLENGTH)
- * =s classification
+ * =s QoS, classification
  * splits a flow of packets depending on their average length.
  * =processing
  * Push
@@ -41,31 +41,30 @@
  * Minimum average length (in bytes) of packets to filter out.
  *
  * =a SplitFirst, Meter, SetIPDSCP */
-				
 
 class CheckAverageLength : public Element { public:
-  
+
   CheckAverageLength();
   ~CheckAverageLength();
-  
+
   const char *class_name() const		{ return "CheckAverageLength"; }
   const char *port_count() const		{ return "1/2"; }
   const char *processing() const		{ return PUSH; }
-  
+
   CheckAverageLength *clone() const			{ return new CheckAverageLength; }
-  
+
   int configure(Vector<String> &, ErrorHandler *);
-  
+
   void media();
   void ins(unsigned);
   unsigned average();
 
   void push(int, Packet *);
- 
+
  private:
 
   unsigned a[ELM];
-  unsigned min,av_length,cont; 
+  unsigned min,av_length,cont;
 
 };
 

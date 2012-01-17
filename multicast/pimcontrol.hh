@@ -9,8 +9,7 @@
 =c
 PIMControl(PIMForwardingTable)
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 Handles the PIM protocol, i.e. generation of Hello-messages and detection of connected PIM routers.

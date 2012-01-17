@@ -20,7 +20,7 @@ CLICK_DECLS
 LocalBroadcast(IP, ETH, ETHERTYPE, LocalBroadcast element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Floods a packet to 1-hop neighbors.
 

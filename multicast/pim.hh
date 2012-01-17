@@ -12,8 +12,7 @@
 =c
 PIM(IPMulticastTable, PIMForwardingTable, PIMControl, Interfaceaddress)
 
-=s
-IP Multicast
+=s IP Multicast
 
 =d
 Handles PIM messages. Arriving PIM messages are checked and processed.

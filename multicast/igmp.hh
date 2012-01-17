@@ -9,8 +9,7 @@
 =c
 IGMP(IPMulticastTable)
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 Handles most of the IGMPv3 protocol (RFC3376). Was tested against Microsoft Windows XP and Linux Vanilla Kernel 2.6.9.

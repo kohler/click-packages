@@ -12,8 +12,7 @@ CLICK_DECLS
 =c
 FixPIMSource(outgoing interface's IP address, PIMForwardingTable)
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 Adds upstream interface IP to PIM join/prune messages and calculates the checksum.

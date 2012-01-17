@@ -10,8 +10,7 @@ CLICK_DECLS
 
 IPMulticastTable(PIMControl)
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 Includes data structures to store addresses of receivers of multicast streams (IPv4).

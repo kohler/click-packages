@@ -20,7 +20,7 @@ CLICK_DECLS
 SR2QueryForwarder(IP, ETH, ETHERTYPE, SR2QueryForwarder element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Forwards Route Queries
 

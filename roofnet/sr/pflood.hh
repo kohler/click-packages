@@ -20,6 +20,7 @@ CLICK_DECLS
  * PFlood(ETHTYPE eth, IP ip, BCAST_IP ip, ETH eth, P int, 
  *              MAX_DELAY int, 
  *              [DEBUG bool], [HISTORY int]);
+ * =s Roofnet
  * =d
  * DSR-inspired end-to-end ad-hoc routing protocol.
  * Input 0: ethernet packets from dev

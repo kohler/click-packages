@@ -11,8 +11,7 @@
 =c
 IP6FixPIMSource(PIMForwardingTable)
 
-=s
-IPv6 Multicast
+=s IPv6 Multicast
 
 =d
 Adds upstream interface IP to PIM join/prune messages and calculates the checksum.

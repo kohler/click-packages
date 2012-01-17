@@ -9,13 +9,12 @@
 =c
 MLD(IP6MulticastTable)
 
-=s
-IPv6 Multicast
+=s IPv6 Multicast
 
 =d
 Handles most of the MLD protocol (RFC2710, RFC3810). Was tested against Microsoft Windows XP and Linux Vanilla Kernel 2.6.9.
 MLD join/leave messages are also processed. Queries are MLDv2 only.
-This element checks whether an arriving MLD message is valid (checksum) and takes appropriate actions. 
+This element checks whether an arriving MLD message is valid (checksum) and takes appropriate actions.
 
 It manages the databank of listeners kept in the IP6MulticastTable element.
 

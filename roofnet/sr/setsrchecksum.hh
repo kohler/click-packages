@@ -6,7 +6,7 @@
 
 SetSRChecksum()
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Set Checksum for Source Routed packet.
 

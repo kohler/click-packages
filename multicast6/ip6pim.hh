@@ -12,8 +12,7 @@
 =c
 IP6PIM(IP6PIMForwardingTable, IP6PIMControl, Interfaceaddress)
 
-=s
-IPv6 Multicast
+=s IPv6 Multicast
 
 =d
 Handles PIM messages. Arriving PIM messages are checked and processed.

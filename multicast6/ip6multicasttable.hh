@@ -12,8 +12,7 @@
 =c
 IP6MulticastTable(IP6PIMControl)
 
-=s
-IPv6 Multicast
+=s IPv6 Multicast
 
 =d
 Includes data structures to store addresses of receivers of multicast streams (IPv6).

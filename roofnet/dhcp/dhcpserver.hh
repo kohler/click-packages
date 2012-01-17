@@ -14,7 +14,7 @@
  * =c
  * DHCPServer( ServerIPAddress, SubnetMask )
  *
- * =s
+ * =s Roofnet
  * The core of the DHCP Server. Responsible of keeping track of
  * free and allocated leases
  *

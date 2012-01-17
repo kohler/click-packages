@@ -21,12 +21,12 @@ CLICK_DECLS
 /*
  * =c
  * SRDestCache([GW ipaddress], [SEL GatewaySelector element])
+ * =s Roofnet
  * =d
- * 
+ *
  * This element marks the gateway for a packet to be sent to.
  * Either manually specifiy an gw using the GW keyword
  * or automatically select it using a GatewaySelector element.
- * 
  *
  */
 

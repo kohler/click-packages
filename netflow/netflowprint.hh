@@ -10,7 +10,7 @@
 
 NetflowPrint([LABEL, KEYWORDS])
 
-=s Mazu Logging
+=s Netflow
 
 prints human-readable summary of Cisco NetFlow packets
 

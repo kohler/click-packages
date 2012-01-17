@@ -9,8 +9,7 @@ CLICK_DECLS
 
 IPMulticastEtherEncap(ETHERTYPE, SRC)
 
-=s
-IPv4 Multicast
+=s IPv4 Multicast
 
 =d
 

@@ -20,7 +20,7 @@ CLICK_DECLS
 SR2GatewayResponder(IP, ETH, ETHERTYPE, SR2GatewayResponder element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Responds to queries destined for this node.
 

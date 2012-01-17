@@ -10,7 +10,7 @@ CLICK_DECLS
 
 CheckSRHeader()
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Check the Source Route header of a packet.
 

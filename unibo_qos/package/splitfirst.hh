@@ -6,14 +6,14 @@
 /*
  * =c
  * SplitFirst(THRESHOLD)
- * =s classification
+ * =s QoS, classification
  * splits the first N packets to output port 1, to port 0 otherwise.
  * =processing
  * Push
  *
  * =d
  * SplitFirst splits the first incoming THRESHOLD packets to output port 1: this
- * behavior is useful to use only the following packets (which should 
+ * behavior is useful to use only the following packets (which should
  * represent a more "stable" flow) to statistically hook a real-time (not-RTP) flow.
  *
  * =e
@@ -42,7 +42,7 @@
 
 
 class SplitFirst : public Element { public:
-  
+
   SplitFirst();
   ~SplitFirst();
 

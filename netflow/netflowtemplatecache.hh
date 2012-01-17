@@ -17,7 +17,7 @@ CLICK_DECLS
 
 NetflowTemplateCache([TAG, KEYWORDS])
 
-=s Mazu Logging
+=s Netflow
 
 caches Netflow V9/IPFIX template records
 

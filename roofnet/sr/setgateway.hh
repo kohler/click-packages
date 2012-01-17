@@ -21,6 +21,7 @@ CLICK_DECLS
 /*
  * =c
  * SetGateway([GW ipaddress], [SEL GatewaySelector element])
+ * =s Roofnet
  * =d
  * 
  * This element marks the gateway for a packet to be sent to.

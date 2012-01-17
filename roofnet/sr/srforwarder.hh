@@ -16,7 +16,7 @@ CLICK_DECLS
 SRForwarder(ETHERTYPE, IP, ETH, ARPTable element, LT LinkTable element
     [ETT element], [METRIC GridGenericMetric] )
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Forwards source-routed packets.
 

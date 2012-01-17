@@ -17,7 +17,7 @@ CLICK_DECLS
 
 NetflowExport(NOTIFIER, [I<KEYWORDS>])
 
-=s Mazu Logging
+=s Netflow
 
 generates Cisco NetFlow and IETF IPFIX records
 

@@ -19,7 +19,7 @@ FloodTracker(IP, ETH, ETHERTYPE, LinkTable, ARPTable,
                 [PERIOD timeout], [GW is_gateway], 
                 [METRIC GridGenericMetric])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Select a gateway to send a packet to based on TCP connection
 state and metric to gateway.

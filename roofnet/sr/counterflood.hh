@@ -20,7 +20,7 @@ CLICK_DECLS
 CounterFlood(ETHTYPE eth, IP ip, BCAST_IP ip, ETH eth, COUNT int, 
              MAX_DELAY int, 
              [DEBUG bool], [HISTORY int]);
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Flood packets; Forward if you hear it less than a threshold.
 

@@ -15,7 +15,7 @@
 /*
  * =c
  * RTPClassifier
- * =s classification
+ * =s QoS, classification
  * splits packets pertaining to an RTP flow from other BE traffic.
  * =processing
  * Push
@@ -23,8 +23,8 @@
  * =d
  * Flows are classified as RTP if 6 following packets containing the
  * same SSRC field are received before TIMEOUT seconds.
- * If not, flow is not classified. Once a flow is classified, it can 
- * be cancelled if no more packets (with the same SSRC value) are 
+ * If not, flow is not classified. Once a flow is classified, it can
+ * be cancelled if no more packets (with the same SSRC value) are
  * received for TIMEOUTRTP seconds.
  * (TIMEOUT = 2 seconds, TIMEOUTRTP = 30 seconds).
  *

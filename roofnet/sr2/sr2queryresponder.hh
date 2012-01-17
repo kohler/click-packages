@@ -21,7 +21,7 @@ CLICK_DECLS
 SR2QueryResponder(IP, ETH, ETHERTYPE, SR2QueryResponder element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Responds to queries destined for this node.
 

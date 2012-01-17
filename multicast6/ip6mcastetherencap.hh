@@ -9,8 +9,7 @@ CLICK_DECLS
 
 IP6MC_EtherEncap(ETHERTYPE, SRC)
 
-=s
-IPv4 Multicast
+=s IPv6 Multicast
 
 =d
 

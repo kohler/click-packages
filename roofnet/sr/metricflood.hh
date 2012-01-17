@@ -20,7 +20,7 @@ CLICK_DECLS
 MetricFlood(IP, ETH, ETHERTYPE, MetricFlood element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 
 Floods a packet with previous hops based on Link Metrics.
 

@@ -20,7 +20,7 @@ CLICK_DECLS
 SRQuerier(IP, ETH, ETHERTYPE, SRQuerier element, LinkTable element, ARPtable element, 
    [METRIC GridGenericMetric], [WARMUP period in seconds])
 
-=s Wifi, Wireless Routing
+=s Roofnet
 Sends route queries if it can't find a valid source route.
 
  */

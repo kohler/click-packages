@@ -6,7 +6,7 @@
 /*
  * =c
  * GetSSRC(OFFSET)
- * =s classification
+ * =s QoS
  * splits packets _possibly_ containing an SSRC field (used by the RTP protocol): this is copied it inside the packet annotation field
  * =processing
  * Push
@@ -27,10 +27,10 @@
  *    rtp[0]->set->[0]output;
  *    rtp[1]->[1]output;
  *    }
- * 
+ *
  * In the above example, GetSSRC is used in combination with the RTPClassifier and SetIPDSCP elements
  * to hook an RTP flow and mark its packets' DSCP field.
- *    
+ *
  * =h SSRC offset in bytes (write-only)
  * Offset (in bytes) of the SSRC field from the beginning of the Ethernet datagram (50 bytes).
  * See also RFC 3550.
@@ -39,24 +39,24 @@
 
 
 class GetSSRC : public Element {
-  
+
   unsigned _offset;
   uint8_t _ssrc,i;
-  
+
  public:
-  
+
   GetSSRC();
   ~GetSSRC();
-  
+
   const char *class_name() const		{ return "GetSSRC"; }
   const char *port_count() const		{ return "1/2"; }
   const char *processing() const		{ return AGNOSTIC; }
-  
+
   GetSSRC *clone() const			{ return new GetSSRC; }
   int configure(Vector<String> &, ErrorHandler *);
 
   void push(int,Packet *);
-  
+
 };
 
 #endif
