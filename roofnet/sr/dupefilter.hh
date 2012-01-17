@@ -2,7 +2,7 @@
 #define CLICK_DUPEFILTER_HH
 #include <click/element.hh>
 #include <click/string.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <click/hashmap.hh>
 CLICK_DECLS
 
@@ -49,7 +49,7 @@ class DupeFilter : public Element {
     Timestamp _last;
     int _dupes;
     int _packets;
-    DEQueue<int> _sequences; //most recently received seq nos
+    Deque<int> _sequences; //most recently received seq nos
     PathInfo(Path p) {
       _p = p;
     }
@@ -58,7 +58,7 @@ class DupeFilter : public Element {
       _dupes = 0;
       _packets = 0;
       _sequences.clear();
-      _last.set_now();
+      _last.assign_now();
     }
   };
 

@@ -2,7 +2,7 @@
 #ifndef CLICK_TCPSCOREBOARD_HH
 #define CLICK_TCPSCOREBOARD_HH
 #include <clicknet/tcp.h>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 CLICK_DECLS
 
 class TCPScoreboard { public:
@@ -19,7 +19,7 @@ class TCPScoreboard { public:
   public:
 
     tcp_seq_t _cumack;
-    DEQueue<tcp_seq_t> _sack;
+    Deque<tcp_seq_t> _sack;
 
 };
 

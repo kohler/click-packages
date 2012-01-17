@@ -19,7 +19,7 @@ class DNSMessage {
 
   	DNSMessage();
     unsigned short rfc1035BuildAQuery(const char *hostname,char *buf,size_t * szp);
-    unsigned short rfc1035BuildAQuery(const char *hostname,char *buf,size_t * szp, unsigned short qid);    
+    unsigned short rfc1035BuildAQuery(const char *hostname,char *buf,size_t * szp, unsigned short qid);
     unsigned short rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t * szp);
     unsigned short rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t * szp, unsigned short qid);
     unsigned short rfc1035BuildPTRQuery(const struct in_addr,char *buf,size_t * szp);

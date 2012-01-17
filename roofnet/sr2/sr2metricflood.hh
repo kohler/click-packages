@@ -7,7 +7,7 @@
 #include <click/etheraddress.hh>
 #include <click/vector.hh>
 #include <click/hashmap.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <elements/wifi/linktable.hh>
 #include <elements/ethernet/arptable.hh>
 #include <elements/wifi/path.hh>
@@ -84,7 +84,7 @@ class SR2MetricFlood : public Element {
   IPMap _neighbors;
   Vector<IPAddress> _neighbors_v;
 
-  DEQueue<Seen> _seen;
+  Deque<Seen> _seen;
 
   int MaxSeen;   // Max size of table of already-seen queries.
   int MaxHops;   // Max hop count for queries.

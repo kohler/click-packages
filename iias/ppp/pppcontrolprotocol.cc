@@ -372,7 +372,7 @@ PPPControlProtocol::simple_action(Packet *p_in)
 
   // runt or bad length field
   if ((unsigned char *)&cp->len >= p->end_data() ||
-      (unsigned char *)((unsigned)cp + ntohs(cp->len)) > p->end_data()) {
+      (unsigned char *)(reinterpret_cast<char *>(cp) + ntohs(cp->len)) > p->end_data()) {
     click_chatter("%s: runt packet or bad length", declaration().c_str());
     goto done;
   }

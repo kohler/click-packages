@@ -7,7 +7,7 @@
 #include <click/etheraddress.hh>
 #include <click/vector.hh>
 #include <click/hashmap.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <elements/wifi/linktable.hh>
 #include <elements/ethernet/arptable.hh>
 #include <elements/wifi/path.hh>
@@ -90,7 +90,7 @@ private:
     Seen();
   };
   
-  DEQueue<Seen> _seen;
+  Deque<Seen> _seen;
 
 
 

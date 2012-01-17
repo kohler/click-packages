@@ -4,7 +4,6 @@
 #include <click/element.hh>
 #include <click/hashtable.hh>
 #include <click/handlercall.hh>
-#include <click/dequeue.hh>
 #include "elements/analysis/aggregatenotifier.hh"
 #include "elements/analysis/toipflowdumps.hh"
 CLICK_DECLS

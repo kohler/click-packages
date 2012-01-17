@@ -57,7 +57,7 @@ LCP::reqci(WritablePacket *p)
 
   ci = (struct ppp_ci *)&cp->data;
   while ((unsigned char *)&ci->len < p->end_data()) {
-    next = (struct ppp_ci *)((unsigned)ci + ci->len);
+    next = (struct ppp_ci *)(reinterpret_cast<char *>(ci) + ci->len);
     // runt or bad length field
     if ((unsigned char *)next > p->end_data()) {
       cp->code = CONFREJ;
@@ -77,7 +77,7 @@ LCP::reqci(WritablePacket *p)
     // filter magic number from reject
     ci = (struct ppp_ci *)&cp->data;
     while ((unsigned char *)&ci->len < p->end_data()) {
-      next = (struct ppp_ci *)((unsigned)ci + ci->len);
+      next = (struct ppp_ci *)(reinterpret_cast<char *>(ci) + ci->len);
       // runt or bad length field
       if ((unsigned char *)next > p->end_data()) {
 	// bail
@@ -86,8 +86,8 @@ LCP::reqci(WritablePacket *p)
       if (ci->type == CI_MAGICNUMBER) {
 	cp->len = htons(ntohs(cp->len) - ci->len);
 	memmove(ci, next, p->end_data() - (unsigned char *)next);
-	p->take((unsigned)next - (unsigned)ci);
-	next = (struct ppp_ci *)((unsigned)ci + ci->len);
+	p->take(reinterpret_cast<char *>(next) - reinterpret_cast<char *>(ci));
+	next = (struct ppp_ci *)(reinterpret_cast<char *>(ci) + ci->len);
       }
       ci = next;
     }

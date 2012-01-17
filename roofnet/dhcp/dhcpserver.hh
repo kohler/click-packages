@@ -4,7 +4,7 @@
 #include <click/element.hh>
 #include <click/hashtable.hh>
 #include <click/vector.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <click/etheraddress.hh>
 #include <click/ipaddress.hh>
 #include <click/timer.hh>
@@ -14,15 +14,15 @@
  * =c
  * DHCPServer( ServerIPAddress, SubnetMask )
  *
- * =s 
+ * =s
  * The core of the DHCP Server. Responsible of keeping track of
  * free and allocated leases
  *
- * =d 
- * 
+ * =d
+ *
  * DHCPServer is responsible of keeping track of free,
- * reservered, and allocated leases. 
- *   
+ * reservered, and allocated leases.
+ *
  * =e
  * DHCPServer(192.168.10.9, 192.168.10.0);
  *
@@ -36,7 +36,7 @@ class Lease {
  public:
 	Lease() { }
 	~Lease() { }
-	
+
 	EtherAddress _eth;
 	IPAddress _ip;
 	Timestamp _start;
@@ -94,7 +94,7 @@ private:
 
   HashTable<EtherAddress, IPAddress> _ips;
 
-  DEQueue<IPAddress> _free_list;
+  Deque<IPAddress> _free_list;
   HashTable<IPAddress, IPAddress> _free;
 
   IPAddress _start;

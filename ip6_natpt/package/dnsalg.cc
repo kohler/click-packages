@@ -108,9 +108,9 @@ DNSAlg::translate_ipv4_ipv6(Packet *p)
   IP6Address ipv6_internal_address;
   IP6Address ipv6_mapped_address;
   IP6Address ipv6_external_address = IP6Address(ip6h->ip6_src);
-  
+
   buffer = (const char*)data;
-  DNSMessage::DNSMessage *dnsmsg = new DNSMessage();
+  DNSMessage *dnsmsg = new DNSMessage();
   memset(&hdr, '\0', sizeof(hdr));
 
   //Unpack DNS header and see if it is a query or response
@@ -408,10 +408,10 @@ DNSAlg::translate_ipv6_ipv4(Packet *p)
   //new buffer of the same size of the actual buffer
   char *newbuffer = new char[1024];
   unsigned newlen = 0;
-  size_t new_len = 1024;  
+  size_t new_len = 1024;
 
   buffer = (const char*)data;
-  DNSMessage::DNSMessage *dnsmsg = new DNSMessage();
+  DNSMessage *dnsmsg = new DNSMessage();
   memset(&hdr, '\0', sizeof(hdr));
   //Unpack DNS header and see if it is a query or response
   if ((dnsmsg->rfc1035HeaderUnpack(buffer,len,&off,&hdr) == 1) || (usport != 53 && udport != 53))

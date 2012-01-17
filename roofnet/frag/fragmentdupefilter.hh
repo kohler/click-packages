@@ -5,12 +5,12 @@
 #include <click/etheraddress.hh>
 #include <click/hashmap.hh>
 #include <click/timer.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include "frag.hh"
 CLICK_DECLS
 
 class FragmentDupeFilter : public Element { public:
-  
+
   FragmentDupeFilter();
   ~FragmentDupeFilter();
 
@@ -27,13 +27,11 @@ class FragmentDupeFilter : public Element { public:
 
   struct DstInfo {
     EtherAddress src;
-    DEQueue<struct fragid> frags;
+    Deque<struct fragid> frags;
     DstInfo() { }
     DstInfo(EtherAddress s) { src = s; }
-    
   };
 
-  
 
   typedef HashMap<EtherAddress, DstInfo> FragTable;
   typedef FragTable::const_iterator FIter;

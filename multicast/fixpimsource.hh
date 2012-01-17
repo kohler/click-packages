@@ -21,19 +21,18 @@ Adds upstream interface IP to PIM join/prune messages and calculates the checksu
 ...-> FixPIMSource(172.20.12.2, "pimft")
 
 =a
-IPMulticastTable, PIM, IGMP, PIMForwardingTable, IPMulticastEtherEncap 
+IPMulticastTable, PIM, IGMP, PIMForwardingTable, IPMulticastEtherEncap
 
 */
 
 class FixPIMSource : public Element {
- 
 
 public:
   FixPIMSource();
   ~FixPIMSource();
- 
+
   PIMForwardingTable *PIMTable;
- 
+
   int configure(Vector<String> &, ErrorHandler *);
 
 
@@ -44,7 +43,6 @@ public:
   WritablePacket *fixpimsource(Packet *);
   Packet *simple_action(Packet *);
 
-  
 private:
 
   IPAddress interfaceaddr;

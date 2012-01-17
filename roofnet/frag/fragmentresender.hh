@@ -7,6 +7,7 @@
 #include <click/timer.hh>
 #include <click/notifier.hh>
 #include <click/task.hh>
+#include "frag.hh"
 CLICK_DECLS
 
 class FragmentResender : public Element { public:

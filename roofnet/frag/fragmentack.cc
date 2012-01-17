@@ -121,18 +121,17 @@ FragmentAck::simple_action(Packet *p)
     struct frag *f = fh->get_frag(x);
     if (f->valid_checksum(fh->frag_size)) {
       new_packets |= nfo->add(fragid(f->packet_num, f->frag_num));
-    }   
-  } 
-  
+    }
+  }
+
   if (new_packets && !nfo->waiting) {
-    nfo->first_rx.set_now();
+    nfo->first_rx.assign_now();
   }
 
   if (fh->flags & FRAG_ACKME) {
     send_ack(src);
   }
   return p;
-  
 }
 
 EXPORT_ELEMENT(FragmentAck)

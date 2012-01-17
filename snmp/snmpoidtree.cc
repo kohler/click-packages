@@ -165,7 +165,7 @@ SNMPOidTree::extract_oid(Node *node, SNMPOid *oid) const
 
   oid->resize(len);
   for (Node *np = node; np; np = np->parent)
-    oid->at_u(--len) = np->suffix;
+    oid->unchecked_at(--len) = np->suffix;
 }
 
 ELEMENT_PROVIDES(SNMPOidTree)

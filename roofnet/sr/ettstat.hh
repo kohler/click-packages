@@ -46,7 +46,7 @@ rate for each host.  Defaults to 10,000 (10 seconds).
 */
 
 #include <click/bighashmap.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <click/element.hh>
 #include <click/glue.hh>
 #include <click/etheraddress.hh>
@@ -175,7 +175,7 @@ public:
     Vector<int> _fwd_rates;
     
     Timestamp _last_rx;
-    DEQueue<probe_t> _probes;   // most recently received probes
+    Deque<probe_t> _probes;   // most recently received probes
     probe_list_t(const IPAddress &p, unsigned int per, unsigned int t) : 
       _ip(p), 
       _period(per), 

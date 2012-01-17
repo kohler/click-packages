@@ -2,7 +2,7 @@
 #define CLICK_SRLOG_HH
 #include <click/element.hh>
 #include <click/glue.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <clicknet/wifi.h>
 
 CLICK_DECLS
@@ -56,8 +56,8 @@ class SRLog : public Element { public:
     
   };
   
-  DEQueue<Fo> _p;
-  DEQueue<Timestamp> _t;
+  Deque<Fo> _p;
+  Deque<Timestamp> _t;
 
   bool _active;
 };

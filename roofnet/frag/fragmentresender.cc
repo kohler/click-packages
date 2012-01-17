@@ -457,7 +457,7 @@ FragmentResender::pull(int port) {
   _packets.insert(fh->packet_num, PacketInfo());
   PacketInfo *nfo = _packets.findp(fh->packet_num);
   nfo->dst = dst;
-  nfo->last_tx.set_now();
+  nfo->last_tx.assign_now();
 
   for (int x = 0; x < fh->num_frags; x++) {
     nfo->frag_status.push_back(0);

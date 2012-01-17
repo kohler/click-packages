@@ -7,7 +7,7 @@
 #include <click/etheraddress.hh>
 #include <click/vector.hh>
 #include <click/hashmap.hh>
-#include <click/dequeue.hh>
+#include <click/deque.hh>
 #include <elements/wifi/linktable.hh>
 #include <elements/ethernet/arptable.hh>
 #include <elements/wifi/path.hh>
@@ -105,7 +105,7 @@ private:
   };
 
 
-  DEQueue<Broadcast> _packets;
+  Deque<Broadcast> _packets;
 
   IPAddress _ip;    // My IP address.
   EtherAddress _en; // My ethernet address.
