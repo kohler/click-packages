@@ -21,6 +21,7 @@
 #include <click/args.hh>
 #include <click/error.hh>
 #include <click/packet_anno.hh>
+CLICK_DECLS
 
 IPAddrColorPaint::IPAddrColorPaint()
 {
@@ -87,6 +88,6 @@ IPAddrColorPaint::pull(int)
     return p;
 }
 
-
+CLICK_ENDDECLS
 ELEMENT_REQUIRES(userlevel IPAddrColors)
 EXPORT_ELEMENT(IPAddrColorPaint)

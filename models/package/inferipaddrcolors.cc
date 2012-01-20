@@ -24,6 +24,7 @@
 #include <click/error.hh>
 #include <click/router.hh>
 #include <click/integers.hh>
+CLICK_DECLS
 
 InferIPAddrColors::InferIPAddrColors()
 {
@@ -211,5 +212,6 @@ InferIPAddrColors::add_handlers()
     add_write_handler("clear", write_handler, (void *)AC_CLEAR);
 }
 
+CLICK_ENDDECLS
 ELEMENT_REQUIRES(userlevel IPAddrColors)
 EXPORT_ELEMENT(InferIPAddrColors)

@@ -4,6 +4,7 @@
 #include <click/string.hh>
 #include <click/vector.hh>
 #include <cstdio>
+CLICK_DECLS
 class ErrorHandler;
 
 class IPAddrColors { public:
@@ -112,4 +113,5 @@ IPAddrColors::ensure_color(color_t c)
     return (c < _next_color ? 0 : hard_ensure_color(c));
 }
 
+CLICK_ENDDECLS
 #endif

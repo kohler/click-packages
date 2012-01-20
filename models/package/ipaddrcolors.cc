@@ -21,6 +21,7 @@
 #include <click/glue.hh>
 #include <click/error.hh>
 #include <click/integers.hh>
+CLICK_DECLS
 
 #ifdef HAVE_BYTEORDER_H
 #include <byteorder.h>
@@ -664,5 +665,6 @@ IPAddrColors::read_file(String where, ErrorHandler *errh)
     return retval;
 }
 
+CLICK_ENDDECLS
 ELEMENT_REQUIRES(userlevel)
 ELEMENT_PROVIDES(IPAddrColors)

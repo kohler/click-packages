@@ -118,6 +118,7 @@ def main():
 
 #ifndef IPFIXTYPES_HH
 #define IPFIXTYPES_HH
+CLICK_DECLS
 
 enum IPFIX_dataType {
   IPFIX_unknown = 0,
@@ -151,6 +152,7 @@ ipfix_type(const char *name) {
   else { return 0; }
 }
 
+CLICK_ENDDECLS
 #endif
 """.strip() % locals()
 

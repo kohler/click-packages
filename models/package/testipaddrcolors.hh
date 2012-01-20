@@ -3,6 +3,7 @@
 #define CLICK_TESTIPADDRCOLORS_HH
 #include <click/element.hh>
 #include "ipaddrcolors.hh"
+CLICK_DECLS
 
 /*
 =c
@@ -87,4 +88,5 @@ class TestIPAddrColors : public Element, public IPAddrColors { public:
 
 };
 
+CLICK_ENDDECLS
 #endif

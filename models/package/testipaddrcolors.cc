@@ -24,6 +24,7 @@
 #include <click/error.hh>
 #include <click/integers.hh>
 #include <click/straccum.hh>
+CLICK_DECLS
 
 TestIPAddrColors::TestIPAddrColors()
 {
@@ -144,5 +145,6 @@ TestIPAddrColors::add_handlers()
     add_read_handler("details", read_handler, (void *)AC_DETAILS);
 }
 
+CLICK_ENDDECLS
 ELEMENT_REQUIRES(userlevel IPAddrColors)
 EXPORT_ELEMENT(TestIPAddrColors)

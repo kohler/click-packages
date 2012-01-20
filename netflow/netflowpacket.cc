@@ -12,6 +12,7 @@
 #if CLICK_USERLEVEL
 # include <time.h>
 #endif
+CLICK_DECLS
 
 String
 NetflowPacket::unparse(bool verbose) const
@@ -450,4 +451,5 @@ template class NetflowTemplatePacket<NetflowPacket::V9_Header, NetflowPacket::V9
 // IPFIXPacket
 template class NetflowTemplatePacket<NetflowPacket::IPFIX_Header, NetflowPacket::IPFIX_Template_Field>;
 
+CLICK_ENDDECLS
 ELEMENT_PROVIDES(NetflowPacket)

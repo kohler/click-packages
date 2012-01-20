@@ -10,10 +10,10 @@
 #include <click/straccum.hh>
 #include "netflowpacket.hh"
 #include "netflowprint.hh"
-
 #if CLICK_USERLEVEL
 # include <stdio.h>
 #endif
+CLICK_DECLS
 
 NetflowPrint::NetflowPrint()
 {
@@ -110,5 +110,6 @@ NetflowPrint::simple_action(Packet *p)
   return p;
 }
 
+CLICK_ENDDECLS
 ELEMENT_REQUIRES(NetflowPacket)
 EXPORT_ELEMENT(NetflowPrint)

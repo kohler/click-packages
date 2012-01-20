@@ -4,6 +4,7 @@
 #include <click/element.hh>
 #include <click/string.hh>
 #include "netflowtemplatecache.hh"
+CLICK_DECLS
 
 /*
 =c
@@ -82,4 +83,5 @@ private:
 
 };
 
+CLICK_ENDDECLS
 #endif

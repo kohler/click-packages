@@ -3,6 +3,7 @@
 #define CLICK_INFERIPADDRCOLORS_HH
 #include <click/element.hh>
 #include "ipaddrcolors.hh"
+CLICK_DECLS
 
 /*
 =c
@@ -185,4 +186,5 @@ class InferIPAddrColors : public Element, public IPAddrColors { public:
 
 };
 
+CLICK_ENDDECLS
 #endif
