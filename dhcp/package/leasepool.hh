@@ -57,11 +57,12 @@ public:
 
   String get_allocated_leases_string() const;
 
-  void remove(const EtherAddress &eth);
-  Lease *new_lease(const EtherAddress &, IPAddress);
-  Lease *new_lease_any(const EtherAddress &);
+  void remove(EtherAddress);
+  Lease *new_lease(EtherAddress, IPAddress);
+  Lease *new_lease_any(EtherAddress);
   IPAddress get_server_ip();
   bool insert(Lease);
+
 private:
 
   Deque<IPAddress> _free_list;

@@ -34,7 +34,7 @@ LeasePool::~LeasePool()
 }
 
 void *
-LeasePool::cast(const char *n) 
+LeasePool::cast(const char *n)
 {
     if (strcmp(n, "DHCPLeasePool") == 0 || strcmp(n, "LeasePool") == 0)
 	return (LeasePool *) this;
@@ -43,7 +43,7 @@ LeasePool::cast(const char *n)
 }
 
 Lease *
-LeasePool::new_lease_any(const EtherAddress &eth) 
+LeasePool::new_lease_any(EtherAddress eth)
 {
 	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
@@ -60,7 +60,7 @@ LeasePool::new_lease_any(const EtherAddress &eth)
 }
 
 Lease *
-LeasePool::new_lease(const EtherAddress &eth, IPAddress ip) 
+LeasePool::new_lease(EtherAddress eth, IPAddress ip)
 {
 	Lease *l = DHCPLeaseTable::rev_lookup(eth);
 	if (l) {
@@ -86,7 +86,7 @@ LeasePool::insert(Lease l) {
 }
 
 void
-LeasePool::remove(const EtherAddress &eth) {
+LeasePool::remove(EtherAddress eth) {
 	if (Lease *l = rev_lookup(eth)) {
 		_free.set(l->_ip, l->_ip);
 		_free_list.push_back(l->_ip);
