@@ -17,7 +17,7 @@
  *
  * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of
- * free and allocated leases
+ * free and allocated leases.
  *
  * =d
  *
@@ -25,7 +25,7 @@
  * reservered, and allocated leases.
  *
  * =e
- * LeasePool(192.168.10.9, 192.168.10.0);
+ * LeasePool(11:22:33:44:55:66, 192.168.10.1, 192.168.10.0, START 192.168.10.10, END 192.168.10.250);
  *
  * =a
  * DHCPServerOffer, DHCPServerACKorNACK, DHCPServerRelease
