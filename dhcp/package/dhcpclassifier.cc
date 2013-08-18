@@ -23,9 +23,9 @@ int
 DHCPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (conf.size() != noutputs())
-	return errh->error("need %d arguments, one per output port", 
+	return errh->error("need %d arguments, one per output port",
 			   noutputs());
-    
+
     for (int argno = 0 ; argno < conf.size(); argno++) {
 	String s = conf[argno];
 	if (s == "discover") {
@@ -46,7 +46,8 @@ DHCPClassifier::configure(Vector<String> &conf, ErrorHandler *errh)
 	    _dhcp_msg_to_outport_map[DHCP_INFORM] = argno;
 	} else if (s == "-") {
 	    _dhcp_msg_to_outport_map[DHCP_REST] = argno;
-	}
+	} else
+            return errh->error("unknown DHCP type %<%s%>", s.printable().c_str());
     }
     return 0;
 }
