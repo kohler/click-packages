@@ -8,16 +8,16 @@
 #include <click/etheraddress.hh>
 #include <click/ipaddress.hh>
 #include <click/timer.hh>
-
 #include <click/timestamp.hh>
 #include "leasetable.hh"
+
 /*
  * =c
  * DHCPLeasePool(ETH, IP, MASK, I<keywords> )
  *
  * =s DHCP
  * The core of the DHCP Server. Responsible of keeping track of
- * free and allocated leases
+ * free and allocated leases.
  *
  * =d
  *
@@ -25,7 +25,7 @@
  * reservered, and allocated leases.
  *
  * =e
- * LeasePool(192.168.10.9, 192.168.10.0);
+ * LeasePool(11:22:33:44:55:66, 192.168.10.1, 192.168.10.0, START 192.168.10.10, END 192.168.10.250);
  *
  * =a
  * DHCPServerOffer, DHCPServerACKorNACK, DHCPServerRelease
@@ -35,40 +35,40 @@
 class LeasePool : public DHCPLeaseTable
 {
 public:
-  LeasePool();
-  ~LeasePool();
-  const char* class_name() const { return "DHCPLeasePool"; }
-  const char* processing() const { return AGNOSTIC; }
-  void* cast(const char*);
-  int configure( Vector<String> &conf, ErrorHandler *errh );
+    LeasePool();
+    ~LeasePool();
 
-  uint32_t get_default_duration();
-  uint32_t get_max_duration();
-  IPAddress get_server_ip_addr();
-  IPAddress get_subnet_mask();
+    const char *class_name() const { return "DHCPLeasePool"; }
+    const char *processing() const { return AGNOSTIC; }
+    void *cast(const char *);
+    int configure(Vector<String> &conf, ErrorHandler *errh);
 
-  void free_list_push(IPAddress);
-  IPAddress free_list_pop();
+    uint32_t get_default_duration();
+    uint32_t get_max_duration();
+    IPAddress get_server_ip_addr();
+    IPAddress get_subnet_mask();
 
-  bool _read_conf_file;
-  bool _read_leases_file;
-  uint32_t _default_duration;
-  uint32_t _max_duration;
+    void free_list_push(IPAddress);
+    IPAddress free_list_pop();
 
-  String get_allocated_leases_string() const;
+    bool _read_conf_file;
+    bool _read_leases_file;
+    uint32_t _default_duration;
+    uint32_t _max_duration;
 
-  void remove(const EtherAddress &eth);
-  Lease *new_lease(const EtherAddress &, IPAddress);
-  Lease *new_lease_any(const EtherAddress &);
-  IPAddress get_server_ip();
-  bool insert(Lease);
+    String get_allocated_leases_string() const;
+
+    void remove(EtherAddress);
+    Lease *new_lease(EtherAddress, IPAddress);
+    Lease *new_lease_any(EtherAddress);
+    IPAddress get_server_ip();
+    bool insert(Lease);
+
 private:
-
-  Deque<IPAddress> _free_list;
-  HashTable<IPAddress, IPAddress> _free;
-
-  IPAddress _start;
-  IPAddress _end;
+    Deque<IPAddress> _free_list;
+    HashTable<IPAddress, IPAddress> _free;
+    IPAddress _start;
+    IPAddress _end;
 };
 
 #endif /* LEASEPOOL_HH */
